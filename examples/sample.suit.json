@@ -1,0 +1,1955 @@
+{
+  "config": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "background": "#000000",
+    "gap": 0.1,
+    "gap_on_loops": false
+  },
+  "slides": [
+    {
+      "id": 1,
+      "title": "Title",
+      "config": {
+        "looping": false,
+        "auto_next": false,
+        "skip": false,
+        "playback_rate": 1.0,
+        "reversed_playback_rate": 1.0,
+        "notes": "Welcome everyone.",
+        "direction": "horizontal"
+      },
+      "content": {
+        "blueprint": {
+          "body": [
+            {
+              "id": 3,
+              "item": {
+                "let_object": {
+                  "var": 2,
+                  "value": {
+                    "id": 4,
+                    "item": {
+                      "new": {
+                        "ctor": "Text",
+                        "args": [
+                          [
+                            "text",
+                            {
+                              "expr": {
+                                "str": "Manim, without the code"
+                              }
+                            }
+                          ],
+                          [
+                            "font_size",
+                            {
+                              "expr": {
+                                "real": 56.0
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 6,
+              "item": {
+                "let_object": {
+                  "var": 5,
+                  "value": {
+                    "id": 7,
+                    "item": {
+                      "chain": {
+                        "base": {
+                          "id": 8,
+                          "item": {
+                            "new": {
+                              "ctor": "Text",
+                              "args": [
+                                [
+                                  "text",
+                                  {
+                                    "expr": {
+                                      "str": "made with Suit"
+                                    }
+                                  }
+                                ],
+                                [
+                                  "font_size",
+                                  {
+                                    "expr": {
+                                      "real": 30.0
+                                    }
+                                  }
+                                ],
+                                [
+                                  "color",
+                                  {
+                                    "expr": {
+                                      "const": "GRAY"
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          }
+                        },
+                        "call": {
+                          "method": "next_to",
+                          "args": [
+                            [
+                              "mobject_or_point",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 2
+                                  }
+                                }
+                              }
+                            ],
+                            [
+                              "direction",
+                              {
+                                "expr": {
+                                  "const": "DOWN"
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 9,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 10,
+                      "item": {
+                        "prim": {
+                          "ctor": "Write",
+                          "args": [
+                            [
+                              "vmobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 2
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {
+                            "run_time": 1.5
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 11,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 12,
+                      "item": {
+                        "prim": {
+                          "ctor": "FadeIn",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 5
+                                  }
+                                }
+                              }
+                            ],
+                            [
+                              "shift",
+                              {
+                                "expr": {
+                                  "call": {
+                                    "fun": "*",
+                                    "args": [
+                                      {
+                                        "real": 0.3
+                                      },
+                                      {
+                                        "const": "UP"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "Shapes",
+      "config": {
+        "looping": false,
+        "auto_next": false,
+        "skip": false,
+        "playback_rate": 1.0,
+        "reversed_playback_rate": 1.0,
+        "notes": "",
+        "direction": "horizontal"
+      },
+      "content": {
+        "blueprint": {
+          "body": [
+            {
+              "id": 14,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 15,
+                      "item": {
+                        "prim": {
+                          "ctor": "FadeOut",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 2
+                                  }
+                                }
+                              }
+                            ],
+                            [
+                              "shift",
+                              {
+                                "expr": {
+                                  "const": "UP"
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    },
+                    {
+                      "id": 16,
+                      "item": {
+                        "prim": {
+                          "ctor": "FadeOut",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 5
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 18,
+              "item": {
+                "let_object": {
+                  "var": 17,
+                  "value": {
+                    "id": 19,
+                    "item": {
+                      "new": {
+                        "ctor": "Circle",
+                        "args": [
+                          [
+                            "radius",
+                            {
+                              "expr": {
+                                "real": 1.2
+                              }
+                            }
+                          ],
+                          [
+                            "color",
+                            {
+                              "expr": {
+                                "const": "BLUE"
+                              }
+                            }
+                          ],
+                          [
+                            "fill_opacity",
+                            {
+                              "expr": {
+                                "real": 0.4
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 21,
+              "item": {
+                "let_object": {
+                  "var": 20,
+                  "value": {
+                    "id": 22,
+                    "item": {
+                      "new": {
+                        "ctor": "Text",
+                        "args": [
+                          [
+                            "text",
+                            {
+                              "expr": {
+                                "str": "a shape"
+                              }
+                            }
+                          ],
+                          [
+                            "font_size",
+                            {
+                              "expr": {
+                                "real": 28.0
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 23,
+              "item": {
+                "attach": {
+                  "target": {
+                    "root": 20
+                  },
+                  "updater": {
+                    "always": {
+                      "method": "next_to",
+                      "args": [
+                        [
+                          "mobject_or_point",
+                          {
+                            "expr": {
+                              "place": {
+                                "root": 17
+                              }
+                            }
+                          }
+                        ],
+                        [
+                          "direction",
+                          {
+                            "expr": {
+                              "const": "DOWN"
+                            }
+                          }
+                        ]
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 24,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 25,
+                      "item": {
+                        "prim": {
+                          "ctor": "Create",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 17
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    },
+                    {
+                      "id": 26,
+                      "item": {
+                        "prim": {
+                          "ctor": "FadeIn",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 20
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 27,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 28,
+                      "item": {
+                        "animate": {
+                          "target": {
+                            "root": 17
+                          },
+                          "calls": [
+                            {
+                              "method": "shift",
+                              "args": [
+                                [
+                                  "vectors",
+                                  {
+                                    "expr": {
+                                      "call": {
+                                        "fun": "*",
+                                        "args": [
+                                          {
+                                            "real": 2.0
+                                          },
+                                          {
+                                            "const": "LEFT"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 30,
+              "item": {
+                "let_object": {
+                  "var": 29,
+                  "value": {
+                    "id": 31,
+                    "item": {
+                      "chain": {
+                        "base": {
+                          "id": 32,
+                          "item": {
+                            "new": {
+                              "ctor": "Square",
+                              "args": [
+                                [
+                                  "side_length",
+                                  {
+                                    "expr": {
+                                      "real": 2.2
+                                    }
+                                  }
+                                ],
+                                [
+                                  "color",
+                                  {
+                                    "expr": {
+                                      "const": "GREEN"
+                                    }
+                                  }
+                                ],
+                                [
+                                  "fill_opacity",
+                                  {
+                                    "expr": {
+                                      "real": 0.4
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          }
+                        },
+                        "call": {
+                          "method": "move_to",
+                          "args": [
+                            [
+                              "point_or_mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 17
+                                  }
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 33,
+              "item": {
+                "detach": {
+                  "target": {
+                    "root": 20
+                  }
+                }
+              }
+            },
+            {
+              "id": 34,
+              "item": {
+                "attach": {
+                  "target": {
+                    "root": 20
+                  },
+                  "updater": {
+                    "always": {
+                      "method": "next_to",
+                      "args": [
+                        [
+                          "mobject_or_point",
+                          {
+                            "expr": {
+                              "place": {
+                                "root": 29
+                              }
+                            }
+                          }
+                        ],
+                        [
+                          "direction",
+                          {
+                            "expr": {
+                              "const": "DOWN"
+                            }
+                          }
+                        ]
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 35,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 36,
+                      "item": {
+                        "prim": {
+                          "ctor": "ReplacementTransform",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 17
+                                  }
+                                }
+                              }
+                            ],
+                            [
+                              "target_mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 29
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 37,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 38,
+                      "item": {
+                        "animate": {
+                          "target": {
+                            "root": 29
+                          },
+                          "calls": [
+                            {
+                              "method": "move_to",
+                              "args": [
+                                [
+                                  "point_or_mobject",
+                                  {
+                                    "expr": {
+                                      "const": "ORIGIN"
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 39,
+      "title": "Dots",
+      "config": {
+        "looping": false,
+        "auto_next": false,
+        "skip": false,
+        "playback_rate": 1.0,
+        "reversed_playback_rate": 1.0,
+        "notes": "",
+        "direction": "horizontal"
+      },
+      "content": {
+        "blueprint": {
+          "body": [
+            {
+              "id": 40,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 41,
+                      "item": {
+                        "prim": {
+                          "ctor": "FadeOut",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 29
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    },
+                    {
+                      "id": 42,
+                      "item": {
+                        "prim": {
+                          "ctor": "FadeOut",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 20
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 44,
+              "item": {
+                "let_object": {
+                  "var": 43,
+                  "value": {
+                    "id": 45,
+                    "item": {
+                      "new": {
+                        "ctor": "Dot",
+                        "args": [
+                          [
+                            "radius",
+                            {
+                              "expr": {
+                                "real": 0.18
+                              }
+                            }
+                          ],
+                          [
+                            "color",
+                            {
+                              "expr": {
+                                "const": "YELLOW"
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 47,
+              "item": {
+                "let_object": {
+                  "var": 46,
+                  "value": {
+                    "id": 48,
+                    "item": {
+                      "new": {
+                        "ctor": "Dot",
+                        "args": [
+                          [
+                            "radius",
+                            {
+                              "expr": {
+                                "real": 0.18
+                              }
+                            }
+                          ],
+                          [
+                            "color",
+                            {
+                              "expr": {
+                                "const": "YELLOW"
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 50,
+              "item": {
+                "let_object": {
+                  "var": 49,
+                  "value": {
+                    "id": 51,
+                    "item": {
+                      "new": {
+                        "ctor": "Dot",
+                        "args": [
+                          [
+                            "radius",
+                            {
+                              "expr": {
+                                "real": 0.18
+                              }
+                            }
+                          ],
+                          [
+                            "color",
+                            {
+                              "expr": {
+                                "const": "YELLOW"
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 53,
+              "item": {
+                "let_object": {
+                  "var": 52,
+                  "value": {
+                    "id": 54,
+                    "item": {
+                      "new": {
+                        "ctor": "Dot",
+                        "args": [
+                          [
+                            "radius",
+                            {
+                              "expr": {
+                                "real": 0.18
+                              }
+                            }
+                          ],
+                          [
+                            "color",
+                            {
+                              "expr": {
+                                "const": "YELLOW"
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 56,
+              "item": {
+                "let_object": {
+                  "var": 55,
+                  "value": {
+                    "id": 57,
+                    "item": {
+                      "new": {
+                        "ctor": "Dot",
+                        "args": [
+                          [
+                            "radius",
+                            {
+                              "expr": {
+                                "real": 0.18
+                              }
+                            }
+                          ],
+                          [
+                            "color",
+                            {
+                              "expr": {
+                                "const": "YELLOW"
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 59,
+              "item": {
+                "let_object": {
+                  "var": 58,
+                  "value": {
+                    "id": 60,
+                    "item": {
+                      "chain": {
+                        "base": {
+                          "id": 61,
+                          "item": {
+                            "group": {
+                              "vector": true,
+                              "items": [
+                                {
+                                  "root": 43
+                                },
+                                {
+                                  "root": 46
+                                },
+                                {
+                                  "root": 49
+                                },
+                                {
+                                  "root": 52
+                                },
+                                {
+                                  "root": 55
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "call": {
+                          "method": "arrange",
+                          "args": [
+                            [
+                              "direction",
+                              {
+                                "expr": {
+                                  "const": "RIGHT"
+                                }
+                              }
+                            ],
+                            [
+                              "buff",
+                              {
+                                "expr": {
+                                  "real": 0.7
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 62,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 63,
+                      "item": {
+                        "par": {
+                          "items": [
+                            {
+                              "id": 64,
+                              "item": {
+                                "prim": {
+                                  "ctor": "FadeIn",
+                                  "args": [
+                                    [
+                                      "mobject",
+                                      {
+                                        "expr": {
+                                          "place": {
+                                            "root": 43
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    [
+                                      "shift",
+                                      {
+                                        "expr": {
+                                          "call": {
+                                            "fun": "*",
+                                            "args": [
+                                              {
+                                                "real": 0.5
+                                              },
+                                              {
+                                                "const": "DOWN"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  ],
+                                  "opts": {
+                                    "run_time": 0.6
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "id": 65,
+                              "item": {
+                                "prim": {
+                                  "ctor": "FadeIn",
+                                  "args": [
+                                    [
+                                      "mobject",
+                                      {
+                                        "expr": {
+                                          "place": {
+                                            "root": 46
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    [
+                                      "shift",
+                                      {
+                                        "expr": {
+                                          "call": {
+                                            "fun": "*",
+                                            "args": [
+                                              {
+                                                "real": 0.5
+                                              },
+                                              {
+                                                "const": "DOWN"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  ],
+                                  "opts": {
+                                    "run_time": 0.6
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "id": 66,
+                              "item": {
+                                "prim": {
+                                  "ctor": "FadeIn",
+                                  "args": [
+                                    [
+                                      "mobject",
+                                      {
+                                        "expr": {
+                                          "place": {
+                                            "root": 49
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    [
+                                      "shift",
+                                      {
+                                        "expr": {
+                                          "call": {
+                                            "fun": "*",
+                                            "args": [
+                                              {
+                                                "real": 0.5
+                                              },
+                                              {
+                                                "const": "DOWN"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  ],
+                                  "opts": {
+                                    "run_time": 0.6
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "id": 67,
+                              "item": {
+                                "prim": {
+                                  "ctor": "FadeIn",
+                                  "args": [
+                                    [
+                                      "mobject",
+                                      {
+                                        "expr": {
+                                          "place": {
+                                            "root": 52
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    [
+                                      "shift",
+                                      {
+                                        "expr": {
+                                          "call": {
+                                            "fun": "*",
+                                            "args": [
+                                              {
+                                                "real": 0.5
+                                              },
+                                              {
+                                                "const": "DOWN"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  ],
+                                  "opts": {
+                                    "run_time": 0.6
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "id": 68,
+                              "item": {
+                                "prim": {
+                                  "ctor": "FadeIn",
+                                  "args": [
+                                    [
+                                      "mobject",
+                                      {
+                                        "expr": {
+                                          "place": {
+                                            "root": 55
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    [
+                                      "shift",
+                                      {
+                                        "expr": {
+                                          "call": {
+                                            "fun": "*",
+                                            "args": [
+                                              {
+                                                "real": 0.5
+                                              },
+                                              {
+                                                "const": "DOWN"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  ],
+                                  "opts": {
+                                    "run_time": 0.6
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          "opts": {
+                            "lag": 0.3
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 69,
+      "title": "Pulse",
+      "config": {
+        "looping": true,
+        "auto_next": false,
+        "skip": false,
+        "playback_rate": 1.0,
+        "reversed_playback_rate": 1.0,
+        "notes": "",
+        "direction": "horizontal"
+      },
+      "content": {
+        "blueprint": {
+          "body": [
+            {
+              "id": 70,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 71,
+                      "item": {
+                        "par": {
+                          "items": [
+                            {
+                              "id": 72,
+                              "item": {
+                                "prim": {
+                                  "ctor": "Indicate",
+                                  "args": [
+                                    [
+                                      "mobject",
+                                      {
+                                        "expr": {
+                                          "place": {
+                                            "root": 43
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  ],
+                                  "opts": {
+                                    "run_time": 0.6
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "id": 73,
+                              "item": {
+                                "prim": {
+                                  "ctor": "Indicate",
+                                  "args": [
+                                    [
+                                      "mobject",
+                                      {
+                                        "expr": {
+                                          "place": {
+                                            "root": 46
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  ],
+                                  "opts": {
+                                    "run_time": 0.6
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "id": 74,
+                              "item": {
+                                "prim": {
+                                  "ctor": "Indicate",
+                                  "args": [
+                                    [
+                                      "mobject",
+                                      {
+                                        "expr": {
+                                          "place": {
+                                            "root": 49
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  ],
+                                  "opts": {
+                                    "run_time": 0.6
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "id": 75,
+                              "item": {
+                                "prim": {
+                                  "ctor": "Indicate",
+                                  "args": [
+                                    [
+                                      "mobject",
+                                      {
+                                        "expr": {
+                                          "place": {
+                                            "root": 52
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  ],
+                                  "opts": {
+                                    "run_time": 0.6
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "id": 76,
+                              "item": {
+                                "prim": {
+                                  "ctor": "Indicate",
+                                  "args": [
+                                    [
+                                      "mobject",
+                                      {
+                                        "expr": {
+                                          "place": {
+                                            "root": 55
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  ],
+                                  "opts": {
+                                    "run_time": 0.6
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          "opts": {
+                            "lag": 0.3
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 77,
+      "title": "Graph",
+      "config": {
+        "looping": false,
+        "auto_next": false,
+        "skip": false,
+        "playback_rate": 1.0,
+        "reversed_playback_rate": 1.0,
+        "notes": "",
+        "direction": "horizontal"
+      },
+      "content": {
+        "blueprint": {
+          "body": [
+            {
+              "id": 78,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 79,
+                      "item": {
+                        "prim": {
+                          "ctor": "FadeOut",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 58
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 81,
+              "item": {
+                "let_object": {
+                  "var": 80,
+                  "value": {
+                    "id": 82,
+                    "item": {
+                      "new": {
+                        "ctor": "Axes",
+                        "args": [
+                          [
+                            "x_range",
+                            {
+                              "expr": {
+                                "vec3": [
+                                  {
+                                    "real": -4.0
+                                  },
+                                  {
+                                    "real": 4.0
+                                  },
+                                  {
+                                    "real": 1.0
+                                  }
+                                ]
+                              }
+                            }
+                          ],
+                          [
+                            "y_range",
+                            {
+                              "expr": {
+                                "vec3": [
+                                  {
+                                    "real": -2.0
+                                  },
+                                  {
+                                    "real": 2.0
+                                  },
+                                  {
+                                    "real": 1.0
+                                  }
+                                ]
+                              }
+                            }
+                          ],
+                          [
+                            "x_length",
+                            {
+                              "expr": {
+                                "real": 8.0
+                              }
+                            }
+                          ],
+                          [
+                            "y_length",
+                            {
+                              "expr": {
+                                "real": 4.0
+                              }
+                            }
+                          ],
+                          [
+                            "tips",
+                            {
+                              "expr": {
+                                "bool": false
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 85,
+              "item": {
+                "let_object": {
+                  "var": 84,
+                  "value": {
+                    "id": 86,
+                    "item": {
+                      "new": {
+                        "ctor": "FunctionGraph",
+                        "args": [
+                          [
+                            "function",
+                            {
+                              "fun": {
+                                "param": 83,
+                                "body": {
+                                  "call": {
+                                    "fun": "sin",
+                                    "args": [
+                                      {
+                                        "var": 83
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          [
+                            "x_range",
+                            {
+                              "expr": {
+                                "vec3": [
+                                  {
+                                    "real": -4.0
+                                  },
+                                  {
+                                    "real": 4.0
+                                  },
+                                  {
+                                    "real": 0.05
+                                  }
+                                ]
+                              }
+                            }
+                          ],
+                          [
+                            "color",
+                            {
+                              "expr": {
+                                "const": "TEAL"
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 87,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 88,
+                      "item": {
+                        "prim": {
+                          "ctor": "Create",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 80
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {
+                            "run_time": 1.5
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 89,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 90,
+                      "item": {
+                        "prim": {
+                          "ctor": "Create",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 84
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {
+                            "run_time": 2.0
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 92,
+              "item": {
+                "let_object": {
+                  "var": 91,
+                  "value": {
+                    "id": 93,
+                    "item": {
+                      "new": {
+                        "ctor": "ValueTracker",
+                        "args": [
+                          [
+                            "value",
+                            {
+                              "expr": {
+                                "real": -4.0
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 95,
+              "item": {
+                "let_object": {
+                  "var": 94,
+                  "value": {
+                    "id": 96,
+                    "item": {
+                      "new": {
+                        "ctor": "Dot",
+                        "args": [
+                          [
+                            "color",
+                            {
+                              "expr": {
+                                "const": "RED"
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 97,
+              "item": {
+                "attach": {
+                  "target": {
+                    "root": 94
+                  },
+                  "updater": {
+                    "always": {
+                      "method": "move_to",
+                      "args": [
+                        [
+                          "point_or_mobject",
+                          {
+                            "expr": {
+                              "vec3": [
+                                {
+                                  "query": {
+                                    "target": {
+                                      "root": 91
+                                    },
+                                    "query": "get_value",
+                                    "args": []
+                                  }
+                                },
+                                {
+                                  "call": {
+                                    "fun": "sin",
+                                    "args": [
+                                      {
+                                        "query": {
+                                          "target": {
+                                            "root": 91
+                                          },
+                                          "query": "get_value",
+                                          "args": []
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "real": 0.0
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 98,
+              "item": {
+                "add": {
+                  "targets": [
+                    {
+                      "root": 91
+                    },
+                    {
+                      "root": 94
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 99,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 100,
+                      "item": {
+                        "animate": {
+                          "target": {
+                            "root": 91
+                          },
+                          "calls": [
+                            {
+                              "method": "set_value",
+                              "args": [
+                                [
+                                  "value",
+                                  {
+                                    "expr": {
+                                      "real": 4.0
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          ],
+                          "opts": {
+                            "run_time": 4.0,
+                            "rate": "linear"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 101,
+      "title": "End",
+      "config": {
+        "looping": false,
+        "auto_next": false,
+        "skip": false,
+        "playback_rate": 1.0,
+        "reversed_playback_rate": 1.0,
+        "notes": "",
+        "direction": "horizontal"
+      },
+      "content": {
+        "blueprint": {
+          "body": [
+            {
+              "id": 102,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 103,
+                      "item": {
+                        "prim": {
+                          "ctor": "FadeOut",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 80
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    },
+                    {
+                      "id": 104,
+                      "item": {
+                        "prim": {
+                          "ctor": "FadeOut",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 84
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    },
+                    {
+                      "id": 105,
+                      "item": {
+                        "prim": {
+                          "ctor": "FadeOut",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 94
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 107,
+              "item": {
+                "let_object": {
+                  "var": 106,
+                  "value": {
+                    "id": 108,
+                    "item": {
+                      "new": {
+                        "ctor": "Text",
+                        "args": [
+                          [
+                            "text",
+                            {
+                              "expr": {
+                                "str": "Thank you"
+                              }
+                            }
+                          ],
+                          [
+                            "font_size",
+                            {
+                              "expr": {
+                                "real": 64.0
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 109,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 110,
+                      "item": {
+                        "prim": {
+                          "ctor": "Write",
+                          "args": [
+                            [
+                              "vmobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 106
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "names": {
+    "2": "title",
+    "5": "subtitle",
+    "17": "circle",
+    "20": "label",
+    "29": "square",
+    "43": "dot 1",
+    "46": "dot 2",
+    "49": "dot 3",
+    "52": "dot 4",
+    "55": "dot 5",
+    "58": "row",
+    "80": "axes",
+    "83": "x",
+    "84": "sine",
+    "91": "t",
+    "94": "tracer",
+    "106": "thanks"
+  },
+  "next_id": 110
+}

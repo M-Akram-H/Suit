@@ -1,0 +1,20 @@
+[package]
+name = "suit-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "suit"
+path = "src/main.rs"
+
+[dependencies]
+suit-core.workspace = true
+suit-sig.workspace = true
+suit-check.workspace = true
+suit-codegen.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+
+[lints]
+workspace = true

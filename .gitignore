@@ -1,0 +1,6 @@
+/target
+/.venv
+/out
+/media
+__pycache__/
+*.pyc

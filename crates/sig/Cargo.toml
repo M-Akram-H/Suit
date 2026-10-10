@@ -1,0 +1,15 @@
+[package]
+name = "suit-sig"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+suit-core.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true
