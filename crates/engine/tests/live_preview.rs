@@ -86,3 +86,45 @@ fn edits_reach_the_preview_by_themselves() {
         "an edit shows up quickly once Manim is running"
     );
 }
+
+#[test]
+#[ignore = "needs Manim"]
+fn a_slide_can_be_recorded_for_playing() {
+    let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let mut session = Session::sample().with_preview(sidecar, || {});
+    session.select(1, None);
+    assert!(session.clip().is_none());
+    session.record_slide();
+    assert!(session.is_recording());
+
+    let started = Instant::now();
+    while session.clip().is_none() {
+        assert_eq!(session.recording_problem(), None);
+        assert!(
+            started.elapsed() < Duration::from_secs(120),
+            "no recording within two minutes"
+        );
+        session.tick();
+        thread::sleep(Duration::from_millis(5));
+    }
+    println!("recorded slide 2 in {:?}", started.elapsed());
+    assert!(!session.is_recording());
+    let report = &session.checked.slides[1];
+    let frames = session.clip().unwrap().frames.len() as u32;
+    assert_eq!(
+        frames,
+        report.frames + report.gap_frames,
+        "Manim plays what the checker predicts"
+    );
+
+    // The recording belongs to the slide and to the deck as it was.
+    session.select(2, None);
+    assert!(session.clip().is_none());
+    session.select(1, None);
+    assert!(session.clip().is_some());
+    session.add_object("Circle");
+    assert!(
+        session.clip().is_none(),
+        "an edit makes the recording stale"
+    );
+}

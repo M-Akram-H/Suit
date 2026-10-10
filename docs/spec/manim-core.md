@@ -84,6 +84,15 @@ what it shows for text, formulas and graphs is what Manim will draw. The one dif
 a real render is the one skipping makes: a time-based updater sees a single long frame per
 step instead of many short ones.
 
+To *play* a slide, a second probe (`suit-cli probe --frames N`) runs the slides before it
+skipped and then plays that one for real, frame for frame, writing down what is drawn in
+each frame instead of drawing it. The canvas plays those frames back, so the motion is
+Manim's own — its interpolation, rate functions, lags and updaters — without a video in
+between. It is also a standing check of P3 (§6.7): the recording has exactly `frames(B)`
+frames, plus the gap, or the tests fail. A still `wait` is the one thing not passed to Manim
+as is: recording makes Manim treat every wait as live, so its frames are written down as
+one frame repeated, which is what E-Wait-Still says they are.
+
 Σ should be generated, not typed in: a script imports the installed Manim, dumps constructor
 and method signatures by introspection, and merges a small hand-written overlay holding what
 Python cannot tell us — kinds of `self`-returning methods, and animation roles. Appendix A

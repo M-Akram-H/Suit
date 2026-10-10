@@ -12,14 +12,16 @@ use crate::{
     style::{ACCENT, UV, WARNING},
 };
 
-/// What the picture of the stage shows: preview generation, slide, step, pixel size, and
-/// how far something is being dragged (in thousandths of a scene unit).
+/// What the picture of the stage shows: preview generation, slide, step, pixel size, how
+/// far something is being dragged (in thousandths of a scene unit), and while the slide is
+/// being played, the frame.
 type StageKey = (
     u64,
     usize,
     Option<usize>,
     [u32; 2],
     Option<(VarId, [i32; 2])>,
+    Option<usize>,
 );
 
 /// What can be put on a slide from the bar above the canvas: the label, and the object.
@@ -45,6 +47,20 @@ pub struct Stage {
     drag: Option<(VarId, [f32; 2])>,
     /// A finished drag that needs a decision, or whose result Manim has yet to show.
     dropped: Option<Dropped>,
+    /// Set while the slide is being played rather than edited.
+    playback: Option<Playback>,
+}
+
+/// Playing the selected slide as Manim animates it.
+struct Playback {
+    /// The selection and the state of the deck this began with; any change to them ends it.
+    began: (usize, Option<usize>, u64),
+    /// The frame shown.
+    frame: usize,
+    /// While it runs: the time at which frame 0 was, or would have been, shown.
+    origin: Option<f64>,
+    /// Start running as soon as there is a recording to run.
+    eager: bool,
 }
 
 struct Dropped {
@@ -72,6 +88,14 @@ impl SuitApp {
             }
         });
         ui.add_space(2.0);
+        // Move the playback on before drawing its controls, so that they show the frame
+        // that is on the canvas; and again after them, so that a press on Play counts from
+        // this frame, not the next.
+        self.advance_playback(ui.ctx());
+        egui::Panel::bottom("transport")
+            .show_separator_line(false)
+            .show(ui, |ui| self.transport(ui));
+        let playing = self.advance_playback(ui.ctx());
 
         let whole = ui.available_rect_before_wrap();
         let response = ui.allocate_rect(whole, Sense::click_and_drag());
@@ -79,6 +103,31 @@ impl SuitApp {
         let frame = Frame::of(&self.session.deck.config);
         let rect = frame.fit(whole.shrink(18.0));
         let painter = ui.painter_at(whole);
+        let pixels = ui.ctx().pixels_per_point();
+        let size = [rect.width() * pixels, rect.height() * pixels].map(|side| side.round() as u32);
+        let border = Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color);
+
+        // While the slide plays, the canvas shows Manim's frames and nothing can be grabbed.
+        if let Some(index) = playing
+            && let Some(clip) = self.session.clip()
+        {
+            let session = &self.session;
+            let key = (
+                session.generation,
+                session.slide,
+                session.step,
+                size,
+                None,
+                Some(index),
+            );
+            let background = session.deck.config.background;
+            let texture = self.stage.picture.get(ui.ctx(), "stage", key, || {
+                rasterize(clip.frame(index), frame, background, size, None)
+            });
+            painter.image(texture, rect, UV, Color32::WHITE);
+            painter.rect_stroke(rect, 0.0, border, StrokeKind::Outside);
+            return;
+        }
 
         // A dropped object stays where it was dropped until Manim has caught up with it.
         if self
@@ -99,8 +148,6 @@ impl SuitApp {
 
         let session = &self.session;
         let snapshot = session.snapshot();
-        let pixels = ui.ctx().pixels_per_point();
-        let size = [rect.width() * pixels, rect.height() * pixels].map(|side| side.round() as u32);
         let thousandths =
             |(var, offset): (VarId, [f32; 2])| (var, offset.map(|c| (c * 1000.0) as i32));
         let key = (
@@ -109,18 +156,15 @@ impl SuitApp {
             session.step,
             size,
             moved.map(thousandths),
+            None,
         );
         let background = session.deck.config.background;
         let texture = self.stage.picture.get(ui.ctx(), "stage", key, || {
-            rasterize(snapshot, frame, background, size, moved)
+            let drawn = snapshot.into_iter().flat_map(|snapshot| &snapshot.drawn);
+            rasterize(drawn, frame, background, size, moved)
         });
         painter.image(texture, rect, UV, Color32::WHITE);
-        painter.rect_stroke(
-            rect,
-            0.0,
-            Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color),
-            StrokeKind::Outside,
-        );
+        painter.rect_stroke(rect, 0.0, border, StrokeKind::Outside);
 
         let Some(snapshot) = snapshot else {
             let message = match (&session.preview, session.steps().is_empty()) {
@@ -246,6 +290,142 @@ impl SuitApp {
             self.stage.dropped = Some(dropped);
         }
         self.ask_about_move(ui.ctx());
+    }
+
+    // ── Playing ──────────────────────────────────────────────────────────────
+
+    /// The frame being shown, while the slide is being played.
+    pub fn playing_frame(&self) -> Option<usize> {
+        let playback = self.stage.playback.as_ref()?;
+        self.session.clip().map(|_| playback.frame)
+    }
+
+    /// Whether the slide is running, or will as soon as Manim has recorded it.
+    pub fn is_playing(&self) -> bool {
+        let running = |playback: &Playback| playback.origin.is_some() || playback.eager;
+        self.stage.playback.as_ref().is_some_and(running)
+    }
+
+    /// Starts playing the selected slide, or pauses it, or carries on from where it paused.
+    pub fn toggle_playing(&mut self) {
+        let frames = self.session.clip().map_or(0, |clip| clip.frames.len());
+        match &mut self.stage.playback {
+            Some(playback) if playback.origin.is_some() || playback.eager => {
+                (playback.origin, playback.eager) = (None, false);
+            }
+            Some(playback) => {
+                // From the top again if it had reached the end.
+                if playback.frame + 1 >= frames {
+                    playback.frame = 0;
+                }
+                playback.eager = true;
+            }
+            None => {
+                let began = (
+                    self.session.slide,
+                    self.session.step,
+                    self.session.revision(),
+                );
+                self.stage.playback = Some(Playback {
+                    began,
+                    frame: 0,
+                    origin: None,
+                    eager: true,
+                });
+                self.session.record_slide();
+            }
+        }
+    }
+
+    pub fn stop_playing(&mut self) {
+        self.stage.playback = None;
+    }
+
+    /// Moves the playback on to the frame that is due. Returns it if there is a recording
+    /// to show; `None` means the canvas shows the steps as usual.
+    fn advance_playback(&mut self, ctx: &egui::Context) -> Option<usize> {
+        let session = &self.session;
+        let now = (session.slide, session.step, session.revision());
+        let playback = self
+            .stage
+            .playback
+            .as_mut()
+            .filter(|playback| playback.began == now);
+        let Some(playback) = playback else {
+            // Something else was selected or the deck changed: back to editing.
+            self.stage.playback = None;
+            return None;
+        };
+        let Some(clip) = session.clip() else {
+            if session.recording_problem().is_some() {
+                self.stage.playback = None;
+            }
+            return None;
+        };
+        let frames = clip.frames.len();
+        if frames == 0 {
+            self.stage.playback = None;
+            return None;
+        }
+        let slide = &session.deck.slides[session.slide];
+        let per_second = f64::from(session.deck.config.fps) * slide.config.playback_rate;
+        let time = ctx.input(|input| input.time);
+        if playback.eager {
+            playback.eager = false;
+            playback.origin = Some(time - playback.frame as f64 / per_second);
+        }
+        if let Some(origin) = playback.origin {
+            let due = ((time - origin) * per_second).floor().max(0.0) as usize;
+            playback.frame = match (due < frames, slide.config.looping) {
+                (true, _) => due,
+                (false, true) => due % frames,
+                (false, false) => {
+                    playback.origin = None;
+                    frames - 1
+                }
+            };
+            ctx.request_repaint();
+        }
+        Some(playback.frame)
+    }
+
+    /// Play and pause, and a slider through the frames, under the canvas.
+    fn transport(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(3.0);
+        ui.horizontal(|ui| {
+            let label = if self.is_playing() { "Pause" } else { "Play" };
+            let has_steps = !self.session.steps().is_empty();
+            let play = ui
+                .add_enabled(has_steps, egui::Button::new(label))
+                .on_hover_text("Play this slide the way Manim animates it (Space)");
+            if play.clicked() {
+                self.toggle_playing();
+            }
+            if self.stage.playback.is_some() && ui.button("Back to editing").clicked() {
+                self.stop_playing();
+            }
+            if self.stage.playback.is_some() && self.session.is_recording() {
+                ui.spinner();
+                ui.weak("Manim is playing the slide through…");
+            }
+            if let Some(problem) = self.session.recording_problem() {
+                ui.colored_label(WARNING, format!("Could not play the slide: {problem}"));
+            }
+            let fps = f64::from(self.session.deck.config.fps);
+            if let (Some(playback), Some(clip)) = (&mut self.stage.playback, self.session.clip()) {
+                let last = clip.frames.len().saturating_sub(1);
+                let mut frame = playback.frame;
+                ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(80.0);
+                let slider = ui.add(egui::Slider::new(&mut frame, 0..=last).show_value(false));
+                if slider.changed() {
+                    // Dragging the slider takes over from the clock.
+                    (playback.frame, playback.origin, playback.eager) = (frame, None, false);
+                }
+                let at = |frame: usize| crate::style::seconds(frame as f64 / fps);
+                ui.weak(format!("{} / {}", at(frame), at(clip.frames.len())));
+            }
+        });
+        ui.add_space(3.0);
     }
 
     /// After a drag on a later step: is the move an animation, a jump, or a new start?

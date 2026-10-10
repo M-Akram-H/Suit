@@ -8,7 +8,7 @@ use egui_kittest::{Harness, kittest::Queryable};
 use suit_codegen::pretty::Pretty;
 use suit_core::{Anim, Command, Expr, Object, VarId};
 use suit_engine::Session;
-use suit_render::{Bounds, Drawn, Outline, Snapshot, Snapshots};
+use suit_render::{Bounds, Clip, Drawn, Outline, Snapshot, Snapshots};
 use suit_ui::SuitApp;
 
 type Window = Harness<'static, SuitApp>;
@@ -383,4 +383,137 @@ fn a_drag_can_be_called_off() {
     press(&mut window, "Cancel");
     assert_eq!(headlines(&window), ["New circle (Circle)", "Create circle"]);
     assert_eq!(window.state().session.can_undo(), Some("Add object"));
+}
+
+// ── Playing ──────────────────────────────────────────────────────────────────
+
+/// A window whose slide has been recorded as `frames` frames at 60 fps. The harness moves
+/// time on a quarter of a second, fifteen frames, with every frame it draws.
+fn with_a_recording(looping: bool, frames: usize) -> Window {
+    let (mut window, _) = with_a_circle([0.0, 0.0]);
+    let session = &mut window.state_mut().session;
+    session.edit_slide(|slide| slide.config.looping = looping);
+    let dot = Outline {
+        points: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+        closed: false,
+    };
+    let drawn = Drawn {
+        owners: Vec::new(),
+        paths: vec![dot],
+        fill: [1.0; 4],
+        stroke: [1.0; 4],
+        stroke_width: 4.0,
+    };
+    session.install_recording(Clip {
+        pool: vec![drawn],
+        frames: vec![vec![0]; frames],
+        marks: Vec::new(),
+        error: None,
+    });
+    window.run_ok();
+    window
+}
+
+fn play(window: &mut Window) {
+    window.get_by_role_and_label(Role::Button, "Play").click();
+    window.step();
+}
+
+#[test]
+fn a_slide_plays_through_and_rests_on_its_last_frame() {
+    let mut window = with_a_recording(false, 30);
+    assert_eq!(
+        window.state().playing_frame(),
+        None,
+        "nothing plays until asked"
+    );
+
+    play(&mut window);
+    assert_eq!(window.state().playing_frame(), Some(0));
+    assert!(window.state().is_playing());
+    window.step();
+    assert_eq!(window.state().playing_frame(), Some(15));
+    window.step();
+    assert_eq!(
+        window.state().playing_frame(),
+        Some(29),
+        "it stops on the last frame"
+    );
+    assert!(!window.state().is_playing());
+    window.step();
+    assert_eq!(window.state().playing_frame(), Some(29));
+
+    // Playing again starts from the top.
+    play(&mut window);
+    assert_eq!(window.state().playing_frame(), Some(0));
+}
+
+#[test]
+fn space_pauses_and_carries_on() {
+    let mut window = with_a_recording(false, 90);
+    // A key press is two frames to the harness: the key going down, which starts the
+    // slide, and the key coming up a quarter of a second later.
+    window.key_press(Key::Space);
+    window.step();
+    assert_eq!(window.state().playing_frame(), Some(15));
+
+    window.key_press(Key::Space);
+    window.step();
+    assert!(!window.state().is_playing());
+    assert_eq!(
+        window.state().playing_frame(),
+        Some(15),
+        "paused before the clock moved it on"
+    );
+    window.step();
+    assert_eq!(
+        window.state().playing_frame(),
+        Some(15),
+        "time passes, the frame stays"
+    );
+
+    // It carries on from where it paused, not from where the clock has got to meanwhile.
+    window.key_press(Key::Space);
+    window.step();
+    assert_eq!(window.state().playing_frame(), Some(30));
+    assert!(window.state().is_playing());
+}
+
+#[test]
+fn a_looping_slide_starts_over() {
+    let mut window = with_a_recording(true, 30);
+    play(&mut window);
+    let mut seen = vec![window.state().playing_frame().unwrap()];
+    for _ in 0..4 {
+        window.step();
+        seen.push(window.state().playing_frame().unwrap());
+    }
+    assert_eq!(seen, [0, 15, 0, 15, 0]);
+    assert!(window.state().is_playing());
+}
+
+#[test]
+fn selecting_or_editing_goes_back_to_the_steps() {
+    let mut window = with_a_recording(false, 30);
+    play(&mut window);
+    press(&mut window, "New circle (Circle)");
+    assert_eq!(
+        window.state().playing_frame(),
+        None,
+        "choosing a step ends the playback"
+    );
+
+    play(&mut window);
+    assert!(
+        window.state().playing_frame().is_some(),
+        "the recording is still good"
+    );
+    press(&mut window, "Back to editing");
+    assert_eq!(window.state().playing_frame(), None);
+
+    // An edit makes the recording stale, so there is nothing left to play from.
+    play(&mut window);
+    press(&mut window, "Pause");
+    assert!(window.state().session.clip().is_none());
+    assert_eq!(window.state().playing_frame(), None);
 }

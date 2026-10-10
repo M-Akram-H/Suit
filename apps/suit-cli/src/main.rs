@@ -48,6 +48,9 @@ enum Cmd {
         deck: PathBuf,
         #[arg(short, long)]
         output: Option<PathBuf>,
+        /// Report every frame of this slide (counted from 1) instead of every step of the deck
+        #[arg(long, value_name = "SLIDE")]
+        frames: Option<usize>,
     },
     /// Print the catalogue of objects, actions and animations as JSON
     Signature,
@@ -80,10 +83,21 @@ fn run(command: Cmd) -> Result<ExitCode, Box<dyn Error>> {
             let deck = load(&deck)?;
             print_timeline(&deck, &sig, &check(&deck, &sig));
         }
-        Cmd::Probe { deck, output } => {
+        Cmd::Probe {
+            deck,
+            output,
+            frames,
+        } => {
             let deck = load(&deck)?;
             let checked = check(&deck, &sig);
-            emit(output, &suit_codegen::probe(&deck, &sig, &checked))?;
+            let script = match frames {
+                Some(slide) if (1..=deck.slides.len()).contains(&slide) => {
+                    suit_codegen::probe_frames(&deck, &sig, &checked, slide - 1)
+                }
+                Some(slide) => return Err(format!("there is no slide {slide}").into()),
+                None => suit_codegen::probe(&deck, &sig, &checked),
+            };
+            emit(output, &script)?;
         }
         Cmd::Export {
             deck,

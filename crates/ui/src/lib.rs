@@ -158,6 +158,12 @@ impl SuitApp {
         if pressed(Key::Delete) || pressed(Key::Backspace) {
             self.session.delete_step();
         }
+        if pressed(Key::Space) {
+            self.toggle_playing();
+        }
+        if pressed(Key::Escape) {
+            self.stop_playing();
+        }
     }
 
     /// With a screenshot requested: once the preview has arrived and been drawn, saves a

@@ -86,3 +86,58 @@ fn building_a_slide_by_hand() {
     picture.save(&path).unwrap();
     println!("saved {}", path.display());
 }
+
+#[test]
+#[ignore = "needs Manim and a graphics driver"]
+fn playing_a_slide_of_the_sample() {
+    let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let mut window: Window = Harness::builder()
+        .with_size(egui::vec2(1480.0, 920.0))
+        .with_max_steps(200)
+        .wgpu()
+        .build_ui_state(
+            |ui, app: &mut SuitApp| app.show(ui),
+            SuitApp::new(Session::sample(), Some(sidecar)),
+        );
+    SuitApp::install_fonts(&window.ctx);
+    settle(&mut window);
+    window
+        .get_by_role_and_label(Role::Button, "Slide 2: Shapes")
+        .click();
+    settle(&mut window);
+
+    // Ask for the slide to be played, and wait for Manim to have gone through it.
+    window.get_by_role_and_label(Role::Button, "Play").click();
+    let started = Instant::now();
+    while window.state().playing_frame().is_none() {
+        assert!(
+            started.elapsed() < Duration::from_secs(120),
+            "no recording within two minutes"
+        );
+        thread::sleep(Duration::from_millis(10));
+        window.step();
+    }
+    println!("recorded in {:?}", started.elapsed());
+    assert_eq!(window.state().playing_frame(), Some(0));
+
+    // Every step of the harness is a quarter of a second: fifteen frames.
+    for _ in 0..14 {
+        window.step();
+    }
+    assert_eq!(
+        window.state().playing_frame(),
+        Some(210),
+        "half-way through the morph"
+    );
+    let session = &window.state().session;
+    let report = &session.checked.slides[1];
+    assert_eq!(
+        session.clip().unwrap().frames.len() as u32,
+        report.frames + report.gap_frames
+    );
+
+    let picture = window.render().expect("the window can be drawn");
+    let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("playing_a_slide.png");
+    picture.save(&path).unwrap();
+    println!("saved {}", path.display());
+}

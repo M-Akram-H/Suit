@@ -1,5 +1,6 @@
 class _Probe:
-    """Records what is on scene after every step, as outlines the editor can draw."""
+    """Records what is on scene, as outlines the editor can draw: after every step, or at
+    every frame of one slide."""
 
     def __init__(self, scene, out):
         self.scene = scene
@@ -8,6 +9,11 @@ class _Probe:
         self.steps = []
         self.slide = 0
         self.error = None
+        # Set by `record`: the distinct outlines seen, and per frame the ones drawn.
+        self.pool = None
+        self.seen = {}
+        self.frames = []
+        self.marks = []
 
     def name(self, var, mobject):
         self.names[var] = mobject
@@ -31,15 +37,25 @@ class _Probe:
 
     @staticmethod
     def outline(mobject):
+        """The object's curves as chains: a start point, then three points per curve.
+
+        A new chain starts wherever one curve does not begin where the last one ended, which
+        is how Manim itself tells sub-paths apart; done on whole arrays here, because a
+        slide can have hundreds of thousands of points.
+        """
+        points = mobject.points[: len(mobject.points) // 4 * 4, :2]
+        if len(points) == 0:
+            return []
+        curves = points.reshape(-1, 4, 2)
+        apart = np.abs(curves[1:, 0] - curves[:-1, 3]).max(axis=1) > 1e-6
+        starts = [0, *(np.flatnonzero(apart) + 1), len(curves)]
         paths = []
-        for subpath in mobject.get_subpaths():
-            if len(subpath) < 4:
-                continue
-            curves = subpath[: len(subpath) // 4 * 4].reshape(-1, 4, 3)
-            points = [curves[0][0]] + [point for curve in curves for point in curve[1:]]
+        for first, after in zip(starts, starts[1:]):
+            chain = curves[first:after]
+            ordered = np.concatenate((chain[0, :1], chain[:, 1:].reshape(-1, 2)))
             paths.append({
-                "points": [[round(float(p[0]), 5), round(float(p[1]), 5)] for p in points],
-                "closed": bool(np.allclose(subpath[0], subpath[-1])),
+                "points": np.round(ordered, 5).tolist(),
+                "closed": bool(np.abs(chain[0, 0] - chain[-1, 3]).max() <= 1e-6),
             })
         return paths
 
@@ -80,6 +96,61 @@ class _Probe:
             }
         self.steps.append({"slide": self.slide, "node": node, "drawn": drawn, "boxes": boxes})
 
+    def quiet(self):
+        """Run without drawing anything: only the state of the scene is wanted."""
+        self.scene.renderer.update_frame = lambda *args, **kwargs: None
+        self.scene.next_section(skip_animations=True)
+
+    def record(self):
+        """From here on, note what is drawn at every frame Manim would render."""
+        self.scene.next_section(skip_animations=False)
+        self.pool = []
+        # Scene updaters run last in every frame, after animations and object updaters,
+        # so this sees exactly the state that would be drawn.
+        self.scene.add_updater(lambda dt: self.frames.append(self.capture()))
+
+    def capture(self):
+        """What is drawn right now, as indices into the pool of distinct outlines."""
+        from manim.utils.family import extract_mobject_family_members
+
+        members = extract_mobject_family_members(
+            self.scene.mobjects, use_z_index=True, only_those_with_points=True
+        )
+        frame = []
+        for member in members:
+            if not isinstance(member, VMobject):
+                continue
+            fill, stroke = member.get_fill_rgbas()[0], member.get_stroke_rgbas()[0]
+            width = float(member.get_stroke_width())
+            if fill[3] <= 0 and (stroke[3] <= 0 or width <= 0):
+                continue
+            # Most outlines do not change from one frame to the next; each distinct one is
+            # written out once.
+            key = (member.points.tobytes(), fill.tobytes(), stroke.tobytes(), width)
+            index = self.seen.get(key)
+            if index is None:
+                index = self.seen[key] = len(self.pool)
+                self.pool.append({
+                    "paths": self.outline(member),
+                    "fill": [float(c) for c in fill],
+                    "stroke": [float(c) for c in stroke],
+                    "stroke_width": width,
+                })
+            frame.append(index)
+        return frame
+
+    def hold(self, frames):
+        """A still wait: the same frame, `frames` times, without asking Manim to wait."""
+        self.frames.extend([self.capture()] * frames)
+
+    def mark(self, node):
+        """Step `node` ends here."""
+        self.marks.append([node, len(self.frames)])
+
     def finish(self):
+        result = {"steps": self.steps, "error": self.error}
+        if self.pool is not None:
+            result.update(pool=self.pool, frames=self.frames, marks=self.marks)
+        # `dumps` uses the fast encoder; `dump` to a file does not.
         with open(self.out, "w", encoding="utf-8") as file:
-            json.dump({"steps": self.steps, "error": self.error}, file)
+            file.write(json.dumps(result))

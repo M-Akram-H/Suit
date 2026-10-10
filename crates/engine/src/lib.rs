@@ -16,8 +16,8 @@ use suit_core::{Command, Deck, DeckConfig, Node, NodeId, SlideContent, SlideId, 
 use suit_render::{Sidecar, Snapshot, Snapshots};
 use suit_sig::Signature;
 
-pub use crate::preview::Preview;
 use crate::preview::Worker;
+pub use crate::preview::{Preview, Recording};
 
 /// The deck shown when none is opened.
 const SAMPLE: &str = include_str!("../../../examples/sample.suit.json");
@@ -67,6 +67,11 @@ pub struct Session {
     requested: Option<u64>,
     /// The revision the snapshots were made from.
     shown: Option<u64>,
+    /// The slide last recorded for playing.
+    recording: Option<Recording>,
+    /// The revision and slide a recording has been asked for and not yet arrived.
+    recording_wanted: Option<(u64, usize)>,
+    recording_problem: Option<String>,
 }
 
 impl Session {
@@ -92,6 +97,9 @@ impl Session {
             worker: None,
             requested: None,
             shown: None,
+            recording: None,
+            recording_wanted: None,
+            recording_problem: None,
         }
     }
 
@@ -133,6 +141,11 @@ impl Session {
                 .into_owned(),
             None => "Untitled".to_owned(),
         }
+    }
+
+    /// A number that goes up with every change to the deck.
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     /// Whether there are changes that have not been saved.

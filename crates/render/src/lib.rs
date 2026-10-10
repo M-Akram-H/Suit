@@ -12,7 +12,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use serde::Deserialize;
+use serde::{Deserialize, de::DeserializeOwned};
 use suit_check::Checked;
 use suit_core::{Deck, NodeId, VarId};
 use suit_sig::Signature;
@@ -47,6 +47,8 @@ pub struct Bounds {
 #[derive(Clone, Debug, Deserialize)]
 pub struct Drawn {
     /// The named objects this belongs to, each with the path from that object down to it.
+    /// Not reported for the frames of a [`Clip`].
+    #[serde(default)]
     pub owners: Vec<(VarId, Vec<u32>)>,
     pub paths: Vec<Outline>,
     /// RGBA, each in `0..=1`.
@@ -61,6 +63,32 @@ pub struct Drawn {
 pub struct Outline {
     pub points: Vec<[f32; 2]>,
     pub closed: bool,
+}
+
+/// One slide as Manim plays it: what is drawn in every frame.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct Clip {
+    /// Every distinct outline that occurs. Most are drawn in many frames.
+    #[serde(default)]
+    pub pool: Vec<Drawn>,
+    /// Per frame, the outlines drawn, back to front, as indices into `pool`.
+    #[serde(default)]
+    pub frames: Vec<Vec<u32>>,
+    /// For each step of the slide, in order: the frame after its last one.
+    #[serde(default)]
+    pub marks: Vec<(NodeId, u32)>,
+    /// Why the run stopped early, if it did.
+    pub error: Option<String>,
+}
+
+impl Clip {
+    /// What is drawn in frame `index`, back to front.
+    pub fn frame(&self, index: usize) -> impl Iterator<Item = &Drawn> {
+        let drawn = self.frames.get(index).map_or(&[][..], Vec::as_slice);
+        drawn
+            .iter()
+            .filter_map(|&outline| self.pool.get(outline as usize))
+    }
 }
 
 impl Snapshots {
@@ -100,8 +128,8 @@ impl Drop for Run {
 }
 
 impl Run {
-    /// The snapshots the script wrote, if it got far enough to write any.
-    fn read(&self) -> Option<Result<Snapshots, String>> {
+    /// What the script wrote, if it got far enough to write anything.
+    fn read<T: DeserializeOwned>(&self) -> Option<Result<T, String>> {
         let json = fs::read_to_string(&self.result).ok()?;
         Some(serde_json::from_str(&json).map_err(|e| format!("unreadable probe result: {e}")))
     }
@@ -140,8 +168,8 @@ impl Sidecar {
         &self.python
     }
 
-    /// Writes the probe script for `deck` into the working directory.
-    fn prepare(&self, deck: &Deck, sig: &Signature, checked: &Checked) -> Result<Run, String> {
+    /// Writes a probe script into the working directory.
+    fn prepare(&self, script: String) -> Result<Run, String> {
         fs::create_dir_all(&self.work)
             .map_err(|e| format!("cannot create {}: {e}", self.work.display()))?;
         let id = format!(
@@ -153,7 +181,7 @@ impl Sidecar {
             script: self.work.join(format!("probe-{id}.py")),
             result: self.work.join(format!("probe-{id}.json")),
         };
-        fs::write(&run.script, suit_codegen::probe(deck, sig, checked))
+        fs::write(&run.script, script)
             .map_err(|e| format!("cannot write {}: {e}", run.script.display()))?;
         Ok(run)
     }
@@ -166,7 +194,7 @@ impl Sidecar {
         sig: &Signature,
         checked: &Checked,
     ) -> Result<Snapshots, String> {
-        let run = self.prepare(deck, sig, checked)?;
+        let run = self.prepare(suit_codegen::probe(deck, sig, checked))?;
         let output = Command::new(&self.python)
             .arg(&run.script)
             .arg(&run.result)
@@ -282,13 +310,30 @@ impl Prober {
         }
     }
 
+    /// The scene after every step of the deck.
     pub fn probe(
         &mut self,
         deck: &Deck,
         sig: &Signature,
         checked: &Checked,
     ) -> Result<Snapshots, String> {
-        let run = self.sidecar.prepare(deck, sig, checked)?;
+        self.run(suit_codegen::probe(deck, sig, checked))
+    }
+
+    /// Slide `slide` as Manim plays it, frame for frame. Takes about as long as the slide
+    /// is complicated, typically a second or two.
+    pub fn probe_frames(
+        &mut self,
+        deck: &Deck,
+        sig: &Signature,
+        checked: &Checked,
+        slide: usize,
+    ) -> Result<Clip, String> {
+        self.run(suit_codegen::probe_frames(deck, sig, checked, slide))
+    }
+
+    fn run<T: DeserializeOwned>(&mut self, script: String) -> Result<T, String> {
+        let run = self.sidecar.prepare(script)?;
         let server = match &mut self.server {
             Some(server) => server,
             None => self.server.insert(self.sidecar.serve()?),

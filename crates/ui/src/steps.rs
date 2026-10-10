@@ -34,6 +34,7 @@ impl SuitApp {
         self.step_buttons(ui);
         ui.add_space(2.0);
 
+        let playing = self.playing_frame();
         let session = &self.session;
         let pretty = Pretty {
             deck: &session.deck,
@@ -80,6 +81,15 @@ impl SuitApp {
                         );
                     } else if response.hovered() {
                         painter.rect_filled(rect, 4.0, ui.visuals().widgets.hovered.weak_bg_fill);
+                    }
+                    // While the slide plays, a bar marks the step the playback is in.
+                    let span = row.and_then(|(_, node)| session.checked.notes.get(&node.id));
+                    let span = span.map(|note| note.start_frame..note.start_frame + note.frames);
+                    if let (Some(frame), Some(span)) = (playing, span)
+                        && span.contains(&(frame as u32))
+                    {
+                        let bar = Rect::from_min_size(rect.min, vec2(3.0, rect.height()));
+                        painter.rect_filled(bar, 1.0, style::ACCENT);
                     }
                     let middle = rect.center().y;
                     let weak = ui.visuals().weak_text_color();

@@ -2,7 +2,7 @@
 
 use eframe::egui;
 use suit_core::{DeckConfig, Rgba, VarId};
-use suit_render::{Drawn, Outline, Snapshot};
+use suit_render::{Drawn, Outline};
 use tiny_skia::{
     Color, FillRule, LineCap, LineJoin, Paint, PathBuilder, Pixmap, Stroke, Transform,
 };
@@ -55,11 +55,11 @@ impl Frame {
     }
 }
 
-/// Paints `snapshot` on `background` into an image of `size` pixels. `moved` shifts the
-/// outlines of one object, in scene units: an object being dragged, before Manim has been
-/// asked where everything ends up.
-pub fn rasterize(
-    snapshot: Option<&Snapshot>,
+/// Paints `drawn`, back to front, on `background` into an image of `size` pixels. `moved`
+/// shifts the outlines of one object, in scene units: an object being dragged, before Manim
+/// has been asked where everything ends up.
+pub fn rasterize<'d>(
+    drawn: impl IntoIterator<Item = &'d Drawn>,
     frame: Frame,
     background: Rgba,
     size: [u32; 2],
@@ -73,7 +73,7 @@ pub fn rasterize(
     let scale = height as f32 / frame.height;
     let to_pixels = Transform::from_scale(scale, -scale)
         .post_translate(width as f32 / 2.0, height as f32 / 2.0);
-    for drawn in snapshot.into_iter().flat_map(|snapshot| &snapshot.drawn) {
+    for drawn in drawn {
         let shift = moved.filter(|(var, _)| drawn.owners.iter().any(|(owner, _)| owner == var));
         let transform = match shift {
             Some((_, [dx, dy])) => to_pixels.pre_translate(dx, dy),

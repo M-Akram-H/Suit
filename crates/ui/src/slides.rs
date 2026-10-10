@@ -75,7 +75,8 @@ impl SuitApp {
                         (session.generation, size),
                         || {
                             let rest = session.snapshots.last_of(index);
-                            rasterize(rest, frame, session.deck.config.background, size, None)
+                            let drawn = rest.into_iter().flat_map(|snapshot| &snapshot.drawn);
+                            rasterize(drawn, frame, session.deck.config.background, size, None)
                         },
                     );
                     painter.image(texture, picture_rect, UV, Color32::WHITE);
