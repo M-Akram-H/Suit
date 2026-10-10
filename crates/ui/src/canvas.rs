@@ -1,7 +1,7 @@
 //! Drawing a snapshot of the scene: Manim's outlines, rasterised the way Cairo would.
 
 use eframe::egui;
-use suit_core::{DeckConfig, Rgba};
+use suit_core::{DeckConfig, Rgba, VarId};
 use suit_render::{Drawn, Outline, Snapshot};
 use tiny_skia::{
     Color, FillRule, LineCap, LineJoin, Paint, PathBuilder, Pixmap, Stroke, Transform,
@@ -55,12 +55,15 @@ impl Frame {
     }
 }
 
-/// Paints `snapshot` on `background` into an image of `size` pixels.
+/// Paints `snapshot` on `background` into an image of `size` pixels. `moved` shifts the
+/// outlines of one object, in scene units: an object being dragged, before Manim has been
+/// asked where everything ends up.
 pub fn rasterize(
     snapshot: Option<&Snapshot>,
     frame: Frame,
     background: Rgba,
     size: [u32; 2],
+    moved: Option<(VarId, [f32; 2])>,
 ) -> egui::ColorImage {
     let [width, height] = size.map(|side| side.max(1));
     let mut pixmap = Pixmap::new(width, height).expect("the size is not zero");
@@ -71,7 +74,12 @@ pub fn rasterize(
     let to_pixels = Transform::from_scale(scale, -scale)
         .post_translate(width as f32 / 2.0, height as f32 / 2.0);
     for drawn in snapshot.into_iter().flat_map(|snapshot| &snapshot.drawn) {
-        draw(&mut pixmap, drawn, to_pixels);
+        let shift = moved.filter(|(var, _)| drawn.owners.iter().any(|(owner, _)| owner == var));
+        let transform = match shift {
+            Some((_, [dx, dy])) => to_pixels.pre_translate(dx, dy),
+            None => to_pixels,
+        };
+        draw(&mut pixmap, drawn, transform);
     }
     egui::ColorImage::from_rgba_premultiplied([width as usize, height as usize], pixmap.data())
 }

@@ -5,14 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-suit-core.workspace = true
-suit-sig.workspace = true
-suit-check.workspace = true
-suit-codegen.workspace = true
+suit-engine.workspace = true
 suit-render.workspace = true
-serde_json.workspace = true
+suit-ui.workspace = true
 eframe.workspace = true
-tiny-skia.workspace = true
 
 [lints]
 workspace = true

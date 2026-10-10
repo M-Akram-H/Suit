@@ -28,6 +28,9 @@ pub struct Checked {
     pub slides: Vec<SlideReport>,
     /// Facts about individual nodes that export and the timeline need.
     pub notes: BTreeMap<NodeId, Note>,
+    /// The objects that exist after each step, with their presence: what an editor can
+    /// offer at that point. A slide's `entry` is the same for the point before its first step.
+    pub after: BTreeMap<NodeId, Vec<ObjectState>>,
 }
 
 impl Checked {
@@ -83,6 +86,7 @@ pub fn check(deck: &Deck, sig: &Signature) -> Checked {
         deck,
         diagnostics: Vec::new(),
         notes: BTreeMap::new(),
+        after: BTreeMap::new(),
         slide: 0,
         node: None,
         layers: 0,
@@ -101,6 +105,7 @@ pub fn check(deck: &Deck, sig: &Signature) -> Checked {
         diagnostics: checker.diagnostics,
         slides,
         notes: checker.notes,
+        after: checker.after,
     }
 }
 
@@ -109,6 +114,7 @@ struct Checker<'a> {
     deck: &'a Deck,
     diagnostics: Vec<Diagnostic>,
     notes: BTreeMap<NodeId, Note>,
+    after: BTreeMap<NodeId, Vec<ObjectState>>,
     slide: usize,
     node: Option<NodeId>,
     layers: u32,
@@ -196,7 +202,7 @@ impl Checker<'_> {
     fn slide(&mut self, env: &mut Env, slide: &Slide, index: usize) -> SlideReport {
         self.slide = index;
         self.node = None;
-        let entry = summary(env);
+        let entry = self.summary(env);
         let config = &slide.config;
 
         if config.playback_rate <= 0.0 || config.reversed_playback_rate <= 0.0 {
@@ -238,6 +244,8 @@ impl Checker<'_> {
                 for node in &blueprint.body {
                     self.node = Some(node.id);
                     let frames = self.command(env, &node.item);
+                    let after = self.summary(env);
+                    self.after.insert(node.id, after);
                     let note = self.note();
                     (note.frames, note.start_frame) = (frames, report.frames);
                     report.frames += frames;
@@ -262,7 +270,7 @@ impl Checker<'_> {
             }
         }
 
-        report.exit = summary(env);
+        report.exit = self.summary(env);
         if config.looping && on_scene(&report.entry) != on_scene(&report.exit) {
             self.warn(
                 "loop-jump",
@@ -271,6 +279,25 @@ impl Checker<'_> {
             );
         }
         report
+    }
+
+    /// Every variable that names an object, with its kind and presence. Variables moved into
+    /// a group are included: their names still work.
+    fn summary(&self, env: &Env) -> Vec<ObjectState> {
+        let named = env
+            .vars
+            .iter()
+            .filter(|(_, entry)| !matches!(entry, Entry::Value(_)));
+        named
+            .filter_map(|(var, _)| {
+                let found = self.lookup(env, &Place::var(*var)).ok()?;
+                Some(ObjectState {
+                    var: *var,
+                    kind: found.kind,
+                    state: found.state,
+                })
+            })
+            .collect()
     }
 
     // ── Commands (§5.5) ──────────────────────────────────────────────────────
@@ -1406,20 +1433,6 @@ fn clash<'e>(writes: &'e Effect, touches: &'e Effect) -> Option<(&'e Step, &'e S
             .find(|b| !a.place.disjoint(&b.place))
             .map(|b| (a, b))
     })
-}
-
-fn summary(env: &Env) -> Vec<ObjectState> {
-    env.vars
-        .iter()
-        .filter_map(|(var, entry)| match entry {
-            Entry::Object(object) => Some(ObjectState {
-                var: *var,
-                kind: object.reshaped.get(&[][..]).unwrap_or(&object.kind).clone(),
-                state: object.tree.state(&object.shape),
-            }),
-            _ => None,
-        })
-        .collect()
 }
 
 /// The objects at least partly on scene, for comparing a loop's entry with its exit.

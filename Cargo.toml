@@ -13,6 +13,8 @@ suit-sig = { path = "crates/sig" }
 suit-check = { path = "crates/check" }
 suit-codegen = { path = "crates/codegen" }
 suit-render = { path = "crates/render" }
+suit-engine = { path = "crates/engine" }
+suit-ui = { path = "crates/ui" }
 
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }

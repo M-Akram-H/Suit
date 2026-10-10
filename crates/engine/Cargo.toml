@@ -1,0 +1,16 @@
+[package]
+name = "suit-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+suit-core.workspace = true
+suit-sig.workspace = true
+suit-check.workspace = true
+suit-codegen.workspace = true
+suit-render.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -50,13 +50,21 @@ impl Deck {
         SlideBuilder { deck: self, index }
     }
 
-    /// Gives `command` and everything inside it fresh node ids.
+    /// Wraps a newly built `command` in a node, giving it and everything inside it ids.
     pub fn adopt(&mut self, command: Command) -> Node<Command> {
         let mut node = Node::unset(command);
-        node.id = NodeId(self.fresh_id());
-        let mut fresh = || NodeId(self.fresh_id());
-        renumber_command(&mut node.item, &mut fresh);
+        self.assign_ids(&mut node);
         node
+    }
+
+    /// Gives an id to every node inside `node` that has none yet, and leaves the others
+    /// alone. An edited copy of a step therefore keeps the identity of what was not replaced.
+    pub fn assign_ids(&mut self, node: &mut Node<Command>) {
+        let mut fresh = || NodeId(self.fresh_id());
+        if node.id == UNSET {
+            node.id = fresh();
+        }
+        renumber_command(&mut node.item, &mut fresh);
     }
 }
 
@@ -189,7 +197,9 @@ fn renumber_command(command: &mut Command, fresh: &mut impl FnMut() -> NodeId) {
 }
 
 fn renumber_object(node: &mut Node<Object>, fresh: &mut impl FnMut() -> NodeId) {
-    node.id = fresh();
+    if node.id == UNSET {
+        node.id = fresh();
+    }
     match &mut node.item {
         Object::New { args, .. } => renumber_args(args, fresh),
         Object::Chain { base, call } => {
@@ -209,7 +219,9 @@ fn renumber_args(args: &mut Args, fresh: &mut impl FnMut() -> NodeId) {
 }
 
 fn renumber_anim(node: &mut Node<Anim>, fresh: &mut impl FnMut() -> NodeId) {
-    node.id = fresh();
+    if node.id == UNSET {
+        node.id = fresh();
+    }
     match &mut node.item {
         Anim::Prim { args, .. } => renumber_args(args, fresh),
         Anim::Animate { calls, .. } => calls
