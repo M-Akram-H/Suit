@@ -1,4 +1,4 @@
-//! `suit`: check, time and export Manim slide decks from the command line.
+//! `suit-cli`: check, time and export Manim slide decks from the command line.
 
 mod sample;
 
@@ -6,13 +6,13 @@ use std::{collections::BTreeMap, error::Error, fs, path::PathBuf, process::ExitC
 
 use clap::{Parser, Subcommand};
 use suit_check::{Checked, Diagnostic, Severity, check};
-use suit_codegen::{Options, export};
-use suit_core::{Anim, Command, Deck, Node, NodeId, Object, SlideContent, Updater};
+use suit_codegen::{Options, export, pretty::Pretty};
+use suit_core::{Deck, NodeId, SlideContent};
 use suit_sig::Signature;
 
 #[derive(Parser)]
 #[command(
-    name = "suit",
+    name = "suit-cli",
     version,
     about = "Check, time and export Manim slide decks"
 )]
@@ -43,6 +43,12 @@ enum Cmd {
         #[arg(long, default_value = "Deck")]
         class_name: String,
     },
+    /// Write the Python script that reports the scene after every step (used by the editor)
+    Probe {
+        deck: PathBuf,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
     /// Print the catalogue of objects, actions and animations as JSON
     Signature,
 }
@@ -51,7 +57,7 @@ fn main() -> ExitCode {
     match run(Cli::parse().command) {
         Ok(code) => code,
         Err(error) => {
-            eprintln!("suit: {error}");
+            eprintln!("suit-cli: {error}");
             ExitCode::FAILURE
         }
     }
@@ -72,7 +78,12 @@ fn run(command: Cmd) -> Result<ExitCode, Box<dyn Error>> {
         }
         Cmd::Timeline { deck } => {
             let deck = load(&deck)?;
-            print_timeline(&deck, &check(&deck, &sig));
+            print_timeline(&deck, &sig, &check(&deck, &sig));
+        }
+        Cmd::Probe { deck, output } => {
+            let deck = load(&deck)?;
+            let checked = check(&deck, &sig);
+            emit(output, &suit_codegen::probe(&deck, &sig, &checked))?;
         }
         Cmd::Export {
             deck,
@@ -84,7 +95,7 @@ fn run(command: Cmd) -> Result<ExitCode, Box<dyn Error>> {
             let checked = check(&deck, &sig);
             print_diagnostics(&deck, &checked);
             if checked.has_errors() {
-                eprintln!("suit: not exported, because the deck has errors");
+                eprintln!("suit-cli: not exported, because the deck has errors");
                 return Ok(ExitCode::FAILURE);
             }
             let options = Options {
@@ -167,7 +178,8 @@ fn print_diagnostics(deck: &Deck, checked: &Checked) {
     eprintln!("{errors} error(s), {warnings} warning(s)");
 }
 
-fn print_timeline(deck: &Deck, checked: &Checked) {
+fn print_timeline(deck: &Deck, sig: &Signature, checked: &Checked) {
+    let pretty = Pretty { deck, sig };
     let fps = f64::from(deck.config.fps);
     let secs = |frames: u32| f64::from(frames) / fps;
     let mut total = 0;
@@ -200,7 +212,7 @@ fn print_timeline(deck: &Deck, checked: &Checked) {
                     note.start_frame + frames - 1
                 ),
             };
-            println!("  {:>2}  {}{timing}", step + 1, describe(deck, node));
+            println!("  {:>2}  {}{timing}", step + 1, pretty.headline(&node.item));
         }
         if report.gap_frames > 0 {
             println!("      hold  {:.2} s", secs(report.gap_frames));
@@ -211,69 +223,4 @@ fn print_timeline(deck: &Deck, checked: &Checked) {
         secs(total),
         deck.config.fps
     );
-}
-
-fn describe(deck: &Deck, node: &Node<Command>) -> String {
-    let name = |var| deck.names.get(&var).map_or("?", String::as_str);
-    let place = |p: &suit_core::Place| {
-        let path: String = p.path.iter().map(|i| format!("[{i}]")).collect();
-        format!("{}{path}", name(p.root))
-    };
-    let places = |ps: &[suit_core::Place]| ps.iter().map(place).collect::<Vec<_>>().join(", ");
-    match &node.item {
-        Command::LetObject { var, value } => {
-            format!("new   {} = {}", name(*var), object_head(&value.item))
-        }
-        Command::LetValue { var, .. } => format!("value {}", name(*var)),
-        Command::Apply { target, call } => format!("set   {}.{}", place(target), call.method),
-        Command::Add { targets } => format!("add   {}", places(targets)),
-        Command::Remove { targets } => format!("remove {}", places(targets)),
-        Command::Play { anims } => {
-            let heads: Vec<String> = anims.iter().map(|a| anim_head(&a.item, &place)).collect();
-            format!("play  {}", heads.join(" + "))
-        }
-        Command::Wait { .. } => "wait".to_owned(),
-        Command::Attach { target, updater } => {
-            let call = match updater {
-                Updater::Always(call) | Updater::Every { call, .. } => call,
-            };
-            format!("always {}.{}", place(target), call.method)
-        }
-        Command::Detach { target } => format!("detach {}", place(target)),
-        Command::Raw(_) => "python".to_owned(),
-    }
-}
-
-fn object_head(object: &Object) -> String {
-    match object {
-        Object::New { ctor, .. } => ctor.to_string(),
-        Object::Group {
-            vector: true,
-            items,
-        } => format!("vgroup of {}", items.len()),
-        Object::Group {
-            vector: false,
-            items,
-        } => format!("group of {}", items.len()),
-        Object::Copy(_) => "copy".to_owned(),
-        Object::Chain { base, .. } => object_head(&base.item),
-    }
-}
-
-fn anim_head(anim: &Anim, place: &impl Fn(&suit_core::Place) -> String) -> String {
-    match anim {
-        Anim::Prim { ctor, args, .. } => {
-            let first = args.iter().find_map(|(_, arg)| match arg {
-                suit_core::Arg::Expr(suit_core::Expr::Place(p)) => Some(place(p)),
-                _ => None,
-            });
-            format!("{ctor}({})", first.unwrap_or_default())
-        }
-        Anim::Animate { target, calls, .. } => {
-            let methods: Vec<&str> = calls.iter().map(|call| call.method.as_str()).collect();
-            format!("{}.{}", place(target), methods.join("."))
-        }
-        Anim::Par { items, .. } => format!("{} together", items.len()),
-        Anim::Seq { items, .. } => format!("{} in sequence", items.len()),
-    }
 }

@@ -1,6 +1,6 @@
-"""Check the catalogue (`suit signature`) against the installed Manim.
+"""Check the catalogue (`suit-cli signature`) against the installed Manim.
 
-usage: suit signature | check_catalog.py
+usage: suit-cli signature | check_catalog.py
 
 Every kind must be a Manim class with the declared parent; every constructor, method,
 query and animation parameter must exist under that name; every rate function and

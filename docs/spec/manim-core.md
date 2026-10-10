@@ -76,6 +76,14 @@ An **interpretation** `𝓘` of Σ gives each symbol its meaning: `𝓘(C)` buil
 animation. The *reference interpretation* is Manim itself. §6 is generic in `𝓘`; a native Rust
 preview would be a second, partial interpretation that must agree with the reference one.
 
+The editor's canvas uses the reference interpretation directly rather than a second one. A
+generated *probe* script (`suit-cli probe`) runs the deck in Manim with animations skipped to
+their end state and reports, after every command, the outline, fill and stroke of everything
+on scene and which variable each outline belongs to. The canvas rasterises those outlines, so
+what it shows for text, formulas and graphs is what Manim will draw. The one difference from
+a real render is the one skipping makes: a time-based updater sees a single long frame per
+step instead of many short ones.
+
 Σ should be generated, not typed in: a script imports the installed Manim, dumps constructor
 and method signatures by introspection, and merges a small hand-written overlay holding what
 Python cannot tell us — kinds of `self`-returning methods, and animation roles. Appendix A

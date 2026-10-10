@@ -886,7 +886,7 @@ impl Checker<'_> {
         let name = self.name(target);
         if found.state != State::Is(Presence::On) {
             let (message, help) =
-                presence_problem(&"This change".into(), &name, Role::Mut, found.state);
+                presence_problem(&"this change".into(), &name, Role::Mut, found.state);
             self.error("presence", message, help);
         }
         if calls.is_empty() {
