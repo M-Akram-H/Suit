@@ -10,6 +10,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
+        Arc,
         atomic::{AtomicU64, Ordering},
         mpsc::{self, Receiver, RecvTimeoutError},
     },
@@ -61,6 +62,52 @@ pub struct Drawn {
     pub stroke: [f32; 4],
     /// In Manim's stroke units: hundredths of a scene unit at the default frame size.
     pub stroke_width: f32,
+    /// Set for a picture, which is drawn from its pixels and has no outline.
+    #[serde(default)]
+    pub picture: Option<Picture>,
+}
+
+/// A picture on the scene.
+#[derive(Clone, Debug, Deserialize)]
+pub struct Picture {
+    /// The file Manim wrote its pixels to. It says which picture this is; the pixels
+    /// themselves are in `png`, because the file goes when that Manim does.
+    pub file: PathBuf,
+    /// Where its top left, top right and bottom left corners are, in scene units.
+    pub corners: [[f32; 2]; 3],
+    /// From 0, not there, to 1.
+    pub opacity: f32,
+    /// The pixels, as a PNG file's contents. Empty if the file could not be read.
+    #[serde(skip)]
+    pub png: Arc<Vec<u8>>,
+}
+
+/// Reads the pixels of every picture in `drawn`, each file once.
+fn load_pictures<'d>(drawn: impl Iterator<Item = &'d mut Drawn>) {
+    let mut read: BTreeMap<PathBuf, Arc<Vec<u8>>> = BTreeMap::new();
+    for picture in drawn.filter_map(|drawn| drawn.picture.as_mut()) {
+        let png = read
+            .entry(picture.file.clone())
+            .or_insert_with(|| Arc::new(fs::read(&picture.file).unwrap_or_default()));
+        picture.png = png.clone();
+    }
+}
+
+/// What a probe reports, once whatever it points to on disk has been read.
+trait Loaded {
+    fn load(&mut self);
+}
+
+impl Loaded for Snapshots {
+    fn load(&mut self) {
+        load_pictures(self.steps.iter_mut().flat_map(|step| &mut step.drawn));
+    }
+}
+
+impl Loaded for Clip {
+    fn load(&mut self) {
+        load_pictures(self.pool.iter_mut());
+    }
 }
 
 /// A chain of cubic Bézier curves: the start point, then three points per curve.
@@ -266,7 +313,7 @@ impl Sidecar {
         for entry in entries.flatten() {
             let name = entry.file_name();
             let name = name.to_string_lossy();
-            let ours = ["probe-", "server-", "texts-"]
+            let ours = ["probe-", "server-", "texts-", "own-"]
                 .iter()
                 .any(|prefix| name.starts_with(prefix));
             let age = entry.metadata().and_then(|meta| meta.modified());
@@ -289,7 +336,7 @@ impl Sidecar {
         let id = unique();
         let script = self.work.join("server.py");
         let log = self.work.join(format!("server-{id}.log"));
-        let texts = self.work.join(format!("texts-{id}"));
+        let own = self.work.join(format!("own-{id}"));
         // Another Suit may be starting its Python on this very file: replace it whole or
         // not at all.
         if fs::read_to_string(&script).ok().as_deref() != Some(SERVER) {
@@ -303,7 +350,7 @@ impl Sidecar {
         let mut child = Command::new(&self.python)
             .arg("-u")
             .arg(&script)
-            .arg(&texts)
+            .arg(&own)
             .current_dir(&self.work)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -327,7 +374,7 @@ impl Sidecar {
             requests,
             replies,
             log,
-            texts,
+            own,
             usable: true,
         })
     }
@@ -350,8 +397,8 @@ struct Server {
     replies: Receiver<()>,
     /// Where the process's error output goes.
     log: PathBuf,
-    /// The process's own directory of typeset text.
-    texts: PathBuf,
+    /// The process's own directory, for typeset text and the pixels of pictures.
+    own: PathBuf,
     /// False once the process is gone or had to be stopped by force.
     usable: bool,
 }
@@ -424,7 +471,7 @@ impl Drop for Server {
         let _ = self.child.kill();
         let _ = self.child.wait();
         let _ = fs::remove_file(&self.log);
-        let _ = fs::remove_dir_all(&self.texts);
+        let _ = fs::remove_dir_all(&self.own);
     }
 }
 
@@ -472,7 +519,11 @@ impl Prober {
         self.run(suit_codegen::probe_frames(deck, sig, checked, slide), watch)
     }
 
-    fn run<T: DeserializeOwned>(&mut self, script: String, watch: Watch) -> Result<T, Failure> {
+    fn run<T: DeserializeOwned + Loaded>(
+        &mut self,
+        script: String,
+        watch: Watch,
+    ) -> Result<T, Failure> {
         let run = self.sidecar.prepare(script)?;
         let server = match &mut self.server {
             Some(server) => server,
@@ -484,6 +535,9 @@ impl Prober {
         }
         outcome?;
         let nothing = || Failure::Broken("Manim produced no result for this deck.".to_owned());
-        run.read().unwrap_or_else(|| Err(nothing()))
+        let mut result: T = run.read().unwrap_or_else(|| Err(nothing()))?;
+        // While the Manim that wrote them is certainly still there.
+        result.load();
+        Ok(result)
     }
 }

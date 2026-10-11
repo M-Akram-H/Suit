@@ -1,6 +1,7 @@
 """Keeps Manim imported and runs probe scripts on request.
 
-Started with one argument: a directory of its own for typeset text.
+Started with one argument: a directory of its own, for typeset text and for the pixels of
+pictures. Scripts find it as `_scratch`.
 
 One request per line on stdin: the script's path, a tab, the path for its result. One reply
 per request on stdout: a line starting with the record separator. Everything a script prints
@@ -17,6 +18,7 @@ text file every time it uses it (`PangoUtils.remove_last_M`), so two Manims maki
 text at the same moment read each other's half-written files, and one that is stopped in the
 middle leaves a broken file behind for everyone after it.
 """
+import os
 import queue
 import sys
 import threading
@@ -34,8 +36,8 @@ except ImportError:  # no such thing on Windows; there the directory is shared u
 
 CANCEL = "\x18"
 
-if len(sys.argv) > 1:
-    manim.config.text_dir = sys.argv[1]
+scratch = sys.argv[1] if len(sys.argv) > 1 else "."
+manim.config.text_dir = os.path.join(scratch, "texts")
 
 replies = sys.stdout
 sys.stdout = sys.stderr
@@ -101,7 +103,7 @@ while (line := requests.get()) is not None:
         if wanted():
             with open(script, encoding="utf-8") as source:
                 code = compile(source.read(), script, "exec")
-            exec(code, {"__name__": "__main__", "_wanted": wanted})
+            exec(code, {"__name__": "__main__", "_wanted": wanted, "_scratch": scratch})
             status = "ok"
     except BaseException as error:  # noqa: BLE001 - a script must never take the server down
         if wanted():

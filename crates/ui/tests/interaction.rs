@@ -233,6 +233,7 @@ fn with_a_circle(now: [f32; 2]) -> (Window, VarId) {
             fill: [1.0; 4],
             stroke: [1.0; 4],
             stroke_width: 4.0,
+            picture: None,
         };
         (
             if on { vec![drawn] } else { Vec::new() },
@@ -405,6 +406,7 @@ fn recording(frames: usize) -> Clip {
         fill: [1.0; 4],
         stroke: [1.0; 4],
         stroke_width: 4.0,
+        picture: None,
     };
     Clip {
         pool: vec![drawn],

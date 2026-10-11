@@ -1,10 +1,17 @@
 //! Drawing a snapshot of the scene: Manim's outlines, rasterised the way Cairo would.
 
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, LazyLock, Mutex},
+};
+
 use eframe::egui;
 use suit_core::{DeckConfig, Rgba, VarId};
-use suit_render::{Drawn, Outline};
+use suit_render::{Drawn, Outline, Picture};
 use tiny_skia::{
-    Color, FillRule, LineCap, LineJoin, Paint, PathBuilder, Pixmap, Stroke, Transform,
+    BlendMode, Color, FillRule, FilterQuality, LineCap, LineJoin, Paint, PathBuilder, Pixmap,
+    PixmapPaint, Stroke, Transform,
 };
 
 /// Manim's frame is eight scene units high whatever the resolution.
@@ -111,7 +118,56 @@ pub fn rasterize<'d>(
     Raster::default().draw(drawn, frame, background, size, moved)
 }
 
+/// The pixels of `picture`, decoded once and kept: a slide that plays shows the same few
+/// pictures in every frame. `None` if they are not a picture after all.
+fn pixels(picture: &Picture) -> Option<Arc<Pixmap>> {
+    type Decoded = HashMap<PathBuf, Option<Arc<Pixmap>>>;
+    static KEPT: LazyLock<Mutex<Decoded>> = LazyLock::new(Mutex::default);
+    let mut kept = KEPT.lock().ok()?;
+    if let Some(known) = kept.get(&picture.file) {
+        return known.clone();
+    }
+    // Nothing clever: a deck has a handful of pictures, and when it has had many, the
+    // ones still in use are decoded again.
+    if kept.len() >= 64 {
+        kept.clear();
+    }
+    let decoded = Pixmap::decode_png(&picture.png).ok().map(Arc::new);
+    kept.insert(picture.file.clone(), decoded.clone());
+    decoded
+}
+
+/// Paints a picture where Manim has it: any parallelogram, given by three of its corners.
+fn draw_picture(pixmap: &mut Pixmap, picture: &Picture, to_pixels: Transform) {
+    let Some(source) = pixels(picture) else {
+        return;
+    };
+    let [top_left, top_right, bottom_left] = picture.corners;
+    let (width, height) = (source.width() as f32, source.height() as f32);
+    // From the picture's own pixels to the scene: one pixel right is a step along the top
+    // edge, one pixel down a step along the left edge.
+    let place = Transform::from_row(
+        (top_right[0] - top_left[0]) / width,
+        (top_right[1] - top_left[1]) / width,
+        (bottom_left[0] - top_left[0]) / height,
+        (bottom_left[1] - top_left[1]) / height,
+        top_left[0],
+        top_left[1],
+    );
+    let paint = PixmapPaint {
+        opacity: picture.opacity.clamp(0.0, 1.0),
+        blend_mode: BlendMode::SourceOver,
+        quality: FilterQuality::Bilinear,
+    };
+    let source = source.as_ref().as_ref();
+    pixmap.draw_pixmap(0, 0, source, &paint, place.post_concat(to_pixels), None);
+}
+
 fn draw(pixmap: &mut Pixmap, drawn: &Drawn, to_pixels: Transform) {
+    if let Some(picture) = &drawn.picture {
+        draw_picture(pixmap, picture, to_pixels);
+        return;
+    }
     let Some(path) = path(&drawn.paths) else {
         return;
     };
@@ -223,6 +279,7 @@ mod tests {
                 fill: [1.0; 4],
                 stroke: [0.3, 0.8, 0.9, 1.0],
                 stroke_width: 4.0,
+                picture: None,
             }
         };
         let drawn: Vec<Drawn> = (0..40).map(shape).collect();

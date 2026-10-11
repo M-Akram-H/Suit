@@ -19,6 +19,8 @@ class _Probe:
         self.seen = {}
         self.frames = []
         self.marks = []
+        # Pictures written out so far: what they show, to the file it is in.
+        self.pictures = {}
 
     def name(self, var, mobject):
         self.names[var] = mobject
@@ -70,7 +72,42 @@ class _Probe:
             })
         return paths
 
+    def picture(self, image):
+        """A picture as the editor can draw it: a file with its pixels, where three of its
+        corners are, and how opaque it is.
+
+        The pixels are written once per distinct picture. An image that is fading changes
+        its alpha at every frame, so that is left out of the file and reported apart.
+        """
+        import os
+        import zlib
+
+        from PIL import Image
+
+        pixels = image.pixel_array
+        solid = getattr(image, "orig_alpha_pixel_array", pixels[:, :, 3])
+        key = (pixels.shape, zlib.crc32(pixels[:, :, :3].tobytes()), zlib.crc32(solid.tobytes()))
+        file = self.pictures.get(key)
+        if file is None:
+            whole = np.dstack((pixels[:, :, :3], solid)).astype(np.uint8)
+            folder = os.path.join(globals().get("_scratch", "."), "pictures")
+            os.makedirs(folder, exist_ok=True)
+            file = os.path.abspath(os.path.join(folder, f"{key[1]:08x}{key[2]:08x}.png"))
+            scaled = Image.fromarray(whole, "RGBA")
+            # No screen shows more than this; a camera's photograph has far more.
+            scaled.thumbnail((2048, 2048))
+            scaled.save(file)
+            self.pictures[key] = file
+        return {
+            "file": file,
+            "corners": np.round(image.points[:3, :2], 5).tolist(),
+            # Read off the pixels, which are what Manim draws; the attributes that are
+            # meant to say the same do not all follow a fade.
+            "opacity": float(pixels[:, :, 3].max()) / max(float(solid.max()), 1.0),
+        }
+
     def step(self, node):
+        from manim.mobject.types.image_mobject import AbstractImageMobject
         from manim.utils.family import extract_mobject_family_members
 
         self.check()
@@ -80,6 +117,16 @@ class _Probe:
         )
         drawn = []
         for member in members:
+            if isinstance(member, AbstractImageMobject):
+                drawn.append({
+                    "owners": owners.get(id(member), []),
+                    "paths": [],
+                    "fill": [0.0] * 4,
+                    "stroke": [0.0] * 4,
+                    "stroke_width": 0.0,
+                    "picture": self.picture(member),
+                })
+                continue
             if not isinstance(member, VMobject):
                 continue
             fill = [float(c) for c in member.get_fill_rgbas()[0]]
@@ -98,7 +145,8 @@ class _Probe:
         on_scene = {id(member) for member in members}
         for var, mobject in self.names.items():
             # Only what can be seen has a place on the canvas; a value tracker does not.
-            family = [m for m in mobject.family_members_with_points() if isinstance(m, VMobject)]
+            seen = (VMobject, AbstractImageMobject)
+            family = [m for m in mobject.family_members_with_points() if isinstance(m, seen)]
             if not family:
                 continue
             low, high = mobject.get_critical_point(DL), mobject.get_critical_point(UR)
@@ -123,6 +171,7 @@ class _Probe:
 
     def capture(self):
         """What is drawn right now, as indices into the pool of distinct outlines."""
+        from manim.mobject.types.image_mobject import AbstractImageMobject
         from manim.utils.family import extract_mobject_family_members
 
         self.check()
@@ -131,6 +180,21 @@ class _Probe:
         )
         frame = []
         for member in members:
+            if isinstance(member, AbstractImageMobject):
+                picture = self.picture(member)
+                key = (picture["file"], member.points.tobytes(), picture["opacity"])
+                index = self.seen.get(key)
+                if index is None:
+                    index = self.seen[key] = len(self.pool)
+                    self.pool.append({
+                        "paths": [],
+                        "fill": [0.0] * 4,
+                        "stroke": [0.0] * 4,
+                        "stroke_width": 0.0,
+                        "picture": picture,
+                    })
+                frame.append(index)
+                continue
             if not isinstance(member, VMobject):
                 continue
             fill, stroke = member.get_fill_rgbas()[0], member.get_stroke_rgbas()[0]
