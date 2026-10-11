@@ -1,6 +1,6 @@
 # Manim Core — abstract syntax, AST, type system and semantics
 
-Draft 0.8 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
+Draft 0.9 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
 
 Manim has no syntax of its own: a scene is a Python method that calls a library. What this
 document formalises is the small language *embedded* in those calls — make objects, change
@@ -1094,29 +1094,89 @@ which are unique and cannot shadow anything Manim exports.
 
 ## Appendix A — starting catalogue
 
-Enough to make real slides. It lives in `crates/sig/src/builtin.rs`; `tools/check_catalog.py`
-checks every kind, parameter name, default, constant and inside in it against the installed
-Manim.
+Enough to make real slides. It lives in `crates/sig/src/builtin.rs`, and `suit-cli signature`
+prints all of it: 37 kinds, 32 of them with a constructor, 22 methods and 17 queries (a name
+counted once), 31 animations, 45 rate functions, 28 functions and 103 constants.
+`tools/check_catalog.py` checks every kind and its parent, every parameter name, every
+method and query, the defaults of the animations, and every rate function, constant and
+inside in it against the installed Manim.
 Roles for animations are from the `introducer` / `remover` flags and clean-up code **[src]**,
 and the ones that matter most are confirmed by `tools/verify_quirks.py` **[run]**.
 
-**Kinds.** `Mobject` ⊃ `VMobject` ⊃ { `Circle`, `Dot`, `Ellipse`, `Square`, `Rectangle`,
-`RoundedRectangle`, `Triangle`, `RegularPolygon`, `Polygon`, `Star`, `Line`, `Arrow`,
-`DoubleArrow`, `DashedLine`, `Arc`, `Brace`, `SurroundingRectangle`, `Text`, `MarkupText`,
-`MathTex`, `Tex`, `DecimalNumber`, `Integer`, `NumberLine`, `Axes`, `NumberPlane`,
-`FunctionGraph`, `ParametricFunction`, `Table`, `Code`, `VGroup` }; `Mobject` ⊃ `Group`,
-`ImageMobject`, `ValueTracker`. And `Plot` and `Tangent ≤ Line`, which are Suit's own (§2),
-with the method `touch`, the query `slope` and the animation `Glide` (`mut`, on a
-`Tangent`); the catalogue check holds these to their own definitions instead of to Manim.
+**Kinds.** Each stands under its parent, which is how `≤` is read off.
 
-**Methods** (on `Mobject` unless noted). `shift`, `move_to`, `next_to`, `to_edge`,
-`to_corner`, `align_to`, `scale`, `rotate`, `flip`, `stretch`, `set_color`, `set_opacity`,
-`set_z_index`, `arrange` (containers); `set_fill`, `set_stroke` (`VMobject`); `set_value`
-(`ValueTracker`, `DecimalNumber`).
+```
+Mobject                               no constructor
+  Group                               no constructor: made by group(p̄) (§3)
+  ImageMobject
+  ValueTracker
+  VMobject                            no constructor
+    VGroup                            no constructor: made by vgroup(p̄) (§3)
+      Axes
+        NumberPlane
+    Arc
+      Circle
+        Dot
+        Ellipse
+    Polygram                          no constructor: Manim's parent of the two below
+      Polygon
+        Rectangle
+          Square
+          RoundedRectangle
+            SurroundingRectangle
+        Star
+      RegularPolygon
+        Triangle
+    Line
+      Arrow
+        DoubleArrow
+      DashedLine
+      NumberLine
+      Tangent                         Suit's own (§2)
+    Brace
+    Text
+    MarkupText
+    MathTex
+      Tex
+    DecimalNumber
+      Integer
+    ParametricFunction
+      FunctionGraph
+    Plot                              Suit's own (§2)
+```
 
-**Queries.** `get_center`, `get_top`, `get_bottom`, `get_left`, `get_right`, `get_corner`,
-`get_width`, `get_height` (`Mobject`); `point_from_proportion` (`VMobject`); `get_value`
-(`ValueTracker`); `c2p` (`Axes`); `n2p` (`NumberLine`).
+The other 32 kinds each have a constructor of their own name. Every one of them takes
+`color`, which is `Mobject`'s, and those below `VMobject` take its `fill_color`,
+`fill_opacity`, `stroke_color`, `stroke_opacity` and `stroke_width` as well (§2).
+`elem(Mobject) = Mobject` and `elem(VMobject) = VMobject`, inherited the same way. With
+`Plot` and `Tangent` come the method `touch`, the query `slope` and the animation `Glide`
+(`mut`, on a `Tangent`); the catalogue check holds these to their own definitions instead of
+to Manim.
+
+**Methods.** On `Mobject`: `shift`, `move_to`, `next_to`, `to_edge`, `to_corner`,
+`align_to`, `set_x`, `set_y`, `scale`, `scale_to_fit_width`, `scale_to_fit_height`, `rotate`,
+`flip`, `stretch`, `arrange`, `set_color`, `become`. On `VMobject`: `set_opacity`,
+`set_fill`, `set_stroke`. `set_value` on `ValueTracker` and on `DecimalNumber`, whose
+parameter Manim calls `value` on the one and `number` on the other. `touch` on `Tangent`.
+
+- `arrange` lines up the children of its receiver, so it is of use on a group; it is a
+  method of every `Mobject` all the same, as it is in Manim.
+- `become` gives its receiver the geometry of another object. It is the one exception to
+  "the receiver keeps its kind" (§2): afterwards the kind is the least common ancestor of
+  the two and indexing into the receiver is no longer allowed, exactly as for the source of
+  a `Transform` (§5.4).
+- `set_z_index` is Manim's and is deliberately not a method of Σ: the layers are given out
+  by the translation (§7), which is what P4 rests on.
+
+**Queries.** On `Mobject`, to a `Vec`: `get_center`, `get_top`, `get_bottom`, `get_left`,
+`get_right`, `get_corner`, `get_start`, `get_end`; to a `Real`: `get_x`, `get_y`, `width`,
+`height`. `point_from_proportion` (`VMobject`); `get_value` (`ValueTracker`,
+`DecimalNumber`); `c2p` (`Axes`); `n2p` (`NumberLine`); `slope` (`Tangent`).
+
+`width`, `height` and `slope` are *properties*: Python reads them without brackets, `p.width`
+where another query is `p.get_center()`. The catalogue says of every query which of the two
+it is, and the catalogue check holds it to that. In a formula they are all asked the same
+way (§3.1).
 
 **Animations.**
 
@@ -1129,7 +1189,6 @@ with the method `touch`, the query `slope` and the animation `Glide` (`mut`, on 
 | `GrowFromCenter`, `GrowFromPoint`, `GrowFromEdge`, `SpinInFromNothing` | `intro` | — |
 | `GrowArrow` | `intro` | `Arrow` |
 | `AddTextLetterByLetter` | `intro` | `Text` |
-| `RemoveTextLetterByLetter` | `consume` **[open]**; not in the catalogue yet | `Text` |
 | `ShowPassingFlash` | `flash` | `VMobject` |
 | `Transform` | source `mut` (kind weakened), target `use` | — |
 | `ReplacementTransform` | source `consume`, target `intro` | — |
@@ -1137,12 +1196,65 @@ with the method `touch`, the query `slope` and the animation `Glide` (`mut`, on 
 | `FadeTransform` | source `outro`, target `intro` | — |
 | `TransformMatchingShapes` | source `outro`, target `intro` | — |
 | `TransformMatchingTex` | source `outro`, target `intro` | `MathTex` both |
-| `Indicate`, `Wiggle`, `ApplyWave`, `Rotate` | `mut` | — |
+| `Indicate`, `Wiggle`, `ApplyWave`, `Rotate`, `ScaleInPlace`, `FadeToColor` | `mut` | — |
 | `Circumscribe` | `use`: it draws a frame around the object and leaves the object alone | — |
 | `MoveAlongPath` | object `mut`, path `use` | path: `VMobject` |
-| `Wipe`, `Zoom` (manim-slides) | current… `outro`, future… `intro`; not in the catalogue yet | — |
+| `Glide` | `mut` | `Tangent` |
+| `Flash`, `FocusOn` | none: what they are given is a value, a point or an object standing for its centre | — |
+
+Not in the catalogue yet: `RemoveTextLetterByLetter` (`consume` **[open]**, on a `Text`), and
+`Wipe` and `Zoom` of manim-slides (current… `outro`, future… `intro`).
 
 Verified defaults: `Animation` run time 1, rate `smooth`, lag 0; `AnimationGroup` rate
 `linear`, lag 0; `Succession` lag 1; `LaggedStart` lag 0.05; `Wait` run time 1, rate `linear`;
-`Add` run time 0 **[src]**. All other per-animation defaults are to come from the generated
-catalogue, not from memory.
+`Add` run time 0 **[src]**. Every other default is in the catalogue, and the catalogue check
+compares it with the one in Manim's signature wherever the signature states one. They are
+`Animation`'s three, except:
+
+- run time 2 for `DrawBorderThenFill`, `Wiggle`, `ApplyWave` and `FocusOn`;
+- rate `linear` for `Write`, `Unwrite`, `AddTextLetterByLetter`, `Flash`, `Circumscribe`,
+  `TransformMatchingShapes` and `TransformMatchingTex`; `double_smooth` for
+  `DrawBorderThenFill`; `there_and_back` for `Indicate`;
+- lag 1 for `Create`, `Uncreate` and `Circumscribe`.
+
+For five animations the run time 1 is the catalogue's own, which Manim's signature does not
+state: `Write`, `Unwrite` and `AddTextLetterByLetter` pick a length from the object they are
+given, and the two `TransformMatching…` take theirs from their parts. It is what is rendered
+all the same, because the translation always passes a run time (§7).
+
+**Rate functions.** By the names Manim exports: `linear`, `smooth`, `smoothstep`,
+`smootherstep`, `smoothererstep`, `rush_into`, `rush_from`, `slow_into`, `double_smooth`,
+`there_and_back`, `there_and_back_with_pause`, `running_start`, `wiggle`, `lingering`,
+`exponential_decay`. And the thirty `ease_in_…`, `ease_out_…` and `ease_in_out_…` of `sine`,
+`quad`, `cubic`, `quart`, `quint`, `expo`, `circ`, `back`, `elastic` and `bounce`, which Manim
+does not export by name: Python is given `rate_functions.ease_in_sine`.
+
+**Functions.** With their types, since an operator stands for several. The first that fits
+is taken, so the integer forms come first (`Int ≤ Real`, §5.1).
+
+| Function | Types |
+|---|---|
+| `+`, `-` | `Int × Int → Int`, `Real × Real → Real`, `Vec × Vec → Vec` |
+| `*` | `Int × Int → Int`, `Real × Real → Real`, `Real × Vec → Vec`, `Vec × Real → Vec` |
+| `/` | `Real × Real → Real`, `Vec × Real → Vec` |
+| `neg` | `Int → Int`, `Real → Real`, `Vec → Vec` |
+| `pow`, `min`, `max` | `Real × Real → Real` |
+| `<`, `<=`, `>`, `>=`, `==`, `!=` | `Real × Real → Bool` |
+| `and`, `or` | `Bool × Bool → Bool` |
+| `not` | `Bool → Bool` |
+| `sin`, `cos`, `tan`, `exp`, `log`, `sqrt`, `abs` | `Real → Real` |
+| `norm`, `x`, `y`, `z` | `Vec → Real` |
+
+**Constants.** Of type `Vec`: `ORIGIN`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `UL`, `UR`, `DL`, `DR`,
+`IN`, `OUT`. Of type `Real`: `PI`, `TAU`, `DEGREES`. Of type `Color`, the 89 colours Manim
+exports by name, which `tools/gen_colors.py` writes into the catalogue from the installed
+Manim:
+
+- `WHITE` and `BLACK`;
+- `BLUE`, `TEAL`, `GREEN`, `YELLOW`, `GOLD`, `RED`, `MAROON`, `PURPLE` and `GRAY`, each also
+  in the five shades `_A` to `_E`;
+- `DARK_GRAY`, `DARKER_GRAY`, `LIGHT_GRAY`, `LIGHTER_GRAY` and `GRAY_BROWN`;
+- every name with `GRAY` in it once more with `GREY`;
+- `DARK_BLUE`, `DARK_BROWN`, `LIGHT_BROWN`, `LIGHT_PINK`, `PINK` and `ORANGE`;
+- `PURE_RED`, `PURE_GREEN`, `PURE_BLUE`, `PURE_CYAN`, `PURE_MAGENTA` and `PURE_YELLOW`;
+- `LOGO_WHITE`, `LOGO_GREEN`, `LOGO_BLUE`, `LOGO_RED` and `LOGO_BLACK`.
