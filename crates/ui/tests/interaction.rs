@@ -1513,3 +1513,17 @@ fn a_problem_takes_one_to_its_step() {
     let session = &window.state().session;
     assert_eq!((session.slide, session.step), (1, Some(1)));
 }
+
+#[test]
+fn the_windows_carry_the_logo() {
+    let icon = SuitApp::icon().expect("the icon is a picture that can be read");
+    assert_eq!((icon.width, icon.height), (256, 256));
+    assert_eq!(icon.rgba.len(), 256 * 256 * 4);
+    // A rounded square: nothing in its corners, and all of it in the middle.
+    let alpha = |x: usize, y: usize| icon.rgba[(y * 256 + x) * 4 + 3];
+    assert_eq!(
+        [alpha(0, 0), alpha(255, 0), alpha(0, 255), alpha(255, 255)],
+        [0; 4]
+    );
+    assert_eq!(alpha(128, 128), 255);
+}

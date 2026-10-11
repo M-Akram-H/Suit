@@ -57,6 +57,13 @@ COPY --from=manim /opt/manim /opt/manim
 COPY docker/start.sh /usr/local/bin/suit-start
 COPY docker/openbox.xml /etc/suit/openbox.xml
 COPY docker/index.html /usr/share/novnc/index.html
+COPY crates/ui/assets/icon.png /usr/share/suit/icon.png
+
+# The browser's tab shows Suit's picture rather than that of the page that carries it:
+# the page's icons are redrawn from Suit's, each at its own size, and its drawn one,
+# which browsers would prefer, is no longer offered.
+RUN /opt/manim/bin/python -c "from PIL import Image; import glob; logo = Image.open('/usr/share/suit/icon.png'); [logo.resize(Image.open(name).size, Image.LANCZOS).save(name) for name in glob.glob('/usr/share/novnc/app/images/icons/novnc-*x*.png')]" \
+    && sed -i '/image\/svg+xml/d' /usr/share/novnc/vnc.html
 
 ENV SUIT_PYTHON=/opt/manim/bin/python \
     PATH=/opt/manim/bin:$PATH \

@@ -305,6 +305,10 @@ fn notes(
     let builder = egui::ViewportBuilder::default()
         .with_title("Suit — notes")
         .with_inner_size([560.0, 660.0]);
+    let builder = match SuitApp::icon() {
+        Some(icon) => builder.with_icon(icon),
+        None => builder,
+    };
     let presenter = &presenting.presenter;
     let slide = &session.deck.slides[presenter.slide()];
     let (place, count) = presenter.place();

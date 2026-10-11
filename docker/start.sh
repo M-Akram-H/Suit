@@ -50,7 +50,7 @@ done
 openbox --config-file /etc/suit/openbox.xml >/dev/null 2>&1 &
 # The screen is reached from the browser through noVNC. Only the container itself may
 # talk to the VNC server; what leaves the container is the web page on port 6080.
-x11vnc -display "$DISPLAY" -forever -shared -nopw -localhost -rfbport 5900 -quiet >/dev/null 2>&1 &
+x11vnc -display "$DISPLAY" -desktop Suit -forever -shared -nopw -localhost -rfbport 5900 -quiet >/dev/null 2>&1 &
 websockify --web /usr/share/novnc 6080 localhost:5900 >/dev/null 2>&1 &
 
 # The window is drawn by the processor: there is no graphics card in here.

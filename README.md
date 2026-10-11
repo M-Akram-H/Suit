@@ -1,4 +1,8 @@
-# Suit
+<p align="center">
+  <img src="docs/images/logo.png" width="160" alt="Suit's logo: a suit covered in formulas, with white-gloved hands straightening its tie">
+</p>
+
+<h1 align="center">Suit</h1>
 
 **A visual editor for [Manim](https://www.manim.community/) slides.** Make animated
 mathematical presentations by clicking instead of writing Python, and see every step

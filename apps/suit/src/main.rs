@@ -110,6 +110,10 @@ fn main() -> eframe::Result {
         .with_app_id("suit")
         .with_inner_size([1480.0, 920.0])
         .with_min_inner_size([1000.0, 640.0]);
+    let viewport = match SuitApp::icon() {
+        Some(icon) => viewport.with_icon(icon),
+        None => viewport,
+    };
     let options = eframe::NativeOptions {
         viewport,
         ..Default::default()

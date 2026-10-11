@@ -1,3 +1,5 @@
+<img src="images/logo.png" width="96" align="right" alt="Suit's logo">
+
 # Suit documentation
 
 Suit is a visual editor for [Manim](https://www.manim.community/) slides. These chapters

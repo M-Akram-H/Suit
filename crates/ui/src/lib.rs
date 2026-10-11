@@ -16,7 +16,10 @@ mod stage;
 mod steps;
 mod style;
 
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{Arc, OnceLock},
+};
 
 use eframe::egui;
 use suit_core::VarId;
@@ -93,6 +96,14 @@ impl SuitApp {
     pub fn with_screenshot(mut self, path: Option<PathBuf>) -> SuitApp {
         self.screenshot = path;
         self
+    }
+
+    /// The picture Suit's windows carry: a suit covered in formulas. `None` if it cannot
+    /// be read, which is no reason not to open a window.
+    pub fn icon() -> Option<Arc<egui::IconData>> {
+        static ICON: OnceLock<Option<Arc<egui::IconData>>> = OnceLock::new();
+        let read = || eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"));
+        ICON.get_or_init(|| read().ok().map(Arc::new)).clone()
     }
 
     /// The monospace font has the arrows and symbols the proportional one lacks.
