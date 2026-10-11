@@ -61,6 +61,8 @@ pub(crate) struct Shared {
     asks: AtomicU64,
     /// Counts the times everything was told to stop.
     stops: AtomicU64,
+    /// Counts the changes to the deck.
+    revision: AtomicU64,
 }
 
 impl Shared {
@@ -93,20 +95,34 @@ struct Request {
     revision: u64,
     deck: Arc<Deck>,
     checked: Arc<Checked>,
+    /// What each slide of this deck looks like depends on; see [`render_keys`].
+    keys: Arc<Vec<u64>>,
     work: Work,
 }
 
 #[derive(Clone, Copy, PartialEq)]
 enum Work {
-    /// The scene after every step.
-    Steps,
+    /// The scene after every step of the slides from number `have` on; the session has
+    /// the ones before. The slides up to the `selected` one are answered first, because
+    /// the canvas shows one of those, and the rest after. `rest` marks that second part.
+    Steps {
+        have: usize,
+        selected: usize,
+        rest: bool,
+    },
     /// The frames of one slide. `asked` is true if someone is waiting for them.
     Record { slide: usize, key: u64, asked: bool },
 }
 
 enum Reply {
+    /// The scene after every step of slides `first` to `last` of a deck with these `keys`.
     Steps {
         revision: u64,
+        keys: Arc<Vec<u64>>,
+        first: usize,
+        last: usize,
+        /// False if the slides after `last` are still to come.
+        done: bool,
         result: Result<Snapshots, Failure>,
     },
     Clip {
@@ -155,7 +171,7 @@ impl Worker {
                 };
                 for request in first.into_iter().chain(inbox.try_iter()) {
                     match request.work {
-                        Work::Steps => steps = Some(request),
+                        Work::Steps { .. } => steps = Some(request),
                         Work::Record { asked: true, .. } => asked.push_back(request),
                         Work::Record { asked: false, .. } => ahead.push_back(request),
                     }
@@ -180,13 +196,51 @@ impl Worker {
                 let stops = shared.stops.load(Ordering::Relaxed);
                 let stopped = || shared.stops.load(Ordering::Relaxed) != stops;
                 let reply = if let Some(request) = steps.take() {
+                    let Work::Steps {
+                        have,
+                        selected,
+                        rest,
+                    } = request.work
+                    else {
+                        continue;
+                    };
+                    let end = request.deck.slides.len().saturating_sub(1);
+                    // The slide on the canvas first, if there is more than that to do.
+                    let last = if have <= selected && selected < end {
+                        selected
+                    } else {
+                        end
+                    };
+                    // What the canvas waits for is seen through. The slides after it are
+                    // given up as soon as the deck has changed again.
+                    let revision = request.revision;
+                    let current = || shared.revision.load(Ordering::Relaxed) == revision;
+                    let wanted = || !stopped() && (!rest || current());
                     let watch = Watch {
                         limit: STEPS_LIMIT,
-                        wanted: &|| !stopped(),
+                        wanted: &wanted,
                     };
-                    let result = prober.probe(&request.deck, &sig, &request.checked, watch);
+                    let (deck, checked) = (&request.deck, &request.checked);
+                    let result = prober.probe_slides(deck, &sig, checked, have, last, watch);
+                    let whole = result.as_ref().is_ok_and(|shown| shown.error.is_none());
+                    let done = last == end || !whole;
+                    let keys = request.keys.clone();
+                    if !done {
+                        // Unless something newer comes in first, which the top of the loop
+                        // will find.
+                        let work = Work::Steps {
+                            have: last + 1,
+                            selected: usize::MAX,
+                            rest: true,
+                        };
+                        steps = Some(Request { work, ..request });
+                    }
                     Reply::Steps {
-                        revision: request.revision,
+                        revision,
+                        keys,
+                        first: have,
+                        last,
+                        done,
                         result,
                     }
                 } else if !shared.quiet.load(Ordering::Relaxed) {
@@ -249,7 +303,7 @@ impl Session {
         let replies: Vec<Reply> = worker.replies.try_iter().collect();
         for reply in replies {
             match reply {
-                Reply::Steps { revision, result } => self.take_steps(revision, result),
+                steps @ Reply::Steps { .. } => self.take_steps(steps),
                 Reply::Clip { key, result } => {
                     self.recordings_wanted.remove(&key);
                     let whole = result.and_then(|clip| match clip.error.clone() {
@@ -274,7 +328,24 @@ impl Session {
                 self.preview = Preview::Running;
                 return Some(DEBOUNCE - waited);
             }
-            if self.send(&[Work::Steps]) {
+            let have = self.held();
+            if have >= self.deck.slides.len() {
+                // What changed is nothing Manim draws: a title, a note, a name. Or the
+                // deck lost its last slides, and what is left is as it was.
+                let count = self.deck.slides.len();
+                self.snapshots.steps.retain(|step| step.slide < count);
+                self.snapshot_keys.truncate(count);
+                self.requested = Some(self.revision);
+                self.preview = Preview::Ready;
+                self.shared.quiet.store(true, Ordering::Relaxed);
+                return None;
+            }
+            let work = Work::Steps {
+                have,
+                selected: self.slide,
+                rest: false,
+            };
+            if self.send(&[work]) {
                 self.requested = Some(self.revision);
                 self.preview = Preview::Running;
             }
@@ -282,7 +353,7 @@ impl Session {
         }
         // With the canvas served and the deck at rest, record the slides ahead of anyone
         // asking, so that playing and presenting start at once.
-        if self.records_ahead && self.preview == Preview::Ready && self.preview_is_current() {
+        if self.records_ahead && self.preview == Preview::Ready {
             let waited = self.changed_at.elapsed();
             if waited < IDLE {
                 return Some(IDLE - waited);
@@ -292,25 +363,76 @@ impl Session {
         None
     }
 
-    fn take_steps(&mut self, revision: u64, result: Result<Snapshots, Failure>) {
+    /// How many slides, from the first, the snapshots show as they are now.
+    fn held(&self) -> usize {
+        let current = |(have, now): &(&Option<u64>, &u64)| **have == Some(**now);
+        self.snapshot_keys
+            .iter()
+            .zip(&self.keys)
+            .take_while(current)
+            .count()
+    }
+
+    /// Whether the canvas shows the selected slide as it is now, rather than as it was
+    /// while Manim catches up.
+    pub fn preview_is_current(&self) -> bool {
+        self.held() > self.slide
+    }
+
+    fn take_steps(&mut self, reply: Reply) {
+        let Reply::Steps {
+            revision,
+            keys,
+            first,
+            last,
+            done,
+            result,
+        } = reply
+        else {
+            return;
+        };
+        // An answer about a deck that has since been asked about again is not merged in:
+        // what the session holds would no longer be what it said it held when it asked.
+        if self.requested != Some(revision) {
+            return;
+        }
         self.generation += 1;
-        let latest = self.requested == Some(revision);
         match result {
-            Ok(snapshots) => {
-                self.shown = Some(revision);
-                self.preview = match (&snapshots.error, latest) {
-                    (_, false) => Preview::Running,
-                    (Some(error), true) => Preview::Failed(error.clone()),
+            Ok(shown) => {
+                // Where Manim stopped, if it did: that slide is there in part, and the
+                // ones after it not at all.
+                let stuck = shown.error.as_ref().map(|_| {
+                    let reached = shown.steps.last().map_or(first, |step| step.slide);
+                    reached.max(first)
+                });
+                let through = if done { usize::MAX } else { last };
+                let kept =
+                    |step: &suit_render::Snapshot| step.slide < first || step.slide > through;
+                self.snapshots.steps.retain(kept);
+                self.snapshots.steps.extend(shown.steps);
+                self.snapshots.steps.sort_by_key(|step| step.slide);
+                self.snapshots.error = shown.error;
+
+                self.snapshot_keys.resize(keys.len(), None);
+                for slide in first..keys.len() {
+                    self.snapshot_keys[slide] = match stuck {
+                        Some(stuck) if slide >= stuck => None,
+                        _ if slide <= last => Some(keys[slide]),
+                        _ if done => None,
+                        _ => self.snapshot_keys[slide],
+                    };
+                }
+                self.preview = match (&self.snapshots.error, done) {
+                    (Some(error), _) => Preview::Failed(error.clone()),
                     (None, true) => Preview::Ready,
+                    (None, false) => Preview::Running,
                 };
-                self.snapshots = snapshots;
             }
-            Err(Failure::Abandoned) if latest => self.preview = Preview::Stopped,
-            Err(Failure::Abandoned) => {}
+            Err(Failure::Abandoned) => self.preview = Preview::Stopped,
             // Python itself did not run; what was shown before is better than nothing.
             Err(reason) => self.preview = Preview::Failed(reason.to_string()),
         }
-        if latest {
+        if self.preview != Preview::Running {
             self.shared.quiet.store(true, Ordering::Relaxed);
         }
     }
@@ -320,12 +442,17 @@ impl Session {
         let Some(worker) = &self.worker else {
             return false;
         };
-        let (deck, checked) = (Arc::new(self.deck.clone()), Arc::new(self.checked.clone()));
+        let (deck, checked) = (
+            Arc::new(self.deck_for_manim()),
+            Arc::new(self.checked.clone()),
+        );
+        let keys = Arc::new(self.keys.clone());
         work.iter().all(|&work| {
             let request = Request {
                 revision: self.revision,
                 deck: deck.clone(),
                 checked: checked.clone(),
+                keys: keys.clone(),
                 work,
             };
             worker.requests.send(request).is_ok()
@@ -339,11 +466,13 @@ impl Session {
             keys.clone_from(&self.keys);
         }
         self.shared.quiet.store(false, Ordering::Relaxed);
+        self.shared.revision.store(self.revision, Ordering::Relaxed);
     }
 
     /// Asks for a fresh preview even though the deck has not changed.
     pub fn refresh_preview(&mut self) {
         self.requested = None;
+        self.snapshot_keys.clear();
         self.shared.quiet.store(false, Ordering::Relaxed);
     }
 
@@ -357,6 +486,10 @@ impl Session {
     /// on. On unless turned off.
     pub fn record_ahead_of_time(&mut self, on: bool) {
         self.records_ahead = on;
+    }
+
+    pub fn records_ahead_of_time(&self) -> bool {
+        self.records_ahead
     }
 
     // ── Playing slides ───────────────────────────────────────────────────────

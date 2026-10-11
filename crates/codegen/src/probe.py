@@ -1,29 +1,162 @@
+import copy
+import hashlib
+import io
+import os
+import pickle
+import types
+import zlib
+
+
 class _Abandoned(BaseException):
     """Nobody wants the result any more. Not an `Exception`, so that nothing on the way out
     mistakes it for a problem with the deck."""
 
 
+def _digest(*parts):
+    whole = hashlib.blake2b(digest_size=12)
+    for part in parts:
+        whole.update(part if isinstance(part, bytes) else str(part).encode())
+        whole.update(b"\0")
+    return whole.hexdigest()
+
+
+class _World:
+    """A scene that is kept between probes, and what it looked like before every slide.
+
+    Running a deck in Manim means running it from its first slide, and most of the time
+    that is spent on slides nobody has touched. So the scene and the deck's variables are
+    saved before each slide, under a name made of everything that was run to get there,
+    and a later probe starts from the furthest state whose name still fits its deck.
+
+    A scene is never rendered here, only driven: Manim does not mind `play` and `add`
+    being called from outside `construct`.
+    """
+
+    # Arrays from this size are saved once and shared between the states: the pixels of
+    # a photograph are many megabytes, and are in every state after the slide that adds it.
+    BIG = 1 << 18
+
+    def __init__(self, key, base):
+        self.scene = Scene()
+        # Nothing is ever drawn: what is on scene is read off the objects.
+        self.scene.renderer.update_frame = lambda *args, **kwargs: None
+        # The deck's variables live in `space`, the globals of every slide's code. An
+        # updater made there looks its objects up in it by name when it runs, so putting
+        # other objects under those names is all that restoring takes.
+        self.space = {name: value for name, value in base.items() if name != "_SLIDES"}
+        self.space["self"] = self.scene
+        self.space["_probe"] = None
+        self.base = set(self.space)
+        # Which of the deck's variables each object is, for telling the editor.
+        self.names = {}
+        self.saved = {}
+        # The name of the state the scene is in, if it is exactly a saved-or-savable one.
+        self.at = key
+        self.arrays = {}
+        # Pictures written out so far: what they show, to the file it is in.
+        self.pictures = {}
+        self.save(key)
+
+    def fixtures(self):
+        scene = self.scene
+        return scene, scene.renderer, scene.camera
+
+    def state(self):
+        variables = {name: value for name, value in self.space.items() if name not in self.base}
+        scene = self.scene
+        return variables, scene.mobjects, scene.foreground_mobjects, self.names
+
+    def save(self, key):
+        """Keeps the present state as `key`: pickled if it can be, copied if not."""
+        if key in self.saved:
+            return
+        world = self
+        kept = []
+        used = set()
+        fixtures = self.fixtures()
+
+        class Saver(pickle.Pickler):
+            def persistent_id(self, value):
+                # Functions stay the very same: Python cannot write a lambda down, and
+                # the ones here do not hold objects, they look them up.
+                if isinstance(value, types.FunctionType):
+                    kept.append(value)
+                    return "function", len(kept) - 1
+                if isinstance(value, np.ndarray) and value.nbytes >= world.BIG:
+                    name = _digest(value.shape, value.dtype, value.tobytes())
+                    if name not in world.arrays:
+                        world.arrays[name] = value.copy()
+                    used.add(name)
+                    return "array", name
+                # The scene itself is not part of its state.
+                for which, fixture in enumerate(fixtures):
+                    if value is fixture:
+                        return "fixture", which
+                return None
+
+        try:
+            written = io.BytesIO()
+            Saver(written, protocol=pickle.HIGHEST_PROTOCOL).dump(self.state())
+            self.saved[key] = ("pickled", written.getvalue(), kept, used)
+        except Exception:
+            try:
+                self.saved[key] = ("copied", copy.deepcopy(self.state()), None, set())
+            except Exception:
+                # Then this slide is simply run again when it is needed.
+                pass
+
+    def restore(self, key):
+        how, state, kept, _ = self.saved[key]
+        world = self
+
+        class Loader(pickle.Unpickler):
+            def persistent_load(self, name):
+                kind, which = name
+                if kind == "function":
+                    return kept[which]
+                if kind == "array":
+                    return world.arrays[which].copy()
+                return world.fixtures()[which]
+
+        if how == "pickled":
+            state = Loader(io.BytesIO(state)).load()
+        else:
+            state = copy.deepcopy(state)
+        variables, mobjects, foreground, names = state
+        for name in [name for name in self.space if name not in self.base]:
+            del self.space[name]
+        self.space.update(variables)
+        scene = self.scene
+        scene.mobjects, scene.foreground_mobjects, self.names = mobjects, foreground, names
+        scene.updaters = []
+        self.at = key
+
+    def keep(self, keys):
+        """Forgets the states that are not on the way through the deck as it is now."""
+        self.saved = {key: state for key, state in self.saved.items() if key in keys}
+        used = set().union(*(state[3] for state in self.saved.values()))
+        self.arrays = {name: array for name, array in self.arrays.items() if name in used}
+
+
 class _Probe:
     """Records what is on scene, as outlines the editor can draw: after every step, or at
-    every frame of one slide."""
+    every frame of one slide. The slides' code calls it after everything it does."""
 
-    def __init__(self, scene, out):
-        self.scene = scene
+    def __init__(self, world, out):
+        self.world = world
+        self.scene = world.scene
         self.out = out
-        self.names = {}
+        # What the slide now running is run for: "quiet" to get past it, "steps" to see
+        # the scene after each of its steps, "record" to see every frame.
+        self.mode = "quiet"
         self.steps = []
         self.slide = 0
         self.error = None
-        # Set by `record`: the distinct outlines seen, and per frame the ones drawn.
+        # For a recording: the distinct outlines seen, and per frame the ones drawn.
         self.pool = None
         self.seen = {}
         self.frames = []
         self.marks = []
-        # Pictures written out so far: what they show, to the file it is in.
-        self.pictures = {}
-
-    def name(self, var, mobject):
-        self.names[var] = mobject
 
     @staticmethod
     def check():
@@ -31,9 +164,42 @@ class _Probe:
         if not globals().get("_wanted", lambda: True)():
             raise _Abandoned
 
+    # ── What the slides' code calls ──────────────────────────────────────────
+
     def enter(self, slide):
         self.slide = slide
-        self.step(None)
+        self.scene.next_section(skip_animations=self.mode != "record")
+        if self.mode == "steps":
+            self.step(None)
+        elif self.mode == "record":
+            self.pool = []
+            # Scene updaters run last in every frame, after animations and object
+            # updaters, so this sees exactly the state that would be drawn.
+            self.scene.add_updater(lambda dt: self.frames.append(self.capture()))
+
+    def name(self, var, mobject):
+        self.world.names[var] = mobject
+
+    def after(self, node):
+        """Step `node` has just been run."""
+        if self.mode == "steps":
+            self.step(node)
+        elif self.mode == "record":
+            self.marks.append([node, len(self.frames)])
+        else:
+            self.check()
+
+    def wait(self, seconds, frames, live):
+        if self.mode == "record" and not live:
+            # A still wait: the same frame, `frames` times. Asking Manim to wait would
+            # not do, because being recorded makes it treat every wait as live.
+            self.frames.extend([self.capture()] * frames)
+        elif live:
+            self.scene.wait(seconds, frozen_frame=False)
+        else:
+            self.scene.wait(seconds)
+
+    # ── Looking at the scene ─────────────────────────────────────────────────
 
     def owners(self):
         """For every part of a named object: which names reach it, and by which path."""
@@ -44,7 +210,7 @@ class _Probe:
             for index, child in enumerate(mobject.submobjects):
                 walk(var, child, path + [index])
 
-        for var, mobject in self.names.items():
+        for var, mobject in self.world.names.items():
             walk(var, mobject, [])
         return owners
 
@@ -79,15 +245,12 @@ class _Probe:
         The pixels are written once per distinct picture. An image that is fading changes
         its alpha at every frame, so that is left out of the file and reported apart.
         """
-        import os
-        import zlib
-
         from PIL import Image
 
         pixels = image.pixel_array
         solid = getattr(image, "orig_alpha_pixel_array", pixels[:, :, 3])
         key = (pixels.shape, zlib.crc32(pixels[:, :, :3].tobytes()), zlib.crc32(solid.tobytes()))
-        file = self.pictures.get(key)
+        file = self.world.pictures.get(key)
         if file is None:
             whole = np.dstack((pixels[:, :, :3], solid)).astype(np.uint8)
             folder = os.path.join(globals().get("_scratch", "."), "pictures")
@@ -97,7 +260,7 @@ class _Probe:
             # No screen shows more than this; a camera's photograph has far more.
             scaled.thumbnail((2048, 2048))
             scaled.save(file)
-            self.pictures[key] = file
+            self.world.pictures[key] = file
         return {
             "file": file,
             "corners": np.round(image.points[:3, :2], 5).tolist(),
@@ -106,15 +269,20 @@ class _Probe:
             "opacity": float(pixels[:, :, 3].max()) / max(float(solid.max()), 1.0),
         }
 
-    def step(self, node):
-        from manim.mobject.types.image_mobject import AbstractImageMobject
+    def members(self):
         from manim.utils.family import extract_mobject_family_members
+
+        return extract_mobject_family_members(
+            self.scene.mobjects, use_z_index=True, only_those_with_points=True
+        )
+
+    def step(self, node):
+        """Notes the scene as it is after step `node`."""
+        from manim.mobject.types.image_mobject import AbstractImageMobject
 
         self.check()
         owners = self.owners()
-        members = extract_mobject_family_members(
-            self.scene.mobjects, use_z_index=True, only_those_with_points=True
-        )
+        members = self.members()
         drawn = []
         for member in members:
             if isinstance(member, AbstractImageMobject):
@@ -143,7 +311,7 @@ class _Probe:
             })
         boxes = {}
         on_scene = {id(member) for member in members}
-        for var, mobject in self.names.items():
+        for var, mobject in self.world.names.items():
             # Only what can be seen has a place on the canvas; a value tracker does not.
             seen = (VMobject, AbstractImageMobject)
             family = [m for m in mobject.family_members_with_points() if isinstance(m, seen)]
@@ -156,30 +324,13 @@ class _Probe:
             }
         self.steps.append({"slide": self.slide, "node": node, "drawn": drawn, "boxes": boxes})
 
-    def quiet(self):
-        """Run without drawing anything: only the state of the scene is wanted."""
-        self.scene.renderer.update_frame = lambda *args, **kwargs: None
-        self.scene.next_section(skip_animations=True)
-
-    def record(self):
-        """From here on, note what is drawn at every frame Manim would render."""
-        self.scene.next_section(skip_animations=False)
-        self.pool = []
-        # Scene updaters run last in every frame, after animations and object updaters,
-        # so this sees exactly the state that would be drawn.
-        self.scene.add_updater(lambda dt: self.frames.append(self.capture()))
-
     def capture(self):
         """What is drawn right now, as indices into the pool of distinct outlines."""
         from manim.mobject.types.image_mobject import AbstractImageMobject
-        from manim.utils.family import extract_mobject_family_members
 
         self.check()
-        members = extract_mobject_family_members(
-            self.scene.mobjects, use_z_index=True, only_those_with_points=True
-        )
         frame = []
-        for member in members:
+        for member in self.members():
             if isinstance(member, AbstractImageMobject):
                 picture = self.picture(member)
                 key = (picture["file"], member.points.tobytes(), picture["opacity"])
@@ -216,18 +367,67 @@ class _Probe:
             frame.append(index)
         return frame
 
-    def hold(self, frames):
-        """A still wait: the same frame, `frames` times, without asking Manim to wait."""
-        self.frames.extend([self.capture()] * frames)
-
-    def mark(self, node):
-        """Step `node` ends here."""
-        self.marks.append([node, len(self.frames)])
-
-    def finish(self):
-        result = {"steps": self.steps, "error": self.error}
+    def finish(self, first):
+        result = {"first": first, "steps": self.steps, "error": self.error}
         if self.pool is not None:
             result.update(pool=self.pool, frames=self.frames, marks=self.marks)
         # `dumps` uses the fast encoder; `dump` to a file does not.
         with open(self.out, "w", encoding="utf-8") as file:
             file.write(json.dumps(result))
+
+
+def _run(slides, what, have, last, out):
+    """Runs the deck as far as slide `last` and writes what was asked for to `out`.
+
+    `what` is "steps" for the scene after every step of the slides from `have` on, or
+    "frames" for every frame of slide `last`. The slides before those are only run if
+    there is no saved state to start from instead.
+    """
+    # Kept by whoever runs one script after another in the same Python; alone, a script
+    # has only itself.
+    worlds = globals().get("_worlds")
+    if worlds is None:
+        worlds = {}
+    root = _digest(config.frame_rate, config.frame_height, config.frame_width)
+    if root not in worlds:
+        worlds.clear()
+        worlds[root] = _World(root, globals())
+    world = worlds[root]
+    # The state before slide `i` is named after everything run to get there.
+    keys = [root]
+    for code in slides:
+        keys.append(_digest(keys[-1], code))
+    world.keep(set(keys))
+
+    first = last if what == "frames" else min(have, last)
+    probe = _Probe(world, out)
+    world.space["_probe"] = probe
+    try:
+        # From where the scene is, if that is on the way; else from the furthest saved
+        # state before the first slide that is to be looked at.
+        start = max(i for i in range(first + 1) if keys[i] in world.saved or keys[i] == world.at)
+        if world.at != keys[start]:
+            world.restore(keys[start])
+        for index in range(start, last + 1):
+            if index < first:
+                probe.mode = "quiet"
+            else:
+                probe.mode = "steps" if what == "steps" else "record"
+            world.at = None
+            exec(compile(slides[index], f"slide {index + 1}", "exec"), world.space)
+            # A slide that was played for real has been through other frames than one
+            # that was skipped through, so only the latter is a state to start from.
+            if probe.mode != "record":
+                world.at = keys[index + 1]
+                world.save(keys[index + 1])
+    except _Abandoned:
+        # Nobody will read it, and writing half a recording down takes its time.
+        probe.out = None
+        raise
+    except Exception as error:
+        probe.error = f"{type(error).__name__}: {error}"
+    finally:
+        world.scene.updaters = []
+        world.space["_probe"] = None
+        if probe.out is not None:
+            probe.finish(first)

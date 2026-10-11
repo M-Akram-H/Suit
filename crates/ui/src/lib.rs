@@ -45,6 +45,10 @@ pub struct SuitApp {
     thumbnails: Vec<Cached<(u64, [u32; 2])>>,
     /// The object last clicked on the canvas.
     pub picked: Option<VarId>,
+    /// The objects picked along with it, by clicking them with Shift held.
+    pub picked_too: Vec<VarId>,
+    /// The object `picked_too` goes with; picking another one starts afresh.
+    picked_with: Option<VarId>,
     /// The outcome of the last action in the bar.
     notice: Option<String>,
     /// When the preview now being waited for was first seen to be on its way.
@@ -73,6 +77,8 @@ impl SuitApp {
             presented_at_start: false,
             thumbnails: Vec::new(),
             picked: None,
+            picked_too: Vec::new(),
+            picked_with: None,
             notice: None,
             asking_since: None,
             dialog: None,

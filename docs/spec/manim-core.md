@@ -1,6 +1,6 @@
 # Manim Core — abstract syntax, AST, type system and semantics
 
-Draft 0.4 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
+Draft 0.5 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
 
 Manim has no syntax of its own: a scene is a Python method that calls a library. What this
 document formalises is the small language *embedded* in those calls — make objects, change
@@ -102,6 +102,17 @@ every command and at every frame, whether their result is still wanted. What a s
 frames depend on is the deck's configuration and the commands of that slide and of the
 slides before it (E-Deck threads `ρ` and `W` forwards only), so a recording stays good
 through every change to a later slide, to a title, or to a note.
+
+The same fact is what makes the canvas quick. E-Deck runs slide `i` from `⟨ρᵢ₋₁, Wᵢ₋₁⟩` and
+from nothing else, so the Manim that runs the probes keeps that pair for every `i` — the
+deck's variables and the scene, saved before each slide under a name made of the
+configuration and of the text of the slides run to get there. A probe starts from the
+furthest saved pair whose name fits the deck it is given and runs the slides from there:
+after a change to slide `k`, slides `1 … k−1` are not run again. A slide that was *played*
+for a recording is never saved from, because it has been through other frames than one that
+was skipped through (Q3), and the two need not end in the same state. The tests hold this to
+the definition: after a long run of edits and undos, what the editor shows must be what a
+Manim that has never seen the deck makes of it.
 
 Σ should be generated, not typed in: a script imports the installed Manim, dumps constructor
 and method signatures by introspection, and merges a small hand-written overlay holding what
@@ -965,6 +976,11 @@ Four things the translation does on purpose:
   `AddTextLetterByLetter` otherwise pick a length from the text, which would make durations
   depend on a render. Composites get one only when it was set; theirs follows from their
   children.
+
+A deck names a **picture** relative to its own folder when the picture lies in it, so that
+the folder can be moved as a whole. The exported file then sets `config.assets_dir` to the
+folder it is in, which is where Manim looks for a file it is given by a relative name
+**[src]**, and the probes are given every name in full.
 
 A fifth is a precaution rather than a rule of Manim's: **points are arrays of reals.**
 `⟨e₁, e₂, e₃⟩` becomes `np.array([…])` with integer literals written as reals, and with

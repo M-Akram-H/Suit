@@ -261,3 +261,107 @@ fn a_manim_that_hangs_is_replaced() {
     assert_eq!(snapshots.expect("a new Manim runs").error, None);
     assert_ne!(prober.process(), process);
 }
+
+/// A deck of `count` slides with a line of text each; `changed` gets another line. The
+/// first slide also leaves a mark in `log` every time Manim runs it.
+fn slides(count: usize, changed: Option<usize>, log: &Path) -> Deck {
+    let mut deck = Deck::new(DeckConfig::default());
+    for index in 0..count {
+        let mut slide = deck.add_slide("A slide");
+        if index == 0 {
+            let python = format!(
+                "open({:?}, \"a\").write(\"ran\\n\")",
+                log.display().to_string()
+            );
+            slide.push(Command::Raw(Raw {
+                python,
+                iface: RawIface::default(),
+            }));
+        }
+        let text = match changed == Some(index) {
+            true => format!("slide {index}, changed"),
+            false => format!("slide {index}"),
+        };
+        let line =
+            Object::new("Text")
+                .arg("text", text.as_str())
+                .then(suit_core::Call::new("shift").arg(
+                    "vectors",
+                    suit_core::Expr::vec3(0.0, index as f64 - 2.0, 0.0),
+                ));
+        let line = slide.object(&format!("line {index}"), line);
+        slide.play(vec![
+            Anim::prim("Write").arg("vmobject", &line).run_time(0.5),
+        ]);
+    }
+    deck
+}
+
+/// How often Manim has run the first slide.
+fn runs(log: &Path) -> usize {
+    std::fs::read_to_string(log).map_or(0, |log| log.lines().count())
+}
+
+#[test]
+#[ignore = "needs Manim"]
+fn a_changed_slide_is_run_from_what_the_slides_before_it_left() {
+    let sig = Signature::builtin();
+    let log = Path::new(env!("CARGO_TARGET_TMPDIR")).join("first-slide-runs.log");
+    let _ = std::fs::remove_file(&log);
+    let mut prober = prober();
+    let shown = |snapshots: &suit_render::Snapshots, from: usize| {
+        let steps = snapshots.steps.iter().filter(|step| step.slide >= from);
+        format!("{:?}", steps.collect::<Vec<_>>())
+    };
+
+    let before = slides(5, None, &log);
+    let checked = check(&before, &sig);
+    let whole = prober
+        .probe(&before, &sig, &checked, Watch::patient())
+        .expect("Manim runs");
+    assert_eq!((whole.error.as_ref(), whole.first), (None, 0));
+    assert_eq!(runs(&log), 1);
+
+    // The fourth slide changes: the session has the first three, and asks from there.
+    let after = slides(5, Some(3), &log);
+    let checked_after = check(&after, &sig);
+    let part = prober
+        .probe_slides(&after, &sig, &checked_after, 3, 4, Watch::patient())
+        .expect("Manim runs");
+    assert_eq!((part.error.as_ref(), part.first), (None, 3));
+    assert!(part.steps.iter().all(|step| step.slide >= 3));
+    assert_eq!(runs(&log), 1, "the first slide was not run again");
+    // Exactly what a Manim that has never seen the deck makes of those slides.
+    let mut fresh = self::prober();
+    let anew = fresh
+        .probe(&after, &sig, &checked_after, Watch::patient())
+        .expect("Manim runs");
+    assert_eq!(runs(&log), 2);
+    assert_eq!(shown(&part, 3), shown(&anew, 3));
+    assert_ne!(shown(&part, 3), shown(&whole, 3), "the change shows");
+
+    // A recording starts from what was left behind, too.
+    let clip = prober
+        .probe_frames(&after, &sig, &checked_after, 4, Watch::patient())
+        .expect("Manim runs");
+    let report = &checked_after.slides[4];
+    assert_eq!(clip.error, None);
+    assert_eq!(clip.frames.len() as u32, report.frames + report.gap_frames);
+    assert_eq!(runs(&log), 2);
+
+    // And back again: the deck as it was, from the slide where the two part.
+    let back = prober
+        .probe_slides(&before, &sig, &checked, 3, 4, Watch::patient())
+        .expect("Manim runs");
+    assert_eq!(shown(&back, 3), shown(&whole, 3));
+    assert_eq!(runs(&log), 2);
+
+    // A change to the first slide leaves nothing to start from but the empty scene.
+    let other = slides(5, Some(0), &log);
+    let checked_other = check(&other, &sig);
+    let all = prober
+        .probe(&other, &sig, &checked_other, Watch::patient())
+        .expect("Manim runs");
+    assert_eq!(all.error, None);
+    assert_eq!(runs(&log), 3);
+}

@@ -13,7 +13,7 @@ use std::{
 
 use suit_core::{Command, Raw, RawIface, Time};
 use suit_engine::{Preview, Session};
-use suit_render::Sidecar;
+use suit_render::{Prober, Sidecar, Watch};
 
 /// Manim runs one at a time per cache directory, so tests that time it must not overlap.
 fn alone() -> MutexGuard<'static, ()> {
@@ -24,7 +24,11 @@ fn alone() -> MutexGuard<'static, ()> {
 /// Ticks like a user interface would until the preview shows the deck as it is.
 fn settle(session: &mut Session) -> Duration {
     let started = Instant::now();
-    while !session.preview_is_current() {
+    // What the session says about its preview is as of its last tick.
+    session.tick();
+    let stopped =
+        |session: &Session| matches!(session.preview, Preview::Failed(_) | Preview::Stopped);
+    while !session.preview_is_current() && !stopped(session) {
         assert!(
             started.elapsed() < Duration::from_secs(60),
             "no preview within a minute"
@@ -232,10 +236,15 @@ fn a_manim_that_never_finishes_is_stopped_by_hand() {
         session.preview == Preview::Stopped
     });
 
-    // With the step gone, a new Manim shows the deck again.
+    // With the step gone the deck is what it was, which the session still has a picture
+    // of; after another change, a new Manim shows it.
     session.delete_step();
-    settle(&mut session);
+    settle_all(&mut session);
     assert_eq!(session.preview, Preview::Ready);
+    let circle = session.add_object("Circle").unwrap();
+    settle_all(&mut session);
+    assert_eq!(session.preview, Preview::Ready);
+    assert!(session.snapshot().unwrap().boxes[&circle].on);
 }
 
 #[test]
@@ -264,4 +273,129 @@ fn manim_makes_every_object_as_it_is_first_added() {
     settle(&mut session);
     assert_eq!(session.preview, Preview::Ready);
     assert_eq!(session.checked.diagnostics, []);
+}
+
+/// Ticks until Manim has shown every slide of the deck as it is.
+fn settle_all(session: &mut Session) {
+    settle(session);
+    let minute = Duration::from_secs(60);
+    until(session, minute, |session| {
+        session.preview != Preview::Running
+    });
+}
+
+/// What a Manim that has never seen the deck says it looks like.
+fn from_scratch(session: &Session) -> String {
+    let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let anew = Prober::new(sidecar)
+        .probe(
+            &session.deck,
+            &session.sig,
+            &session.checked,
+            Watch::patient(),
+        )
+        .expect("Manim runs");
+    assert_eq!(anew.error, None);
+    format!("{:?}", anew.steps)
+}
+
+#[test]
+#[ignore = "needs Manim"]
+fn the_preview_after_many_edits_is_the_preview_of_the_deck() {
+    let _alone = alone();
+    let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let mut session = Session::sample().with_preview(sidecar, || {});
+    session.record_ahead_of_time(false);
+    settle_all(&mut session);
+    assert_eq!(session.preview, Preview::Ready);
+    assert_eq!(
+        format!("{:?}", session.snapshots.steps),
+        from_scratch(&session)
+    );
+
+    // Edits all over the deck, each built on what Manim kept from the ones before.
+    session.select(5, None);
+    let star = session.add_object("Star").unwrap();
+    settle_all(&mut session);
+    session.select(1, Some(3));
+    let ring = session.add_object("Circle").unwrap();
+    assert!(session.place_at_creation(ring, [3.0, 2.0]));
+    settle_all(&mut session);
+    session.select(3, None);
+    session.add_object("Text");
+    settle_all(&mut session);
+    session.undo();
+    settle_all(&mut session);
+    session.select(2, Some(0));
+    session.insert_move(star, [0.0, 0.0], true);
+    // That step is before the star is made: Manim stops there, and says so.
+    settle_all(&mut session);
+    assert!(
+        matches!(session.preview, Preview::Failed(_)),
+        "{:?}",
+        session.preview
+    );
+    session.undo();
+    settle_all(&mut session);
+    session.select(4, None);
+    session.move_slide(false);
+    settle_all(&mut session);
+    session.undo();
+    session.select(0, Some(1));
+    session.edit_slide(|slide| slide.title = "Another title".to_owned());
+    settle_all(&mut session);
+    session.select(2, None);
+    session.add_slide();
+    session.add_object("Triangle");
+    settle_all(&mut session);
+
+    assert_eq!(session.preview, Preview::Ready);
+    assert_eq!(session.checked.diagnostics, []);
+    assert_eq!(
+        format!("{:?}", session.snapshots.steps),
+        from_scratch(&session)
+    );
+}
+
+#[test]
+#[ignore = "needs Manim"]
+fn an_edit_late_in_a_long_deck_does_not_replay_the_deck() {
+    let _alone = alone();
+    let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let mut session = Session::blank().with_preview(sidecar, || {});
+    session.record_ahead_of_time(false);
+    // Fifteen slides with a line of text and a formula each.
+    for slide in 0..15 {
+        if slide > 0 {
+            session.add_slide();
+        }
+        session.add_object("Text");
+        session.add_object("MathTex");
+    }
+    settle_all(&mut session);
+    // The whole deck, by a Manim that is up and has typeset everything before: what
+    // every edit used to cost.
+    session.refresh_preview();
+    let whole = Instant::now();
+    settle_all(&mut session);
+    let whole = whole.elapsed();
+
+    session.add_object("Circle");
+    let late = settle(&mut session);
+    session.select(7, Some(1));
+    session.add_object("Square");
+    let middle = settle(&mut session);
+    let rest = Instant::now();
+    settle_all(&mut session);
+    println!(
+        "the whole deck {whole:?}; an edit on the last slide {late:?}; on a middle one \
+         {middle:?} until the canvas has it, {:?} more for the slides after",
+        rest.elapsed()
+    );
+    assert!(late < whole / 3, "{late:?} against {whole:?}");
+    assert!(middle < whole / 3, "{middle:?} against {whole:?}");
+    assert_eq!(
+        format!("{:?}", session.snapshots.steps),
+        from_scratch(&session)
+    );
 }

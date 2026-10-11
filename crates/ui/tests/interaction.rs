@@ -256,7 +256,7 @@ fn with_a_circle(now: [f32; 2]) -> (Window, VarId) {
             snapshot(Some(ids[0]), at([0.0, 0.0], false)),
             snapshot(Some(ids[1]), at(now, true)),
         ],
-        error: None,
+        ..Snapshots::default()
     };
     (open(session), var)
 }
@@ -1048,4 +1048,169 @@ fn the_animations_on_offer_suit_the_object() {
     press(&mut window, "GrowFromCenter");
     assert_eq!(headlines(&window)[3], "GrowFromCenter circle");
     assert_eq!(window.state().session.checked.diagnostics, []);
+}
+
+#[test]
+fn shift_picks_several_objects_to_group() {
+    // A circle three units left of the middle and a square in the middle, as Manim would
+    // report them once both are on the slide.
+    let mut session = Session::blank();
+    let circle = session.add_object("Circle").unwrap();
+    let square = session.add_object("Square").unwrap();
+    let shape = |var: VarId, x: f32| {
+        let rect = [x - 1.0, -1.0, x + 1.0, 1.0];
+        let corners = [
+            [rect[0], -1.0],
+            [rect[2], -1.0],
+            [rect[2], 1.0],
+            [rect[0], 1.0],
+        ];
+        let mut points = vec![corners[0]];
+        for side in 0..4 {
+            let (from, to) = (corners[side], corners[(side + 1) % 4]);
+            points.extend([from, to, to]);
+        }
+        let drawn = Drawn {
+            owners: vec![(var, vec![])],
+            paths: vec![Outline {
+                points,
+                closed: true,
+            }],
+            fill: [1.0; 4],
+            stroke: [1.0; 4],
+            stroke_width: 4.0,
+            picture: None,
+        };
+        (drawn, (var, Bounds { rect, on: true }))
+    };
+    let (round, round_box) = shape(circle, -3.0);
+    let (straight, straight_box) = shape(square, 0.0);
+    let last = session.steps().last().map(|node| node.id);
+    session.snapshots = Snapshots {
+        steps: vec![Snapshot {
+            slide: 0,
+            node: last,
+            drawn: vec![round, straight],
+            boxes: BTreeMap::from([round_box, straight_box]),
+        }],
+        ..Snapshots::default()
+    };
+    let mut window = open(session);
+    window.state_mut().picked = None;
+
+    let (centre, scale) = on_canvas(&window, [0.0, 0.0]);
+    let on_circle = centre - egui::vec2(3.0 / scale, 0.0);
+    window.hover_at(on_circle);
+    window.drag_at(on_circle);
+    window.drop_at(on_circle);
+    window.run_ok();
+    assert_eq!(window.state().picked, Some(circle));
+    assert!(window.query_by_label_contains("Group these").is_none());
+
+    // The square, with Shift: both are picked now, and can be grouped from right there.
+    window
+        .get_by_label("Canvas")
+        .click_modifiers(Modifiers::SHIFT);
+    window.run_ok();
+    assert_eq!(window.state().picked, Some(circle));
+    assert_eq!(window.state().picked_too, [square]);
+    press(&mut window, "Group these 2…");
+    press(&mut window, "Group these");
+    assert_eq!(text_of_step(&window, 4), "group = vgroup(circle, square)");
+
+    // A plain click picks one object again.
+    window.get_by_label("Canvas").click();
+    window.run_ok();
+    assert!(window.state().picked_too.is_empty());
+}
+
+#[test]
+fn animations_take_turns_and_python_fills_the_gaps() {
+    let mut window = open(Session::blank());
+    press(&mut window, "Circle");
+    press(&mut window, "Animate");
+    press(&mut window, "Add animation");
+    assert_eq!(headlines(&window)[2], "Indicate circle + Indicate circle");
+    press(&mut window, "Play these one after another");
+    assert_eq!(headlines(&window)[2], "2 in a row");
+    assert!(window.state().session.checked.diagnostics.is_empty());
+    // With two animations in a row the properties are longer than their panel, and the
+    // button is below its edge; it is pressed without being pointed at.
+    window
+        .get_by_role_and_label(Role::Button, "Play these together")
+        .click_accesskit();
+    window.run_ok();
+    assert_eq!(headlines(&window)[2], "Indicate circle + Indicate circle");
+
+    menu(&mut window, "More steps", "Python code");
+    assert_eq!(headlines(&window)[3], "Python code");
+    assert!(matches!(
+        window.state().session.steps()[3].item,
+        Command::Raw(_)
+    ));
+}
+
+#[test]
+fn pictures_are_named_from_where_the_deck_is() {
+    let folder = scratch("portable");
+    let elsewhere = scratch("elsewhere");
+    fs::create_dir_all(folder.join("art")).unwrap();
+    fs::write(folder.join("art/inside.png"), b"one picture").unwrap();
+    fs::write(elsewhere.join("outside.png"), b"another picture").unwrap();
+    let file_of = |session: &Session, step: usize| {
+        let Command::LetObject { value, .. } = &session.steps()[step].item else {
+            panic!("not an object")
+        };
+        let Object::Chain { base, .. } = &value.item else {
+            panic!("not placed")
+        };
+        let Object::New { args, .. } = &base.item else {
+            panic!("not made")
+        };
+        let suit_core::Arg::Expr(Expr::Str(file)) = &args[0].1 else {
+            panic!("no file")
+        };
+        file.clone()
+    };
+
+    let mut session = Session::blank();
+    session.save_as(&folder.join("deck.suit.json")).unwrap();
+    session.add_picture(&folder.join("art/inside.png")).unwrap();
+    session.add_picture(&elsewhere.join("outside.png")).unwrap();
+    assert_eq!(file_of(&session, 0), "art/inside.png");
+    assert_eq!(
+        file_of(&session, 2),
+        elsewhere.join("outside.png").display().to_string()
+    );
+    assert_eq!(
+        session.pictures_elsewhere(),
+        [elsewhere.join("outside.png")]
+    );
+
+    // Gathering copies what is elsewhere next to the deck; then the folder has it all.
+    let mut window = open(session);
+    menu(&mut window, "File", "Gather pictures");
+    assert!(
+        window
+            .query_by_label("Copied 1 picture next to the deck.")
+            .is_some()
+    );
+    let session = &mut window.state_mut().session;
+    assert_eq!(file_of(session, 2), "pictures/outside.png");
+    assert_eq!(
+        fs::read(folder.join("pictures/outside.png")).unwrap(),
+        b"another picture"
+    );
+    assert!(session.pictures_elsewhere().is_empty());
+
+    // Saved somewhere else, the deck names the same files from there.
+    let moved = scratch("moved");
+    session.save_as(&moved.join("deck.suit.json")).unwrap();
+    assert_eq!(
+        file_of(session, 0),
+        folder.join("art/inside.png").display().to_string()
+    );
+    assert!(!session.is_dirty());
+    session.save_as(&folder.join("art/deck.suit.json")).unwrap();
+    assert_eq!(file_of(session, 0), "inside.png");
 }

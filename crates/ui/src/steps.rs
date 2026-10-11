@@ -4,7 +4,8 @@ use eframe::egui::{self, Align2, FontId, Rect, Sense, pos2, vec2};
 use suit_check::{ObjectState, State};
 use suit_codegen::pretty::Pretty;
 use suit_core::{
-    Anim, Arg, Call, Command, Expr, Node, Place, Presence, SlideContent, Sym, Time, Updater, VarId,
+    Anim, Arg, Call, Command, Expr, Node, Place, Presence, Raw, RawIface, SlideContent, Sym, Time,
+    Updater, VarId,
 };
 use suit_engine::Session;
 use suit_sig::{AnimParam, AnimParamType, Role};
@@ -306,15 +307,26 @@ impl SuitApp {
                         }
                     });
                     if ui
+                        .button("Python code")
+                        .on_hover_text(
+                            "A step written in Python, for what the editor has no step for. \
+                             It is run as it stands; `self` is the scene.",
+                        )
+                        .clicked()
+                    {
+                        let python = "# self is the scene\n".to_owned();
+                        add = Some(Command::Raw(Raw {
+                            python,
+                            iface: RawIface::default(),
+                        }));
+                        ui.close();
+                    }
+                    if ui
                         .button("Group…")
                         .on_hover_text("Put objects together, to move and animate them as one")
                         .clicked()
                     {
-                        let free = !self
-                            .session
-                            .grouped()
-                            .contains(&self.picked.unwrap_or(VarId(0)));
-                        self.grouping = Some(self.picked.filter(|_| free).into_iter().collect());
+                        self.start_grouping();
                         ui.close();
                     }
                 })
@@ -356,6 +368,14 @@ impl SuitApp {
         if duplicate && let Some(object) = &subject {
             self.picked = self.session.duplicate(object.var).or(self.picked);
         }
+    }
+
+    /// Opens the dialog for making a group, with what is picked ticked already.
+    pub(crate) fn start_grouping(&mut self) {
+        let grouped = self.session.grouped();
+        let picked = self.picked.iter().chain(&self.picked_too);
+        let free = picked.filter(|var| !grouped.contains(var));
+        self.grouping = Some(free.copied().collect());
     }
 
     /// Choosing what goes into a group.

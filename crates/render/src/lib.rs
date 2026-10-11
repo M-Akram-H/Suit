@@ -26,6 +26,9 @@ use suit_sig::Signature;
 /// The scene after every step of a deck, in deck order.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Snapshots {
+    /// The first slide reported: the ones before it were not asked for.
+    #[serde(default)]
+    pub first: usize,
     pub steps: Vec<Snapshot>,
     /// Why the run stopped early, if it did; the steps before it are still valid.
     pub error: Option<String>,
@@ -503,7 +506,24 @@ impl Prober {
         checked: &Checked,
         watch: Watch,
     ) -> Result<Snapshots, Failure> {
-        self.run(suit_codegen::probe(deck, sig, checked), watch)
+        let last = deck.slides.len().saturating_sub(1);
+        self.probe_slides(deck, sig, checked, 0, last, watch)
+    }
+
+    /// The scene after every step of the slides from number `have` to number `last`. The
+    /// Python process remembers what the scene was like before every slide it has run, so
+    /// this takes as long as those slides do, not as long as the deck up to them.
+    pub fn probe_slides(
+        &mut self,
+        deck: &Deck,
+        sig: &Signature,
+        checked: &Checked,
+        have: usize,
+        last: usize,
+        watch: Watch,
+    ) -> Result<Snapshots, Failure> {
+        let script = suit_codegen::probe_slides(deck, sig, checked, have, last);
+        self.run(script, watch)
     }
 
     /// Slide `slide` as Manim plays it, frame for frame. Takes about as long as the slide

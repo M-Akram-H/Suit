@@ -125,3 +125,26 @@ fn a_preview_height_keeps_the_aspect_ratio_and_the_timing() {
         )
     );
 }
+
+#[test]
+fn pictures_named_from_the_deck_are_found_from_the_file() {
+    let sig = Signature::builtin();
+    let picture = |file: &str| {
+        let mut deck = Deck::new(DeckConfig::default());
+        let mut slide = deck.add_slide("One");
+        let photo = slide.object(
+            "photo",
+            Object::new("ImageMobject").arg("filename_or_array", file),
+        );
+        slide.play(vec![Anim::prim("FadeIn").arg("mobject", &photo)]);
+        let checked = check(&deck, &sig);
+        assert_eq!(checked.diagnostics, []);
+        export(&deck, &sig, &checked, &Options::default())
+    };
+    let beside = picture("pictures/photo.png");
+    assert!(beside.contains("from pathlib import Path\n"));
+    assert!(beside.contains("config.assets_dir = str(Path(__file__).resolve().parent)\n"));
+    assert!(beside.contains("ImageMobject(\"pictures/photo.png\")"));
+    // A picture named in full needs no such help.
+    assert!(!picture("/somewhere/photo.png").contains("assets_dir"));
+}

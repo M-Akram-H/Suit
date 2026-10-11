@@ -3,6 +3,7 @@
 //! every change to the deck goes through one, so that all of them can be undone.
 
 mod edit;
+mod pictures;
 mod present;
 mod preview;
 
@@ -69,8 +70,8 @@ pub struct Session {
     worker: Option<Worker>,
     /// The revision last sent off for a preview.
     requested: Option<u64>,
-    /// The revision the snapshots were made from.
-    shown: Option<u64>,
+    /// Per slide, what its snapshots were made from (`preview::render_keys`), if it has any.
+    snapshot_keys: Vec<Option<u64>>,
     /// Per slide, what its recording depends on (`preview::render_keys`).
     keys: Vec<u64>,
     /// The recordings made, by what they are recordings of.
@@ -105,7 +106,7 @@ impl Session {
             changed_at: Instant::now(),
             worker: None,
             requested: None,
-            shown: None,
+            snapshot_keys: Vec::new(),
             keys: Vec::new(),
             recordings: HashMap::new(),
             recordings_wanted: BTreeSet::new(),
@@ -295,17 +296,24 @@ impl Session {
             .or_else(|| self.snapshots.find(self.slide, None))
     }
 
-    /// Whether the snapshots are of the deck as it is now, rather than of an earlier state
-    /// while Manim catches up.
-    pub fn preview_is_current(&self) -> bool {
-        self.shown == Some(self.revision)
-    }
-
     // ── Files ────────────────────────────────────────────────────────────────
 
     pub fn save_as(&mut self, path: &Path) -> Result<(), String> {
-        let text = serde_json::to_string_pretty(&self.deck).map_err(|e| e.to_string())?;
+        // Pictures are named from where the deck is, so a deck that moves names them anew:
+        // the deck itself, and every earlier state of it that undoing could bring back.
+        let (from, to) = (self.path.as_deref().and_then(Path::parent), path.parent());
+        let mut deck = self.deck.clone();
+        pictures::rebase(&mut deck, from, to);
+        let text = serde_json::to_string_pretty(&deck).map_err(|e| e.to_string())?;
         fs::write(path, text).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+        if deck != self.deck {
+            let history = self.undo.iter_mut().chain(&mut self.redo);
+            for (_, moment) in history {
+                pictures::rebase(&mut moment.deck, from, to);
+            }
+            self.deck = deck;
+            self.settle();
+        }
         self.path = Some(path.to_path_buf());
         self.saved_revision = self.revision;
         Ok(())

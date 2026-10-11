@@ -150,6 +150,11 @@ impl SuitApp {
             });
         });
         ui.add_space(2.0);
+        // What was picked along with an object goes when another object is picked.
+        if self.picked_with != self.picked {
+            self.picked_too.clear();
+            self.picked_with = self.picked;
+        }
         // Move the playback on before drawing its controls, so that they show the frame
         // that is on the canvas; and again after them, so that a press on Play counts from
         // this frame, not the next.
@@ -288,6 +293,9 @@ impl SuitApp {
         if let Some(var) = self.picked.filter(|var| !touched.contains(var)) {
             outline(var, WARNING);
         }
+        for var in &self.picked_too {
+            outline(*var, WARNING);
+        }
 
         // Picking and dragging. What is outlined can be grabbed by its outline, which is
         // the only way to get hold of an object that is not shown yet.
@@ -339,7 +347,19 @@ impl SuitApp {
         if response.clicked()
             && let Some(position) = response.interact_pointer_pos()
         {
-            self.picked = under_pointer(position);
+            let hit = under_pointer(position);
+            let adding = ui.input(|input| input.modifiers.shift);
+            match (adding, hit, self.picked) {
+                // With Shift, a click adds to what is picked, or takes away from it.
+                (true, Some(hit), Some(first)) if hit != first => {
+                    match self.picked_too.contains(&hit) {
+                        true => self.picked_too.retain(|var| *var != hit),
+                        false => self.picked_too.push(hit),
+                    }
+                }
+                (true, None, _) | (true, _, Some(_)) => {}
+                _ => self.picked = hit,
+            }
         }
 
         if let Some(mut dropped) = finished {
@@ -465,6 +485,14 @@ impl SuitApp {
             }
             if self.stage.playback.is_some() && ui.button("Back to editing").clicked() {
                 self.stop_playing();
+            }
+            if !self.picked_too.is_empty()
+                && ui
+                    .button(format!("Group these {}…", self.picked_too.len() + 1))
+                    .on_hover_text("Put the picked objects together, to move and animate as one")
+                    .clicked()
+            {
+                self.start_grouping();
             }
             if self.stage.playback.is_some() && self.session.is_recording() {
                 ui.spinner();

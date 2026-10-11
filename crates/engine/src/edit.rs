@@ -58,12 +58,17 @@ impl Session {
     }
 
     /// Brings everything derived from the deck up to date after it changed.
-    fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.checked = check(&self.deck, &self.sig);
         self.revision += 1;
         self.changed_at = Instant::now();
         self.unsettle();
         self.select(self.slide, self.step);
+    }
+
+    /// Changes the deck as a whole, as one undo step called `label`.
+    pub(crate) fn change_deck(&mut self, label: &str, edit: impl FnOnce(&mut Deck)) {
+        self.change(label, None, |session| edit(&mut session.deck));
     }
 
     fn restore(&mut self, moment: Moment) {
@@ -252,7 +257,7 @@ impl Session {
 
     /// Puts the picture in `file` on the slide, four units high.
     pub fn add_picture(&mut self, file: &Path) -> Option<VarId> {
-        let file = file.display().to_string();
+        let file = self.name_of_picture(file);
         self.add_made("picture", "ImageMobject", |_| {
             Object::new("ImageMobject")
                 .arg("filename_or_array", file.as_str())

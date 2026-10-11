@@ -44,6 +44,9 @@ sys.stdout = sys.stderr
 turn = open("manim.lock", "w")  # noqa: SIM115 - held for as long as the process lives
 
 requests = queue.Queue()
+# What the probes keep from one script to the next: the scene, and its state before every
+# slide, so that a slide nobody touched is not run again.
+worlds = {}
 # The script whose result is not wanted any more; `True` once nothing is.
 unwanted = None
 running = None
@@ -103,7 +106,8 @@ while (line := requests.get()) is not None:
         if wanted():
             with open(script, encoding="utf-8") as source:
                 code = compile(source.read(), script, "exec")
-            exec(code, {"__name__": "__main__", "_wanted": wanted, "_scratch": scratch})
+            given = {"_wanted": wanted, "_scratch": scratch, "_worlds": worlds}
+            exec(code, {"__name__": "__main__", **given})
             status = "ok"
     except BaseException as error:  # noqa: BLE001 - a script must never take the server down
         if wanted():

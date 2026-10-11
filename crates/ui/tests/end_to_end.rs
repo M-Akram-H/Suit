@@ -22,7 +22,9 @@ fn settle(window: &mut Window) {
     let started = Instant::now();
     loop {
         window.step();
-        if window.state().session.preview_is_current() {
+        // Every slide, not only the one on the canvas: the slide list is looked at too.
+        let session = &window.state().session;
+        if session.preview_is_current() && session.preview != suit_engine::Preview::Running {
             break;
         }
         assert!(

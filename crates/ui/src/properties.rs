@@ -309,6 +309,27 @@ fn edit_command(
                 let on = object.state == State::Is(Presence::On);
                 anims.push(Node::unset(starting_animation(&Place::var(object.var), on)));
             }
+            // Several animations play together unless they are told to take turns.
+            let in_turn =
+                matches!(anims.as_slice(), [only] if matches!(only.item, Anim::Seq { .. }));
+            if anims.len() >= 2
+                && ui
+                    .button("Play these one after another")
+                    .on_hover_text("Each starts when the one before it has finished")
+                    .clicked()
+            {
+                let items = std::mem::take(anims);
+                let opts = Opts::default();
+                anims.push(Node::unset(Anim::Seq { items, opts }));
+            } else if in_turn
+                && ui
+                    .button("Play these together")
+                    .on_hover_text("All start at the same moment")
+                    .clicked()
+                && let Some(Anim::Seq { items, .. }) = anims.pop().map(|only| only.item)
+            {
+                *anims = items;
+            }
         }
         Command::Wait { duration } => {
             ui.horizontal(|ui| {
@@ -354,6 +375,23 @@ fn edit_command(
                     .code_editor()
                     .desired_rows(6)
                     .desired_width(f32::INFINITY),
+            );
+            ui.horizontal(|ui| {
+                ui.label("takes");
+                let mut secs = raw.iface.duration.secs();
+                let field = egui::DragValue::new(&mut secs)
+                    .speed(0.02)
+                    .range(0.0..=600.0)
+                    .max_decimals(2)
+                    .suffix(" s");
+                if ui.add(field).changed() {
+                    raw.iface.duration = Time::from_secs(secs);
+                }
+            });
+            ui.weak(
+                "The editor cannot read Python. If this code plays or waits, say how long \
+                 for, so that the times of the slide stay right; and objects it makes are \
+                 not known to the steps after it.",
             );
         }
     }

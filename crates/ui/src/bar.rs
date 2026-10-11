@@ -65,6 +65,22 @@ impl SuitApp {
                     self.ask_where_to_save(None);
                 }
                 ui.separator();
+                let elsewhere = self.session.pictures_elsewhere().len();
+                if ui
+                    .add_enabled(elsewhere > 0, egui::Button::new("Gather pictures"))
+                    .on_hover_text(
+                        "Copy the pictures that are somewhere else into a folder next to \
+                         the deck, so that the deck's folder has all it needs",
+                    )
+                    .on_disabled_hover_text("Every picture is in the deck's folder already.")
+                    .clicked()
+                {
+                    self.notice = Some(match self.session.gather_pictures() {
+                        Ok(1) => "Copied 1 picture next to the deck.".to_owned(),
+                        Ok(count) => format!("Copied {count} pictures next to the deck."),
+                        Err(problem) => problem,
+                    });
+                }
                 if ui.button("Export Python").clicked() {
                     self.notice = Some(match self.session.export() {
                         Ok(path) => format!("Exported to {}", path.display()),
@@ -126,6 +142,17 @@ impl SuitApp {
                         &mut self.notes_shown,
                         "Show my notes in a second window (N)",
                     );
+                    let mut ahead = self.session.records_ahead_of_time();
+                    let asked = ui
+                        .checkbox(&mut ahead, "Get the slides ready to play while I edit")
+                        .on_hover_text(
+                            "Manim plays every slide through in the background whenever \
+                             the deck rests, so that Play and Present start at once. Off, \
+                             a slide is played through when it is first asked for.",
+                        );
+                    if asked.changed() {
+                        self.session.record_ahead_of_time(ahead);
+                    }
                 });
             how.widget_info(|| {
                 egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "How to present")

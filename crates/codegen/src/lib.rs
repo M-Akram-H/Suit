@@ -72,10 +72,9 @@ const PROBE: &str = include_str!("probe.py");
 enum Mode {
     /// The deck itself, for manim-slides.
     Slides,
-    /// The scene after every step.
-    Steps,
-    /// Every frame of one slide. The slides before it run without being looked at.
-    Frames { slide: usize },
+    /// The deck slide by slide, for the probes: each slide's steps as a piece of its own,
+    /// with a call into the probe after every one.
+    Probe,
 }
 
 /// A Python script that runs the deck without rendering it and writes, as JSON to the path
@@ -85,7 +84,21 @@ enum Mode {
 /// Animations are skipped to their end state, so time-based updaters see one long frame
 /// per step instead of many short ones.
 pub fn probe(deck: &Deck, sig: &Signature, checked: &Checked) -> String {
-    probe_script(deck, sig, checked, Mode::Steps)
+    probe_slides(deck, sig, checked, 0, deck.slides.len().saturating_sub(1))
+}
+
+/// The same for some of the slides only: those from number `have`, which the caller has no
+/// use reporting before, to number `last`. Run by a Manim that has run the slides before
+/// them already and kept what they left behind, it does not run them again.
+pub fn probe_slides(
+    deck: &Deck,
+    sig: &Signature,
+    checked: &Checked,
+    have: usize,
+    last: usize,
+) -> String {
+    let run = format!("_run(_SLIDES, \"steps\", {have}, {last}, sys.argv[1])");
+    probe_script(deck, sig, checked, last, &run)
 }
 
 /// A Python script that plays slide `slide` in Manim, frame for frame as a render would,
@@ -95,15 +108,17 @@ pub fn probe(deck: &Deck, sig: &Signature, checked: &Checked) -> String {
 /// A still `wait` is recorded as one frame repeated rather than waited through, because the
 /// recording itself would make Manim treat the scene as live (spec §6.5).
 pub fn probe_frames(deck: &Deck, sig: &Signature, checked: &Checked, slide: usize) -> String {
-    probe_script(deck, sig, checked, Mode::Frames { slide })
+    let run = format!("_run(_SLIDES, \"frames\", {slide}, {slide}, sys.argv[1])");
+    probe_script(deck, sig, checked, slide, &run)
 }
 
-fn probe_script(deck: &Deck, sig: &Signature, checked: &Checked, mode: Mode) -> String {
+/// The slides up to `last`, each as a piece of Python, and `run` to say what to do with them.
+fn probe_script(deck: &Deck, sig: &Signature, checked: &Checked, last: usize, run: &str) -> String {
     let exporter = Exporter {
         deck,
         sig,
         checked,
-        mode,
+        mode: Mode::Probe,
     };
     let config = &deck.config;
     let frame_width = FRAME_HEIGHT * f64::from(config.width) / f64::from(config.height);
@@ -117,41 +132,21 @@ fn probe_script(deck: &Deck, sig: &Signature, checked: &Checked, mode: Mode) -> 
     out.push_str("config.dry_run = True\nconfig.verbosity = \"ERROR\"\n");
     out.push_str("config.progress_bar = \"none\"\n\n\n");
     out.push_str(PROBE);
-    out.push_str("\n\nclass Deck(Scene):\n    def construct(self):\n");
-    out.push_str("        _probe = _Probe(self, sys.argv[1])\n        try:\n");
-    let mut body = String::new();
-    let last = match mode {
-        Mode::Frames { slide } => {
-            let _ = writeln!(body, "{INDENT}_probe.quiet()");
-            slide
-        }
-        _ => usize::MAX,
-    };
-    for (index, slide) in deck
-        .slides
-        .iter()
-        .enumerate()
-        .take_while(|(index, _)| *index <= last)
-    {
+    // Each slide is a text of its own, so that it can be run by itself, starting from
+    // what the slides before it left behind.
+    out.push_str("\n\n_SLIDES = [\n");
+    for (index, slide) in deck.slides.iter().enumerate().take(last + 1) {
+        let mut body = String::new();
         exporter.slide(&mut body, slide, index);
-    }
-    // One level deeper than usual: the body sits inside the `try`.
-    for line in body.lines() {
-        match line.is_empty() {
-            true => out.push('\n'),
-            false => {
-                let _ = writeln!(out, "    {line}");
-            }
+        let _ = writeln!(out, "    (  # slide {}", index + 1);
+        for line in body.lines().filter(|line| !line.trim().is_empty()) {
+            let line = line.strip_prefix(INDENT).unwrap_or(line);
+            let _ = writeln!(out, "        {}", string(&format!("{line}\n")));
         }
+        out.push_str("        \"\"\n    ),\n");
     }
-    out.push_str("        except Exception as error:\n");
-    out.push_str("            _probe.error = f\"{type(error).__name__}: {error}\"\n");
-    out.push_str("        finally:\n            _probe.finish()\n\n\n");
-    // Stepping through the deck skips every animation; recording a slide must not.
-    out.push_str(match mode {
-        Mode::Frames { .. } => "Deck().render()\n",
-        _ => "Deck(skip_animations=True).render()\n",
-    });
+    out.push_str("]\n\n");
+    let _ = writeln!(out, "{run}");
     out
 }
 
@@ -160,16 +155,6 @@ struct Exporter<'a> {
     sig: &'a Signature,
     checked: &'a Checked,
     mode: Mode,
-}
-
-/// How a `wait` is to be written.
-struct Hold {
-    /// Updaters are running, so every frame differs.
-    live: bool,
-    /// How many frames it lasts (spec §5.7).
-    frames: u32,
-    /// Whether this is on the slide whose frames are being recorded.
-    recording: bool,
 }
 
 /// Statements inside `construct`.
@@ -187,6 +172,9 @@ impl Exporter<'_> {
         out.push_str(
             "\"\"\"Generated by Suit. Edits are overwritten on the next export.\"\"\"\n\n",
         );
+        if self.names_pictures_from_its_folder() {
+            out.push_str("from pathlib import Path\n\n");
+        }
         out.push_str("import numpy as np\nfrom manim import *\n");
         out.push_str("from manim.utils import rate_functions\nfrom manim_slides import Slide\n\n");
         let _ = writeln!(out, "config.pixel_width = {width}");
@@ -199,6 +187,10 @@ impl Exporter<'_> {
             "config.background_color = {}",
             string(&config.background.hex_rgb())
         );
+        if self.names_pictures_from_its_folder() {
+            // Wherever Manim is started from, they are found next to this file.
+            out.push_str("config.assets_dir = str(Path(__file__).resolve().parent)\n");
+        }
         out.push('\n');
         if self.checked.notes.values().any(|note| note.copies_group) {
             out.push_str(RELAYER);
@@ -207,9 +199,40 @@ impl Exporter<'_> {
         out.push_str("    def construct(self):\n");
     }
 
+    /// Whether some picture of the deck is named relative to where the deck is.
+    fn names_pictures_from_its_folder(&self) -> bool {
+        fn relative(object: &Object) -> bool {
+            match object {
+                Object::New { ctor, args } => {
+                    &**ctor == "ImageMobject"
+                        && args.iter().any(|(_, arg)| {
+                            matches!(arg, Arg::Expr(Expr::Str(file)) if !file.starts_with('/'))
+                        })
+                }
+                Object::Chain { base, .. } => relative(&base.item),
+                Object::Group { .. } | Object::Copy(_) => false,
+            }
+        }
+        let blueprints = self
+            .deck
+            .slides
+            .iter()
+            .filter_map(|slide| match &slide.content {
+                SlideContent::Blueprint(blueprint) => Some(blueprint),
+                SlideContent::Media { .. } => None,
+            });
+        blueprints.flat_map(|blueprint| &blueprint.body).any(
+            |node| matches!(&node.item, Command::LetObject { value, .. } if relative(&value.item)),
+        )
+    }
+
     fn slide(&self, out: &mut String, slide: &Slide, index: usize) {
-        let title = slide.title.replace(['\n', '\r'], " ");
-        let _ = writeln!(out, "{INDENT}# ── Slide {}: {title} ──", index + 1);
+        // A probe is told nothing that does not change what Manim draws, the title least
+        // of all: it tells what it has run before by the text of the slides.
+        if self.mode == Mode::Slides {
+            let title = slide.title.replace(['\n', '\r'], " ");
+            let _ = writeln!(out, "{INDENT}# ── Slide {}: {title} ──", index + 1);
+        }
 
         let config = &slide.config;
         let mut settings = Vec::new();
@@ -240,17 +263,10 @@ impl Exporter<'_> {
         if config.direction == Direction::Vertical {
             settings.push("direction=\"vertical\"".to_owned());
         }
-        // Whether this is the slide whose every frame is being recorded.
-        let recording = self.mode == Mode::Frames { slide: index };
         match self.mode {
-            Mode::Steps => {
+            Mode::Probe => {
                 let _ = writeln!(out, "{INDENT}_probe.enter({index})");
             }
-            Mode::Frames { .. } if recording => {
-                let _ = writeln!(out, "{INDENT}_probe.record()");
-            }
-            // The slides before the recorded one only have to leave the right state behind.
-            Mode::Frames { .. } => {}
             // The first slide starts by itself; a call is only needed to configure it.
             Mode::Slides if index > 0 || !settings.is_empty() => {
                 let _ = writeln!(out, "{INDENT}self.next_slide({})", settings.join(", "));
@@ -259,24 +275,20 @@ impl Exporter<'_> {
         }
 
         if let SlideContent::Blueprint(blueprint) = &slide.content {
-            self.blueprint(out, blueprint, recording);
+            self.blueprint(out, blueprint);
             // The hold that lets the slide rest on its finished state (spec §6.6). Emitted
             // here rather than left to manim-slides so that it obeys the same still-or-live
-            // rule as every other wait. Stepping through the deck has no use for it.
+            // rule as every other wait.
             let report = &self.checked.slides[index];
-            if report.gap_frames > 0 && self.mode != Mode::Steps {
-                let hold = Hold {
-                    live: report.gap_live,
-                    frames: report.gap_frames,
-                    recording,
-                };
-                self.wait(out, self.deck.config.gap.secs(), hold);
+            if report.gap_frames > 0 {
+                let secs = self.deck.config.gap.secs();
+                self.wait(out, secs, report.gap_live, report.gap_frames);
             }
         }
         out.push('\n');
     }
 
-    fn blueprint(&self, out: &mut String, blueprint: &Blueprint, recording: bool) {
+    fn blueprint(&self, out: &mut String, blueprint: &Blueprint) {
         for node in &blueprint.body {
             let note = self
                 .checked
@@ -284,27 +296,17 @@ impl Exporter<'_> {
                 .get(&node.id)
                 .cloned()
                 .unwrap_or_default();
-            self.command(out, &node.item, &note, recording);
-            if self.mode == Mode::Steps {
+            self.command(out, &node.item, &note);
+            if self.mode == Mode::Probe {
                 if let Command::LetObject { var, .. } = &node.item {
                     let _ = writeln!(out, "{INDENT}_probe.name({}, {})", var.0, self.var(*var));
                 }
-                let _ = writeln!(out, "{INDENT}_probe.step({})", node.id.0);
-            }
-            match self.mode {
-                Mode::Frames { .. } if recording => {
-                    let _ = writeln!(out, "{INDENT}_probe.mark({})", node.id.0);
-                }
-                // The slides before the recorded one are where a run can be stopped early.
-                Mode::Frames { .. } => {
-                    let _ = writeln!(out, "{INDENT}_probe.check()");
-                }
-                _ => {}
+                let _ = writeln!(out, "{INDENT}_probe.after({})", node.id.0);
             }
         }
     }
 
-    fn command(&self, out: &mut String, command: &Command, note: &Note, recording: bool) {
+    fn command(&self, out: &mut String, command: &Command, note: &Note) {
         match command {
             Command::LetObject { var, value } => {
                 let name = self.var(*var);
@@ -353,12 +355,7 @@ impl Exporter<'_> {
                 }
             }
             Command::Wait { duration } => {
-                let hold = Hold {
-                    live: note.live,
-                    frames: note.frames,
-                    recording,
-                };
-                self.wait(out, duration.secs(), hold);
+                self.wait(out, duration.secs(), note.live, note.frames);
             }
             Command::Attach { target, updater } => {
                 let (params, call) = match updater {
@@ -384,26 +381,28 @@ impl Exporter<'_> {
     }
 
     /// A wait on a scene with running updaters must not be frozen, or the first frame
-    /// shows them stale (spec §6.5, Q4).
-    fn wait(&self, out: &mut String, secs: f64, hold: Hold) {
-        match hold {
-            // Recording makes Manim treat every wait as live, so a still one is written
-            // down as its one frame, repeated, instead of being waited through.
-            Hold {
-                live: false,
-                recording: true,
-                frames,
-            } => {
-                let _ = writeln!(out, "{INDENT}_probe.hold({frames})");
+    /// shows them stale (spec §6.5, Q4). `frames` is how long it lasts (spec §5.7).
+    fn wait(&self, out: &mut String, secs: f64, live: bool, frames: u32) {
+        match (self.mode, live) {
+            // The probe decides: while it records, Manim treats every wait as live, so a
+            // still one is written down as its one frame, repeated, instead of waited
+            // through.
+            (Mode::Probe, _) => {
+                let live = if live { "True" } else { "False" };
+                let _ = writeln!(
+                    out,
+                    "{INDENT}_probe.wait({}, {frames}, {live})",
+                    float(secs)
+                );
             }
-            Hold { live: true, .. } => {
+            (Mode::Slides, true) => {
                 let _ = writeln!(
                     out,
                     "{INDENT}self.wait({}, frozen_frame=False)",
                     float(secs)
                 );
             }
-            Hold { live: false, .. } => {
+            (Mode::Slides, false) => {
                 let _ = writeln!(out, "{INDENT}self.wait({})", float(secs));
             }
         }
