@@ -528,6 +528,557 @@
           ]
         }
       }
+    },
+    {
+      "id": 66,
+      "title": "Slide 2",
+      "config": {
+        "looping": false,
+        "auto_next": false,
+        "skip": false,
+        "playback_rate": 1.0,
+        "reversed_playback_rate": 1.0,
+        "notes": "",
+        "direction": "horizontal"
+      },
+      "content": {
+        "blueprint": {
+          "body": [
+            {
+              "id": 68,
+              "item": {
+                "let_object": {
+                  "var": 67,
+                  "value": {
+                    "id": 116,
+                    "item": {
+                      "chain": {
+                        "base": {
+                          "id": 69,
+                          "item": {
+                            "new": {
+                              "ctor": "MathTex",
+                              "args": [
+                                [
+                                  "tex_strings",
+                                  {
+                                    "expr": {
+                                      "str": "f'(x)=-1/x^2"
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          }
+                        },
+                        "call": {
+                          "method": "move_to",
+                          "args": [
+                            [
+                              "point_or_mobject",
+                              {
+                                "expr": {
+                                  "vec3": [
+                                    {
+                                      "real": -5.37
+                                    },
+                                    {
+                                      "real": 2.64
+                                    },
+                                    {
+                                      "real": 0.0
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 70,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 71,
+                      "item": {
+                        "prim": {
+                          "ctor": "Write",
+                          "args": [
+                            [
+                              "vmobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 67
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 74,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 75,
+                      "item": {
+                        "prim": {
+                          "ctor": "Indicate",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 67
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 101,
+              "item": {
+                "let_object": {
+                  "var": 100,
+                  "value": {
+                    "id": 102,
+                    "item": {
+                      "new": {
+                        "ctor": "Tangent",
+                        "args": [
+                          [
+                            "graph",
+                            {
+                              "expr": {
+                                "place": {
+                                  "root": 41
+                                }
+                              }
+                            }
+                          ],
+                          [
+                            "dot",
+                            {
+                              "expr": {
+                                "bool": true
+                              }
+                            }
+                          ],
+                          [
+                            "at",
+                            {
+                              "expr": {
+                                "real": -1.6
+                              }
+                            }
+                          ],
+                          [
+                            "color",
+                            {
+                              "expr": {
+                                "const": "ORANGE"
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 103,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 104,
+                      "item": {
+                        "prim": {
+                          "ctor": "Create",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 100
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 107,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 108,
+                      "item": {
+                        "prim": {
+                          "ctor": "Glide",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 100
+                                  }
+                                }
+                              }
+                            ],
+                            [
+                              "to",
+                              {
+                                "expr": {
+                                  "real": 5.6
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {
+                            "run_time": 3.0
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 109,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 110,
+                      "item": {
+                        "prim": {
+                          "ctor": "Glide",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 100
+                                  }
+                                }
+                              }
+                            ],
+                            [
+                              "to",
+                              {
+                                "expr": {
+                                  "real": -6.27
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {
+                            "run_time": 3.0
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 111,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 112,
+                      "item": {
+                        "prim": {
+                          "ctor": "Uncreate",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 100
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 113,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 114,
+                      "item": {
+                        "prim": {
+                          "ctor": "Uncreate",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 59
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 121,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 122,
+                      "item": {
+                        "animate": {
+                          "target": {
+                            "root": 67
+                          },
+                          "calls": [
+                            {
+                              "method": "move_to",
+                              "args": [
+                                [
+                                  "point_or_mobject",
+                                  {
+                                    "expr": {
+                                      "vec3": [
+                                        {
+                                          "real": -5.24
+                                        },
+                                        {
+                                          "real": 3.15
+                                        },
+                                        {
+                                          "real": 0.0
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 123,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 124,
+                      "item": {
+                        "prim": {
+                          "ctor": "Indicate",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 67
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 128,
+              "item": {
+                "let_object": {
+                  "var": 127,
+                  "value": {
+                    "id": 129,
+                    "item": {
+                      "new": {
+                        "ctor": "Plot",
+                        "args": [
+                          [
+                            "function",
+                            {
+                              "fun": {
+                                "param": 130,
+                                "body": {
+                                  "call": {
+                                    "fun": "/",
+                                    "args": [
+                                      {
+                                        "int": -1
+                                      },
+                                      {
+                                        "call": {
+                                          "fun": "pow",
+                                          "args": [
+                                            {
+                                              "var": 130
+                                            },
+                                            {
+                                              "int": 2
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 125,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 126,
+                      "item": {
+                        "prim": {
+                          "ctor": "ReplacementTransform",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 41
+                                  }
+                                }
+                              }
+                            ],
+                            [
+                              "target_mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 127
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 133,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 134,
+                      "item": {
+                        "prim": {
+                          "ctor": "Indicate",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 127
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "names": {
@@ -541,7 +1092,14 @@
     "41": "graph 2",
     "44": "x",
     "53": "formula 2",
-    "59": "formula 3"
+    "59": "formula 3",
+    "67": "formula 4",
+    "76": "line",
+    "88": "tangent",
+    "95": "tangent 2",
+    "100": "tangent 3",
+    "127": "graph 3",
+    "130": "x"
   },
-  "next_id": 65
+  "next_id": 134
 }
