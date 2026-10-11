@@ -491,11 +491,16 @@ fn edit_object(ui: &mut egui::Ui, scope: &Scope, object: &mut Object, outermost:
             ui.weak(format!("A {ctor}"));
             match scope.sig.ctors.get(ctor) {
                 Some(sig) => {
+                    // A graph's range is where its rule is worked out, in fine steps.
+                    let sampled = matches!(&**ctor, "FunctionGraph" | "ParametricFunction");
                     let slots: Vec<Slot> = scope
                         .sig
                         .ctor_params(sig)
                         .into_iter()
-                        .map(Slot::from)
+                        .map(|param| Slot {
+                            sampled,
+                            ..Slot::from(param)
+                        })
                         .collect();
                     ui.push_id("made", |ui| editors::args(ui, scope, &slots, args));
                 }

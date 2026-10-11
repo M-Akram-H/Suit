@@ -63,6 +63,8 @@ impl Session {
         self.revision += 1;
         self.changed_at = Instant::now();
         self.unsettle();
+        // Names may have changed, and what Manim remarked on is told by name.
+        self.note_remarks();
         self.select(self.slide, self.step);
     }
 
@@ -548,7 +550,10 @@ fn starting_arguments(ctor: &str, about: Option<&Place>) -> Option<Vec<(&'static
         "Brace" => vec![("mobject", about?.into())],
         "SurroundingRectangle" => vec![("mobjects", about?.into())],
         // A wave, and a circle: something to see, and to change into what is wanted.
-        "FunctionGraph" => vec![("function", Arg::fun(UNBOUND, call("sin")))],
+        "FunctionGraph" => vec![
+            ("function", Arg::fun(UNBOUND, call("sin"))),
+            ("x_range", Expr::vec3(-7.0, 7.0, 0.05).into()),
+        ],
         "ParametricFunction" => {
             let twice = |fun: &str| Expr::call("*", vec![Expr::Real(2.0), call(fun)]);
             let circle = Expr::Vec3(Box::new([twice("cos"), twice("sin"), Expr::Real(0.0)]));

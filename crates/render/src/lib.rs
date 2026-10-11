@@ -32,6 +32,20 @@ pub struct Snapshots {
     pub steps: Vec<Snapshot>,
     /// Why the run stopped early, if it did; the steps before it are still valid.
     pub error: Option<String>,
+    /// What was found odd on the way, without it stopping the run.
+    #[serde(default)]
+    pub remarks: Vec<Remark>,
+}
+
+/// Something about an object that Manim puts up with and its author would want to know.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct Remark {
+    pub slide: usize,
+    /// The step after which it was first seen.
+    pub node: Option<NodeId>,
+    pub var: VarId,
+    /// `undefined`: some of the object's points are not numbers, and Manim draws none of it.
+    pub what: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]

@@ -17,7 +17,7 @@ use std::{
     time::Duration,
 };
 
-use suit_check::Checked;
+use suit_check::{Checked, Diagnostic, Severity};
 use suit_core::{Deck, SlideContent};
 use suit_render::{Clip, Failure, Prober, Sidecar, Snapshots, Watch};
 use suit_sig::Signature;
@@ -334,7 +334,9 @@ impl Session {
                 // deck lost its last slides, and what is left is as it was.
                 let count = self.deck.slides.len();
                 self.snapshots.steps.retain(|step| step.slide < count);
+                self.snapshots.remarks.retain(|remark| remark.slide < count);
                 self.snapshot_keys.truncate(count);
+                self.note_remarks();
                 self.requested = Some(self.revision);
                 self.preview = Preview::Ready;
                 self.shared.quiet.store(true, Ordering::Relaxed);
@@ -361,6 +363,30 @@ impl Session {
             self.record_ahead();
         }
         None
+    }
+
+    /// Puts what Manim remarked on into words, to be listed with the checker's problems.
+    pub(crate) fn note_remarks(&mut self) {
+        let worded = |remark: &suit_render::Remark| {
+            let name = self.name(remark.var);
+            let (message, help) = match remark.what.as_str() {
+                "undefined" => (
+                    format!("Manim draws nothing of {name}: some of its points are not numbers."),
+                    "If it is a graph, its rule has no value somewhere in its range, like the \
+                     logarithm of a negative number. Give it a range where it has one.",
+                ),
+                other => (format!("Manim remarks on {name}: {other}."), ""),
+            };
+            Diagnostic {
+                severity: Severity::Warning,
+                code: "manim",
+                slide: remark.slide,
+                node: remark.node,
+                message,
+                help: Some(help.to_owned()).filter(|help| !help.is_empty()),
+            }
+        };
+        self.remarked = self.snapshots.remarks.iter().map(worded).collect();
     }
 
     /// How many slides, from the first, the snapshots show as they are now.
@@ -412,6 +438,11 @@ impl Session {
                 self.snapshots.steps.extend(shown.steps);
                 self.snapshots.steps.sort_by_key(|step| step.slide);
                 self.snapshots.error = shown.error;
+                let stays =
+                    |remark: &suit_render::Remark| remark.slide < first || remark.slide > through;
+                self.snapshots.remarks.retain(stays);
+                self.snapshots.remarks.extend(shown.remarks);
+                self.note_remarks();
 
                 self.snapshot_keys.resize(keys.len(), None);
                 for slide in first..keys.len() {
@@ -435,6 +466,15 @@ impl Session {
         if self.preview != Preview::Running {
             self.shared.quiet.store(true, Ordering::Relaxed);
         }
+    }
+
+    /// Uses `snapshots` as what Manim shows of the deck as it is now. For front ends that
+    /// obtain them some other way, and for tests.
+    pub fn install_snapshots(&mut self, snapshots: Snapshots) {
+        self.snapshots = snapshots;
+        self.snapshot_keys = self.keys.iter().map(|key| Some(*key)).collect();
+        self.generation += 1;
+        self.note_remarks();
     }
 
     /// Hands the worker the deck as it is, with `work` to do on it.

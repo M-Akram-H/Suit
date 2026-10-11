@@ -82,6 +82,15 @@ pub struct Slot {
     pub ty: Type,
     pub required: bool,
     pub variadic: bool,
+    /// For a range: whether it is the range a rule is worked out over, point by point,
+    /// rather than the range of an axis with its ticks.
+    pub sampled: bool,
+}
+
+impl Slot {
+    fn is_range(&self) -> bool {
+        self.name.ends_with("_range") && self.ty == Type::Base(Base::Vec)
+    }
 }
 
 impl From<&Param> for Slot {
@@ -91,6 +100,7 @@ impl From<&Param> for Slot {
             ty: param.ty.clone(),
             required: param.required,
             variadic: param.pass == Pass::Variadic,
+            sampled: false,
         }
     }
 }
@@ -106,6 +116,7 @@ impl From<&AnimParam> for Slot {
             ty,
             required: param.required,
             variadic: param.pass == Pass::Variadic,
+            sampled: false,
         }
     }
 }
@@ -146,7 +157,10 @@ pub fn args(ui: &mut egui::Ui, scope: &Scope, slots: &[Slot], args: &mut Args) -
                 for (nth, &index) in given.iter().enumerate() {
                     ui.label(label(&slot.name));
                     ui.push_id((slot.name.as_str(), nth), |ui| {
-                        changed |= value(ui, scope, &slot.ty, &mut args[index].1);
+                        changed |= match &mut args[index].1 {
+                            Arg::Expr(expr) if slot.is_range() => range(ui, scope, expr),
+                            arg => value(ui, scope, &slot.ty, arg),
+                        };
                     });
                     // What a constructor cannot do without stays, unless it is one of several.
                     if !slot.required || given.len() > 1 {
@@ -207,6 +221,13 @@ pub(crate) fn starting_value(scope: &Scope, slot: &Slot) -> Option<Arg> {
         Type::Base(Base::Vec) if directional.contains(&slot.name.as_str()) => {
             Some(Expr::konst("UP").into())
         }
+        // Across the frame in fine steps for a rule; a few whole ticks for an axis.
+        Type::Base(Base::Vec) if slot.is_range() => Some(match (slot.sampled, &*slot.name) {
+            (true, "t_range") => Expr::vec3(0.0, 1.0, 0.01).into(),
+            (true, _) => Expr::vec3(-7.0, 7.0, 0.05).into(),
+            (false, "y_range") => Expr::vec3(-3.0, 3.0, 1.0).into(),
+            (false, _) => Expr::vec3(-5.0, 5.0, 1.0).into(),
+        }),
         Type::Base(Base::Vec) => Some(Expr::vec3(0.0, 0.0, 0.0).into()),
         Type::Mob(kind) => {
             let fits = |object: &&ObjectState| scope.sig.is_subkind(&object.kind, kind);
@@ -429,6 +450,25 @@ fn text(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
         }
         other => formula(ui, scope, other),
     }
+}
+
+/// A range: where it starts, where it ends, and how far apart the points in it are.
+fn range(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
+    let plain = |part: &Expr| matches!(part, Expr::Real(_) | Expr::Int(_));
+    let Expr::Vec3(parts) = expr else {
+        return formula(ui, scope, expr);
+    };
+    if !parts.iter().all(plain) {
+        return formula(ui, scope, expr);
+    }
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        for (part, what) in parts.iter_mut().zip(["from", "to", "in steps of"]) {
+            ui.weak(what);
+            ui.push_id(what, |ui| changed |= real(ui, scope, part));
+        }
+    });
+    changed
 }
 
 /// The named colours people reach for first; the rest follow in alphabetical order.

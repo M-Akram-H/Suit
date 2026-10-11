@@ -945,16 +945,47 @@ fn a_graph_is_made_and_its_rule_rewritten() {
     );
     assert_eq!(
         text_of_step(&window, 0),
-        "graph = FunctionGraph(x ↦ sin(x))"
+        "graph = FunctionGraph(x ↦ sin(x), x_range = (-7.0, 7.0, 0.05))"
     );
 
-    press(&mut window, "New graph (FunctionGraph)");
-    rewrite(&mut window, "sin(x)", "x ^ 2 / 4 - 1");
+    // Its rule and its range are at hand without going to the step that makes it.
+    rewrite(&mut window, "sin(x)", "log(x)");
     assert_eq!(
         text_of_step(&window, 0),
-        "graph = FunctionGraph(x ↦ x ^ 2 / 4 - 1)"
+        "graph = FunctionGraph(x ↦ log(x), x_range = (-7.0, 7.0, 0.05))"
     );
+    for part in ["from", "to", "in steps of"] {
+        assert!(window.query_by_label(part).is_some(), "{part}");
+    }
     assert_eq!(window.state().session.checked.diagnostics, []);
+
+    // Manim draws nothing of a graph whose rule has no value in part of its range, and
+    // says nothing. The editor says it, where problems are said.
+    assert!(window.query_by_label_contains("ready to export").is_some());
+    let session = &mut window.state_mut().session;
+    let graph = session.objects()[0].var;
+    let made = session.steps()[0].id;
+    session.install_snapshots(Snapshots {
+        remarks: vec![suit_render::Remark {
+            slide: 0,
+            node: Some(made),
+            var: graph,
+            what: "undefined".to_owned(),
+        }],
+        ..Snapshots::default()
+    });
+    window.run_ok();
+    assert!(window.query_by_label("Problems (1)").is_some());
+    assert!(
+        window
+            .query_by_label("Manim draws nothing of graph: some of its points are not numbers.")
+            .is_some()
+    );
+    assert!(
+        window
+            .query_by_label_contains("logarithm of a negative number")
+            .is_some()
+    );
 
     // What goes around another object says so when there is none.
     let mut empty = open(Session::blank());

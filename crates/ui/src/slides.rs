@@ -114,11 +114,7 @@ impl SuitApp {
                         FontId::proportional(12.0),
                         weak,
                     );
-                    let problems = session
-                        .checked
-                        .diagnostics
-                        .iter()
-                        .filter(|d| d.slide == index);
+                    let problems = session.problems().filter(|d| d.slide == index);
                     if let Some(color) = style::worst(problems) {
                         painter.text(
                             pos2(right.left() - 6.0, baseline),

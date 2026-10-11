@@ -152,6 +152,9 @@ class _Probe:
         self.steps = []
         self.slide = 0
         self.error = None
+        # What was found odd along the way, for the editor to pass on: each once a slide.
+        self.remarks = []
+        self.remarked = set()
         # For a recording: the distinct outlines seen, and per frame the ones drawn.
         self.pool = None
         self.seen = {}
@@ -200,6 +203,18 @@ class _Probe:
             self.scene.wait(seconds)
 
     # ── Looking at the scene ─────────────────────────────────────────────────
+
+    @staticmethod
+    def whole(mobject):
+        """Whether every point of the object is a number. A graph of a rule that has no
+        value somewhere in its range has points that are not, and Manim then draws none
+        of that object, without a word."""
+        return bool(np.isfinite(mobject.points).all())
+
+    def remark(self, var, node, what):
+        if (self.slide, var, what) not in self.remarked:
+            self.remarked.add((self.slide, var, what))
+            self.remarks.append({"slide": self.slide, "node": node, "var": var, "what": what})
 
     def owners(self):
         """For every part of a named object: which names reach it, and by which path."""
@@ -295,7 +310,7 @@ class _Probe:
                     "picture": self.picture(member),
                 })
                 continue
-            if not isinstance(member, VMobject):
+            if not isinstance(member, VMobject) or not self.whole(member):
                 continue
             fill = [float(c) for c in member.get_fill_rgbas()[0]]
             stroke = [float(c) for c in member.get_stroke_rgbas()[0]]
@@ -316,6 +331,9 @@ class _Probe:
             seen = (VMobject, AbstractImageMobject)
             family = [m for m in mobject.family_members_with_points() if isinstance(m, seen)]
             if not family:
+                continue
+            if not all(self.whole(member) for member in family):
+                self.remark(var, node, "undefined")
                 continue
             low, high = mobject.get_critical_point(DL), mobject.get_critical_point(UR)
             boxes[str(var)] = {
@@ -346,7 +364,7 @@ class _Probe:
                     })
                 frame.append(index)
                 continue
-            if not isinstance(member, VMobject):
+            if not isinstance(member, VMobject) or not self.whole(member):
                 continue
             fill, stroke = member.get_fill_rgbas()[0], member.get_stroke_rgbas()[0]
             width = float(member.get_stroke_width())
@@ -369,11 +387,33 @@ class _Probe:
 
     def finish(self, first):
         result = {"first": first, "steps": self.steps, "error": self.error}
+        result["remarks"] = self.remarks
         if self.pool is not None:
             result.update(pool=self.pool, frames=self.frames, marks=self.marks)
-        # `dumps` uses the fast encoder; `dump` to a file does not.
+        try:
+            # `dumps` uses the fast encoder; `dump` to a file does not.
+            written = json.dumps(result, allow_nan=False)
+        except ValueError:
+            # Something that is not a number got through, which no reader of JSON takes.
+            # Rather than have nothing to show at all, show it with nothing in its place.
+            def numbers(value):
+                if isinstance(value, float):
+                    return value if value == value and abs(value) != float("inf") else 0.0
+                if isinstance(value, dict):
+                    return {key: numbers(item) for key, item in value.items()}
+                if isinstance(value, (list, tuple)):
+                    return [numbers(item) for item in value]
+                return value
+
+            result = numbers(result)
+            if result["error"] is None:
+                result["error"] = (
+                    "Something on the slide has a size or a place that is not a number, "
+                    "as after a division by zero"
+                )
+            written = json.dumps(result, allow_nan=False)
         with open(self.out, "w", encoding="utf-8") as file:
-            file.write(json.dumps(result))
+            file.write(written)
 
 
 def _run(slides, what, have, last, out):

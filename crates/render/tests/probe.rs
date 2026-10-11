@@ -396,3 +396,76 @@ fn a_python_without_manim_is_named_and_what_to_do_about_it() {
     );
     assert!(reason.contains("run.sh"));
 }
+
+#[test]
+#[ignore = "needs Manim"]
+fn a_graph_of_a_rule_with_no_value_somewhere_is_remarked_on_not_choked_on() {
+    let sig = Signature::builtin();
+    // The logarithm of x from -7 to 7: no value left of zero. Manim draws none of it
+    // and says nothing; the probe says so, and shows everything else.
+    let graph_over = |from: f64| {
+        let mut deck = deck("beside a graph");
+        let mut slide = deck.add_slide("Graph");
+        let x = slide.var("x");
+        let rule = suit_core::Arg::fun(
+            x,
+            suit_core::Expr::call("log", vec![suit_core::Expr::Var(x)]),
+        );
+        let graph = slide.object(
+            "graph",
+            Object::new("FunctionGraph")
+                .arg("function", rule)
+                .arg("x_range", suit_core::Expr::vec3(from, 7.0, 0.05)),
+        );
+        slide.play(vec![Anim::prim("Create").arg("mobject", &graph)]);
+        slide.wait(0.5);
+        (deck, graph.root)
+    };
+    let mut prober = prober();
+
+    let (deck, graph) = graph_over(-7.0);
+    let checked = check(&deck, &sig);
+    assert_eq!(checked.diagnostics, []);
+    let shown = prober
+        .probe(&deck, &sig, &checked, Watch::patient())
+        .expect("the answer can be read");
+    assert_eq!(shown.error, None);
+    assert_eq!(shown.remarks.len(), 1);
+    let remark = &shown.remarks[0];
+    assert_eq!(
+        (remark.slide, remark.var, remark.what.as_str()),
+        (1, graph, "undefined")
+    );
+    let last = shown.steps.last().unwrap();
+    assert!(
+        !last.boxes.contains_key(&graph),
+        "it has no place to speak of"
+    );
+    // The circle and the letters from the slide before are still there, and that is all.
+    assert_eq!(
+        last.drawn.len(),
+        1 + "beside a graph".replace(' ', "").len()
+    );
+    // Playing the slide is the same: nothing of the graph, no trouble with the rest.
+    let clip = prober
+        .probe_frames(&deck, &sig, &checked, 1, Watch::patient())
+        .expect("the answer can be read");
+    let report = &checked.slides[1];
+    assert_eq!(clip.error, None);
+    assert_eq!(clip.frames.len() as u32, report.frames + report.gap_frames);
+
+    // From where the logarithm has a value, there is a graph and nothing to remark on.
+    let (deck, graph) = graph_over(0.1);
+    let checked = check(&deck, &sig);
+    let shown = prober
+        .probe(&deck, &sig, &checked, Watch::patient())
+        .expect("Manim runs");
+    assert_eq!((shown.error.as_ref(), shown.remarks.len()), (None, 0));
+    let last = shown.steps.last().unwrap();
+    assert!(last.boxes[&graph].on);
+    let [left, _, right, _] = last.boxes[&graph].rect;
+    assert!(
+        (left - 0.1).abs() < 0.01 && (right - 7.0).abs() < 0.06,
+        "{left} to {right}"
+    );
+}

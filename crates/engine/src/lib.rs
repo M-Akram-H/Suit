@@ -82,6 +82,8 @@ pub struct Session {
     recording_problems: BTreeMap<u64, String>,
     records_ahead: bool,
     shared: Arc<Shared>,
+    /// What Manim remarked on while running the deck, worded like the checker's problems.
+    remarked: Vec<Diagnostic>,
 }
 
 impl Session {
@@ -113,6 +115,7 @@ impl Session {
             recording_problems: BTreeMap::new(),
             records_ahead: true,
             shared: Arc::default(),
+            remarked: Vec::new(),
         };
         session.unsettle();
         session
@@ -246,8 +249,14 @@ impl Session {
                 .and_then(|id| locations.get(&id))
                 .map(|&(_, step)| step)
         };
-        let on_slide = self.checked.diagnostics.iter().filter(|d| d.slide == slide);
+        let on_slide = self.problems().filter(|d| d.slide == slide);
         on_slide.map(|d| (step_of(d), d)).collect()
+    }
+
+    /// Everything that is the matter with the deck: what the checker found, and what
+    /// Manim remarked on when it ran it.
+    pub fn problems(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.checked.diagnostics.iter().chain(&self.remarked)
     }
 
     // ── Selection ────────────────────────────────────────────────────────────

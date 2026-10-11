@@ -270,6 +270,21 @@ impl SuitApp {
             return;
         };
 
+        // What is shown may be older than the deck, or an earlier step than the selected
+        // one: where Manim stopped, the canvas has nothing newer to show, and says so.
+        let own = snapshot.node == session.selected().map(|node| node.id);
+        let behind = !session.preview_is_current() || !own;
+        if behind && matches!(session.preview, Preview::Failed(_) | Preview::Stopped) {
+            painter.text(
+                rect.left_top() + vec2(10.0, 8.0),
+                Align2::LEFT_TOP,
+                "Manim stopped before this, so the picture is an earlier one. \
+                 The bar at the top says why.",
+                FontId::proportional(13.0),
+                WARNING,
+            );
+        }
+
         if session.steps().is_empty() {
             let hint = "An empty slide. Pick something from the bar above to put on it.";
             painter.text(

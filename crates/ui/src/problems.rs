@@ -1,15 +1,21 @@
-//! The list of what the checker found, along the bottom.
+//! The list of what is the matter with the deck, along the bottom: what the checker found,
+//! what Manim remarked on when it ran the deck, and Manim not getting through it at all.
 
 use eframe::egui::{self, Sense};
+use suit_engine::Preview;
 
 use crate::{SuitApp, style};
 
 impl SuitApp {
     pub(crate) fn problems(&mut self, ui: &mut egui::Ui) {
         let session = &self.session;
-        let diagnostics = &session.checked.diagnostics;
+        let stopped = match &session.preview {
+            Preview::Failed(reason) => Some(reason.as_str()),
+            _ => None,
+        };
+        let count = session.problems().count() + usize::from(stopped.is_some());
         ui.add_space(6.0);
-        ui.strong(match diagnostics.len() {
+        ui.strong(match count {
             0 => "Problems".to_owned(),
             count => format!("Problems ({count})"),
         });
@@ -18,10 +24,17 @@ impl SuitApp {
         egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
-                if diagnostics.is_empty() {
+                if count == 0 {
                     ui.weak("None. The deck is ready to export.");
                 }
-                for problem in diagnostics {
+                if let Some(reason) = stopped {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(style::WARNING, "⚠");
+                        ui.weak("Manim");
+                        ui.label(format!("stopped before the end of the deck: {reason}"));
+                    });
+                }
+                for problem in session.problems() {
                     let step = problem
                         .node
                         .and_then(|id| locations.get(&id))
