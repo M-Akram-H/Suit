@@ -234,8 +234,14 @@ impl SuitApp {
         painter.rect_stroke(rect, 0.0, border, StrokeKind::Outside);
 
         let Some(snapshot) = snapshot else {
+            let nothing_at_all = session.snapshots.steps.is_empty();
             let message = match (&session.preview, session.steps().is_empty()) {
                 (Preview::Running, _) => "Waiting for Manim…",
+                // Not one slide was shown: it is Manim that is the matter, not the step.
+                (Preview::Failed(_), _) if nothing_at_all => {
+                    "Manim is not running, so there is nothing to show here.\n\
+                     The bar at the top says why."
+                }
                 (_, true) => "An empty slide. Pick something from the bar above to put on it.",
                 _ => "Manim did not get as far as this step.",
             };

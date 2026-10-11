@@ -294,6 +294,29 @@ impl Sidecar {
         &self.python
     }
 
+    /// The same, with another Python: one that is known to have Manim, or, in a test, one
+    /// that is known not to.
+    pub fn with_python(mut self, python: PathBuf) -> Sidecar {
+        self.python = python;
+        self
+    }
+
+    /// Says what a failure means where that is known, in place of what Python said.
+    fn explain(&self, failure: Failure) -> Failure {
+        match failure {
+            // The commonest way for this to go wrong: Suit was started somewhere other
+            // than where Manim was installed, and found a Python that knows nothing of it.
+            Failure::Broken(reason) if reason.contains("No module named 'manim'") => {
+                Failure::Broken(format!(
+                    "{} has no Manim. Start Suit with run.sh, which looks for the Python \
+                     that has it, or name that Python in SUIT_PYTHON.",
+                    self.python.display()
+                ))
+            }
+            other => other,
+        }
+    }
+
     /// Writes a probe script into the working directory.
     fn prepare(&self, script: String) -> Result<Run, String> {
         fs::create_dir_all(&self.work)
@@ -553,7 +576,7 @@ impl Prober {
         if !server.usable {
             self.server = None;
         }
-        outcome?;
+        outcome.map_err(|failure| self.sidecar.explain(failure))?;
         let nothing = || Failure::Broken("Manim produced no result for this deck.".to_owned());
         let mut result: T = run.read().unwrap_or_else(|| Err(nothing()))?;
         // While the Manim that wrote them is certainly still there.

@@ -365,3 +365,34 @@ fn a_changed_slide_is_run_from_what_the_slides_before_it_left() {
     assert_eq!(all.error, None);
     assert_eq!(runs(&log), 3);
 }
+
+/// Does not need Manim: it needs a Python without it, which the system's usually is.
+#[test]
+fn a_python_without_manim_is_named_and_what_to_do_about_it() {
+    let python = Path::new("/usr/bin/python3");
+    let has = |module: &str| {
+        let found = std::process::Command::new(python)
+            .args(["-c", &format!("import {module}")])
+            .stderr(std::process::Stdio::null())
+            .status();
+        found.is_ok_and(|status| status.success())
+    };
+    if !has("sys") || has("manim") {
+        return;
+    }
+    let sig = Signature::builtin();
+    let deck = deck("no Manim");
+    let checked = check(&deck, &sig);
+    let sidecar = Sidecar::locate(Path::new(".")).with_python(python.to_path_buf());
+    let failure = Prober::new(sidecar)
+        .probe(&deck, &sig, &checked, Watch::patient())
+        .expect_err("there is no Manim to run");
+    let Failure::Broken(reason) = failure else {
+        panic!("{failure:?}")
+    };
+    assert!(
+        reason.starts_with("/usr/bin/python3 has no Manim."),
+        "{reason}"
+    );
+    assert!(reason.contains("run.sh"));
+}
