@@ -10,7 +10,10 @@ use std::{
 use eframe::egui::{
     self, Key, Modifiers, ViewportCommand, ViewportEvent, ViewportId, accesskit::Role,
 };
-use egui_kittest::{Harness, kittest::Queryable};
+use egui_kittest::{
+    Harness,
+    kittest::{By, Queryable},
+};
 use suit_codegen::pretty::Pretty;
 use suit_core::{Anim, Command, Expr, Object, Time, VarId};
 use suit_engine::Session;
@@ -871,4 +874,178 @@ fn how_a_presentation_runs_is_chosen_next_to_the_button() {
     window.key_press(Key::ArrowRight);
     window.run_ok();
     assert!(!window.state().is_presenting());
+}
+
+// ── Building blocks ──────────────────────────────────────────────────────────
+
+/// Replaces what is in the text field that now says `shown`.
+fn rewrite(window: &mut Window, shown: &str, text: &str) {
+    let field = |window: &Window| {
+        let says = By::new().role(Role::TextInput).value(shown);
+        window.get(says).rect().center()
+    };
+    let at = field(window);
+    window.hover_at(at);
+    window.drag_at(at);
+    window.drop_at(at);
+    window.run_ok();
+    window.key_combination_modifiers(Modifiers::COMMAND, &[Key::A]);
+    window.event(egui::Event::Text(text.to_owned()));
+    window.run_ok();
+}
+
+#[test]
+fn a_setting_can_be_a_formula() {
+    let mut window = open(Session::blank());
+    menu(&mut window, "More objects", "Named value");
+    assert_eq!(headlines(&window), ["Value value"]);
+    rewrite(&mut window, "1.0", "3 / 4");
+    assert_eq!(text_of_step(&window, 0), "value = 3 / 4");
+
+    press(&mut window, "Circle");
+    press(&mut window, "New circle (Circle)");
+    menu(&mut window, "Add setting", "radius");
+    assert_eq!(text_of_step(&window, 1), "circle = Circle(radius = 1.0)");
+    // A plain number has a plain field; fx turns it into a formula.
+    press(&mut window, "fx");
+    rewrite(&mut window, "1.0", "2 * value");
+    assert_eq!(
+        text_of_step(&window, 1),
+        "circle = Circle(radius = 2 * value)"
+    );
+    assert_eq!(window.state().session.checked.diagnostics, []);
+
+    // What is not a formula is said to be so, and changes nothing.
+    rewrite(&mut window, "2 * value", "2 * valu");
+    assert!(
+        window
+            .query_by_label_contains("nothing called “valu”")
+            .is_some()
+    );
+    assert_eq!(
+        text_of_step(&window, 1),
+        "circle = Circle(radius = 2 * value)"
+    );
+    // What is one but makes no sense goes to the checker, like everything else.
+    rewrite(&mut window, "2 * valu", "\"big\"");
+    assert_eq!(
+        text_of_step(&window, 1),
+        "circle = Circle(radius = \"big\")"
+    );
+    assert_eq!(window.state().session.checked.diagnostics.len(), 1);
+}
+
+#[test]
+fn a_graph_is_made_and_its_rule_rewritten() {
+    let mut window = open(Session::blank());
+    menu(&mut window, "More objects", "Graph of a function");
+    assert_eq!(
+        headlines(&window),
+        ["New graph (FunctionGraph)", "Create graph"]
+    );
+    assert_eq!(
+        text_of_step(&window, 0),
+        "graph = FunctionGraph(x ↦ sin(x))"
+    );
+
+    press(&mut window, "New graph (FunctionGraph)");
+    rewrite(&mut window, "sin(x)", "x ^ 2 / 4 - 1");
+    assert_eq!(
+        text_of_step(&window, 0),
+        "graph = FunctionGraph(x ↦ x ^ 2 / 4 - 1)"
+    );
+    assert_eq!(window.state().session.checked.diagnostics, []);
+
+    // What goes around another object says so when there is none.
+    let mut empty = open(Session::blank());
+    menu(&mut empty, "More objects", "Brace under…");
+    assert!(headlines(&empty).is_empty());
+    assert!(empty.query_by_label_contains("needs an object").is_some());
+}
+
+#[test]
+fn an_object_keeps_doing_something() {
+    let mut window = open(Session::blank());
+    press(&mut window, "Circle");
+    press(&mut window, "Dot");
+    menu(&mut window, "More steps", "Keep doing…");
+    assert_eq!(text_of_step(&window, 4), "always dot.next_to(circle, DOWN)");
+    assert_eq!(window.state().session.checked.diagnostics, []);
+
+    // With the time passed, it can also keep moving.
+    window
+        .get_by_label("by an amount that depends on the time passed")
+        .click();
+    window.run_ok();
+    window.get_by_value("next to").click();
+    window.run_ok();
+    press(&mut window, "rotate");
+    press(&mut window, "fx");
+    rewrite(&mut window, "1.0", "90 * DEGREES * dt");
+    assert_eq!(
+        text_of_step(&window, 4),
+        "every dt. dot.rotate(90 * DEGREES * dt)"
+    );
+    assert_eq!(window.state().session.checked.diagnostics, []);
+
+    menu(&mut window, "More steps", "Stop keeping on");
+    assert_eq!(headlines(&window)[5], "dot stops updating");
+}
+
+#[test]
+fn objects_are_grouped_and_copied_from_the_steps() {
+    let mut window = open(Session::blank());
+    press(&mut window, "Circle");
+    press(&mut window, "Square");
+    menu(&mut window, "More steps", "Group…");
+    // The square was picked last, so it is ticked already; one object is not a group.
+    assert!(
+        window
+            .query_by_label_contains("Tick what belongs together")
+            .is_some()
+    );
+    window.get_by_label("circle").click();
+    window.run_ok();
+    press(&mut window, "Group these");
+    assert_eq!(headlines(&window)[4], "New group (group of 2)");
+    assert_eq!(text_of_step(&window, 4), "group = vgroup(circle, square)");
+    assert_eq!(window.state().session.checked.diagnostics, []);
+
+    // The group is what further steps are about.
+    press(&mut window, "Animate");
+    assert_eq!(headlines(&window)[5], "Indicate group");
+    menu(&mut window, "More steps", "Duplicate");
+    assert_eq!(
+        headlines(&window)[6..],
+        ["New group copy (copy)", "Create group copy"]
+    );
+    assert_eq!(window.state().session.checked.diagnostics, []);
+
+    // Its members are spoken for.
+    menu(&mut window, "More steps", "Group…");
+    assert!(window.query_by_label("circle").is_none());
+    press(&mut window, "Cancel");
+}
+
+#[test]
+fn the_animations_on_offer_suit_the_object() {
+    let mut window = open(Session::blank());
+    press(&mut window, "Circle");
+    press(&mut window, "Other animations");
+    assert!(window.query_by_label("Take it away").is_some());
+    assert!(
+        window
+            .query_by_role_and_label(Role::Button, "Create")
+            .is_none(),
+        "it is on the slide already"
+    );
+    press(&mut window, "FadeOut");
+    assert_eq!(headlines(&window)[2], "FadeOut circle");
+
+    // Gone from the slide, it can only be brought back.
+    press(&mut window, "Other animations");
+    assert!(window.query_by_label("Take it away").is_none());
+    press(&mut window, "GrowFromCenter");
+    assert_eq!(headlines(&window)[3], "GrowFromCenter circle");
+    assert_eq!(window.state().session.checked.diagnostics, []);
 }

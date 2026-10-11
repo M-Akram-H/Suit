@@ -187,7 +187,7 @@ fn dragging_at_creation_replaces_the_placement() {
     // The scaling stays; where it was put is replaced, rounded to hundredths.
     assert_eq!(
         pretty.command(&session.steps()[step].item),
-        "circle = Circle().scale(0.5).move_to(⟨2, -1.5, 0⟩)"
+        "circle = Circle().scale(0.5).move_to((2.0, -1.5))"
     );
     assert!(session.place_at_creation(circle, [0.0, 3.0]));
     let pretty = suit_codegen::pretty::Pretty {
@@ -196,7 +196,7 @@ fn dragging_at_creation_replaces_the_placement() {
     };
     assert_eq!(
         pretty.command(&session.steps()[step].item),
-        "circle = Circle().scale(0.5).move_to(⟨0, 3, 0⟩)"
+        "circle = Circle().scale(0.5).move_to((0.0, 3.0))"
     );
     assert_eq!(codes(&session), [] as [&str; 0]);
 }
@@ -320,4 +320,92 @@ impl CreationVar for Session {
             other => panic!("step {step} makes no object: {other:?}"),
         }
     }
+}
+
+#[test]
+fn every_object_in_the_catalogue_can_be_added() {
+    let kinds: Vec<String> = Session::blank()
+        .sig
+        .ctors
+        .keys()
+        .map(|ctor| ctor.to_string())
+        // A picture needs a file, and is added by another way.
+        .filter(|ctor| ctor != "ImageMobject")
+        .collect();
+    assert!(kinds.len() >= 29);
+    for ctor in &kinds {
+        let mut session = Session::blank();
+        session.add_object("Circle").unwrap();
+        let added = session.add_object(ctor);
+        assert!(added.is_some(), "{ctor} was not added");
+        assert_eq!(session.checked.diagnostics, [], "{ctor}");
+    }
+    // A brace goes around something; with nothing there, none is made.
+    let mut empty = Session::blank();
+    assert_eq!(empty.add_object("Brace"), None);
+    assert!(empty.steps().is_empty());
+}
+
+#[test]
+fn a_graph_gets_a_parameter_of_its_own() {
+    let mut session = Session::blank();
+    session.add_object("FunctionGraph").unwrap();
+    session.add_object("FunctionGraph").unwrap();
+    let params: Vec<suit_core::VarId> = session
+        .steps()
+        .iter()
+        .filter_map(|node| match &node.item {
+            Command::LetObject { value, .. } => match &value.item {
+                Object::New { args, .. } => args.iter().find_map(|(_, arg)| match arg {
+                    suit_core::Arg::Fun { param, body } => {
+                        assert_eq!(**body, Expr::call("sin", vec![Expr::Var(*param)]));
+                        Some(*param)
+                    }
+                    _ => None,
+                }),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert_eq!(params.len(), 2);
+    assert_ne!(params[0], params[1]);
+    assert!(params.iter().all(|param| session.name(*param) == "x"));
+}
+
+#[test]
+fn objects_are_grouped_copied_and_given_values() {
+    let mut session = Session::blank();
+    let circle = session.add_object("Circle").unwrap();
+    let square = session.add_object("Square").unwrap();
+    assert!(session.grouped().is_empty());
+
+    let group = session.add_group(&[circle, square]).unwrap();
+    assert_eq!(session.name(group), "group");
+    assert_eq!(session.checked.diagnostics, []);
+    assert_eq!(session.grouped(), [circle, square].into());
+    let Some(Command::LetObject { value, .. }) = session.selected().map(|node| &node.item) else {
+        panic!("the group's step is selected");
+    };
+    assert!(matches!(&value.item, Object::Group { vector: true, items } if items.len() == 2));
+    // Before the group is made, its members are free.
+    session.select(0, Some(0));
+    assert!(session.grouped().is_empty());
+    session.step_selection(true);
+
+    session.select(0, Some(session.steps().len() - 1));
+    let copy = session.duplicate(group).unwrap();
+    assert_eq!(session.name(copy), "group copy");
+    assert_eq!(session.checked.diagnostics, []);
+
+    assert!(session.values_before().is_empty());
+    let value = session.add_value().unwrap();
+    assert_eq!(session.name(value), "value");
+    assert!(
+        session.values_before().is_empty(),
+        "not before its own step"
+    );
+    session.add_object("Dot");
+    assert_eq!(session.values_before(), [value]);
+    assert_eq!(session.checked.diagnostics, []);
 }

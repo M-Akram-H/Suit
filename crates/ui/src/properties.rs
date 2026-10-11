@@ -7,7 +7,8 @@ use eframe::egui::{self, RichText};
 use suit_check::{ObjectState, State};
 use suit_codegen::pretty::Pretty;
 use suit_core::{
-    Anim, Args, Call, Command, Expr, Node, Object, Opts, Place, Presence, Sym, Time, Updater, VarId,
+    Anim, Args, Call, Command, Expr, Node, Object, Opts, Place, Presence, Sym, Time, UNBOUND,
+    Updater, VarId,
 };
 
 use crate::{
@@ -70,11 +71,12 @@ impl SuitApp {
         };
         ui.add_space(6.0);
 
-        let scope = Scope {
-            sig: &session.sig,
-            deck: &session.deck,
-            objects: session.objects_before(),
-        };
+        let scope = Scope::new(
+            &session.sig,
+            &session.deck,
+            session.objects_before(),
+            session.values_before(),
+        );
         let subject = self.subject().cloned();
         let mut command = node.item.clone();
         let mut renamed = None;
@@ -239,17 +241,22 @@ fn edit_command(
             ui.add_space(4.0);
             edit_object(ui, scope, &mut value.item, true);
         }
-        Command::LetValue { value, .. } => {
-            ui.label(
-                RichText::new(
-                    Pretty {
-                        deck: scope.deck,
-                        sig: scope.sig,
-                    }
-                    .expr(value),
-                )
-                .monospace(),
-            );
+        Command::LetValue { var, value } => {
+            let mut name = scope.deck.names.get(&*var).cloned().unwrap_or_default();
+            ui.horizontal(|ui| {
+                ui.label("name");
+                if ui
+                    .add(egui::TextEdit::singleline(&mut name).desired_width(180.0))
+                    .changed()
+                {
+                    *renamed = Some((*var, name.clone()));
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("is");
+                editors::formula(ui, scope, value);
+            });
+            ui.weak("Steps after this one can use it by its name, in any formula.");
         }
         Command::Apply { target, call } => {
             ui.horizontal(|ui| {
@@ -315,14 +322,24 @@ fn edit_command(
                 edit_place(ui, scope, &any, target);
             });
             let kind = scope.kind_of(target).cloned().unwrap_or(any);
+            ui.weak("On every frame, it does this again:");
+            let mut timed = matches!(updater, Updater::Every { .. });
             match updater {
-                Updater::Always(call) => {
-                    ui.weak("On every frame, it does this again:");
-                    edit_call(ui, scope, &kind, call);
-                }
-                Updater::Every { .. } => {
-                    ui.weak("On every frame, depending on the time passed. Not editable here yet.");
-                }
+                Updater::Always(call) => edit_call(ui, scope, &kind, call),
+                Updater::Every { dt, call } => edit_call(ui, &scope.inside(*dt), &kind, call),
+            }
+            let asked = ui
+                .checkbox(&mut timed, "by an amount that depends on the time passed")
+                .on_hover_text(
+                    "Formulas in this step can then use dt: the seconds since the frame \
+                     before. Turning by 90 * DEGREES * dt is a quarter turn every second.",
+                );
+            if asked.changed() {
+                // The time step gets a variable of its own when the step goes into the deck.
+                *updater = match (timed, updater.call().clone()) {
+                    (true, call) => Updater::Every { dt: UNBOUND, call },
+                    (false, call) => Updater::Always(call),
+                };
             }
         }
         Command::Detach { target } => {

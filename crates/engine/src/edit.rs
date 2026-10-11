@@ -1,13 +1,13 @@
 //! Every way the deck can change. Each public method here is one undo step.
 
-use std::{path::Path, time::Instant};
+use std::{collections::BTreeSet, path::Path, time::Instant};
 
 use suit_check::check;
 use suit_core::{
     Anim, Arg, Blueprint, Call, Command, Deck, Expr, Node, NodeId, Object, Place, Slide,
-    SlideConfig, SlideContent, SlideId, VarId,
+    SlideConfig, SlideContent, SlideId, UNBOUND, VarId,
 };
-use suit_sig::{AnimParamType, Role};
+use suit_sig::{AnimParamType, Role, VGROUP_KIND};
 
 use crate::{MERGE_WINDOW, Moment, Session, Target};
 
@@ -231,10 +231,18 @@ impl Session {
     }
 
     /// Makes a new object after the selected step and brings it onto the slide with the
-    /// animation that suits it; selects that animation.
+    /// animation that suits it; selects that animation. Some objects are made around
+    /// another one, a brace for instance: that is `about`, or failing that the newest
+    /// object there is. `None` if such an object is needed and there is none.
     pub fn add_object(&mut self, ctor: &str) -> Option<VarId> {
-        let args = starting_arguments(ctor);
-        self.add_made(ctor, |_| {
+        self.add_object_about(ctor, None)
+    }
+
+    pub fn add_object_about(&mut self, ctor: &str, about: Option<VarId>) -> Option<VarId> {
+        let kind = self.sig.ctors.get(ctor)?.kind.clone();
+        let about = about.or_else(|| self.objects().last().map(|object| object.var));
+        let args = starting_arguments(ctor, about.map(Place::var).as_ref())?;
+        self.add_made(&everyday_name(ctor), &kind, |_| {
             args.into_iter()
                 .fold(Object::new(ctor), |object, (name, value)| {
                     object.arg(name, value)
@@ -245,17 +253,104 @@ impl Session {
     /// Puts the picture in `file` on the slide, four units high.
     pub fn add_picture(&mut self, file: &Path) -> Option<VarId> {
         let file = file.display().to_string();
-        self.add_made("ImageMobject", |_| {
+        self.add_made("picture", "ImageMobject", |_| {
             Object::new("ImageMobject")
                 .arg("filename_or_array", file.as_str())
                 .then(Call::new("scale_to_fit_height").arg("height", 4.0))
         })
     }
 
-    /// Names what `make` builds, which is a `ctor`, and brings it onto the slide.
-    fn add_made(&mut self, ctor: &str, make: impl FnOnce(&mut Deck) -> Object) -> Option<VarId> {
+    /// Makes a copy of `var` next to it and brings the copy onto the slide.
+    pub fn duplicate(&mut self, var: VarId) -> Option<VarId> {
+        let source = self.objects().iter().find(|object| object.var == var)?;
+        let kind = source.kind.clone();
+        let name = format!("{} copy", self.name(var));
+        let aside = Call::new("shift").arg("vectors", Expr::vec3(0.5, -0.5, 0.0));
+        self.add_made(&name, &kind, |_| Object::copy(&Place::var(var)).then(aside))
+    }
+
+    /// Makes a group of `members`, which from then on can be moved and animated as one.
+    /// The members keep their names. Selects the step that makes the group.
+    pub fn add_group(&mut self, members: &[VarId]) -> Option<VarId> {
         self.body()?;
-        let kind = self.sig.ctors.get(ctor)?.kind.clone();
+        if members.is_empty() {
+            return None;
+        }
+        // A group of shapes can do more than a group of anything, so it is one if it can be.
+        let shape = self.sig.elem(VGROUP_KIND);
+        let kind_of = |var: &VarId| self.objects().iter().find(|object| object.var == *var);
+        let vector = members.iter().all(|var| {
+            kind_of(var).is_some_and(|object| self.sig.is_subkind(&object.kind, &shape))
+        });
+        let items = members.iter().map(|var| Place::var(*var)).collect();
+        let name = self.unused_name("group");
+        self.change("Group", None, |session| {
+            let var = session.deck.fresh_var(&name);
+            let value = Node::unset(Object::Group { vector, items });
+            session.insert(vec![Command::LetObject { var, value }]);
+            Some(var)
+        })
+    }
+
+    /// The objects that are members of a group at the selected point, and so cannot go
+    /// into another.
+    pub fn grouped(&self) -> BTreeSet<VarId> {
+        fn members(object: &Object) -> &[Place] {
+            match object {
+                Object::Group { items, .. } => items,
+                Object::Chain { base, .. } => members(&base.item),
+                _ => &[],
+            }
+        }
+        let mut grouped = BTreeSet::new();
+        for node in self.steps_until_selection(true) {
+            if let Command::LetObject { value, .. } = &node.item {
+                grouped.extend(members(&value.item).iter().map(|place| place.root));
+            }
+        }
+        grouped
+    }
+
+    /// Adds a named value after the selected step: a number other steps can use by name.
+    pub fn add_value(&mut self) -> Option<VarId> {
+        self.body()?;
+        let name = self.unused_name("value");
+        self.change("Add value", None, |session| {
+            let var = session.deck.fresh_var(&name);
+            let value = Expr::Real(1.0);
+            session.insert(vec![Command::LetValue { var, value }]);
+            Some(var)
+        })
+    }
+
+    /// The named values that can be read by the selected step: those made before it.
+    pub fn values_before(&self) -> Vec<VarId> {
+        let made = |node: &Node<Command>| match &node.item {
+            Command::LetValue { var, .. } => Some(*var),
+            _ => None,
+        };
+        self.steps_until_selection(false).filter_map(made).collect()
+    }
+
+    /// The steps of the deck from its start up to the selected one, with or without it.
+    fn steps_until_selection(&self, inclusive: bool) -> impl Iterator<Item = &Node<Command>> {
+        let earlier = (0..self.slide).flat_map(|slide| self.steps_of(slide));
+        let count = match (self.step, inclusive) {
+            (Some(step), true) => step + 1,
+            (Some(step), false) => step,
+            (None, _) => 0,
+        };
+        earlier.chain(self.steps().iter().take(count))
+    }
+
+    /// Names what `make` builds, which is of `kind`, and brings it onto the slide.
+    fn add_made(
+        &mut self,
+        name: &str,
+        kind: &str,
+        make: impl FnOnce(&mut Deck) -> Object,
+    ) -> Option<VarId> {
+        self.body()?;
         let entrance = ["Write", "Create", "FadeIn"].into_iter().find_map(|name| {
             let anim = self.sig.anims.get(name)?;
             // The parameter through which the animation introduces an object of this kind.
@@ -265,13 +360,15 @@ impl Session {
                     kind: wanted,
                 } => {
                     let fits =
-                        self.sig.is_subkind(&kind, wanted) && (name != "Write" || writes(&kind));
+                        self.sig.is_subkind(kind, wanted) && (name != "Write" || writes(kind));
                     fits.then(|| (name, param.name.clone()))
                 }
                 _ => None,
             })
         });
-        let name = self.unused_name(&everyday_name(ctor));
+        // What cannot be seen is not brought in with a flourish.
+        let entrance = entrance.filter(|_| kind != "ValueTracker");
+        let name = self.unused_name(name);
         self.change("Add object", None, |session| {
             let object = make(&mut session.deck);
             let var = session.deck.fresh_var(&name);
@@ -373,26 +470,77 @@ fn move_to([x, y]: [f64; 2]) -> Call {
 
 /// What a new object of this kind is called until someone names it.
 fn everyday_name(ctor: &str) -> String {
-    match ctor {
-        "MathTex" => "formula".to_owned(),
-        "Tex" | "MarkupText" => "text".to_owned(),
-        "NumberLine" => "number line".to_owned(),
-        "ImageMobject" => "picture".to_owned(),
-        _ => ctor.to_lowercase(),
-    }
+    let name = match ctor {
+        "MathTex" => "formula",
+        "Tex" | "MarkupText" => "text",
+        "NumberLine" => "number line",
+        "NumberPlane" => "grid",
+        "ImageMobject" => "picture",
+        "RoundedRectangle" => "rounded rectangle",
+        "RegularPolygon" | "Polygon" => "polygon",
+        "DashedLine" => "dashed line",
+        "DoubleArrow" => "double arrow",
+        "DecimalNumber" | "Integer" => "number",
+        "FunctionGraph" => "graph",
+        "ParametricFunction" => "curve",
+        "ValueTracker" => "tracker",
+        "SurroundingRectangle" => "frame",
+        _ => return ctor.to_lowercase(),
+    };
+    name.to_owned()
 }
 
 /// Kinds that are written rather than drawn.
 fn writes(kind: &str) -> bool {
-    matches!(kind, "Text" | "MarkupText" | "MathTex" | "Tex")
+    matches!(
+        kind,
+        "Text" | "MarkupText" | "MathTex" | "Tex" | "DecimalNumber" | "Integer"
+    )
 }
 
-/// What a freshly added object needs to be given before it can exist.
-fn starting_arguments(ctor: &str) -> Vec<(&'static str, Arg)> {
-    match ctor {
-        "Text" | "MarkupText" => vec![("text", "Text".into())],
+/// What a freshly added object is given to start with: what it cannot exist without, and
+/// where the bare object would be too small or too plain to see what it is. `about` is the
+/// object it is made around, for those that are. `None` if it needs one and there is none.
+fn starting_arguments(ctor: &str, about: Option<&Place>) -> Option<Vec<(&'static str, Arg)>> {
+    let point = |x: f64, y: f64| Arg::from(Expr::vec3(x, y, 0.0));
+    let unbound = || Expr::Var(UNBOUND);
+    let call = |fun: &str| Expr::call(fun, vec![unbound()]);
+    Some(match ctor {
+        "Text" => vec![("text", "Text".into())],
+        "MarkupText" => vec![("text", "<b>Bold</b> and <i>slanted</i>".into())],
         "MathTex" => vec![("tex_strings", "x^2".into())],
         "Tex" => vec![("tex_strings", "Text".into())],
+        "Ellipse" => vec![("width", 3.0.into()), ("height", 1.5.into())],
+        "RoundedRectangle" => vec![
+            ("corner_radius", 0.3.into()),
+            ("width", 3.0.into()),
+            ("height", 1.6.into()),
+        ],
+        "RegularPolygon" => vec![("n", 6_i64.into())],
+        "Polygon" => vec![
+            ("vertices", point(-1.5, -1.0)),
+            ("vertices", point(1.5, -1.0)),
+            ("vertices", point(2.0, 1.0)),
+            ("vertices", point(-1.0, 1.0)),
+        ],
+        "DecimalNumber" => vec![("number", 1.5.into())],
+        "Integer" => vec![("number", 42.0.into())],
+        "ValueTracker" => vec![("value", 0.0.into())],
+        // A picture is of a file, which has to be chosen: see `add_picture`.
+        "ImageMobject" => return None,
+        "Brace" => vec![("mobject", about?.into())],
+        "SurroundingRectangle" => vec![("mobjects", about?.into())],
+        // A wave, and a circle: something to see, and to change into what is wanted.
+        "FunctionGraph" => vec![("function", Arg::fun(UNBOUND, call("sin")))],
+        "ParametricFunction" => {
+            let twice = |fun: &str| Expr::call("*", vec![Expr::Real(2.0), call(fun)]);
+            let circle = Expr::Vec3(Box::new([twice("cos"), twice("sin"), Expr::Real(0.0)]));
+            let whole_turn = [Expr::Real(0.0), Expr::konst("TAU"), Expr::Real(0.05)];
+            vec![
+                ("function", Arg::fun(UNBOUND, circle)),
+                ("t_range", Expr::Vec3(Box::new(whole_turn)).into()),
+            ]
+        }
         _ => Vec::new(),
-    }
+    })
 }

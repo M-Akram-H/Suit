@@ -50,6 +50,8 @@ pub struct SuitApp {
     /// When the preview now being waited for was first seen to be on its way.
     asking_since: Option<f64>,
     dialog: Option<Dialog>,
+    /// While a group is being put together: what has been ticked so far.
+    grouping: Option<Vec<VarId>>,
     /// Set once the window may close whatever state the deck is in.
     leaving: bool,
     screenshot: Option<PathBuf>,
@@ -74,6 +76,7 @@ impl SuitApp {
             notice: None,
             asking_since: None,
             dialog: None,
+            grouping: None,
             leaving: false,
             screenshot: None,
             settled: 0,
@@ -158,6 +161,7 @@ impl SuitApp {
             });
         egui::CentralPanel::default().show(ui, |ui| self.stage(ui));
         self.dialogs(ui.ctx());
+        self.grouping(ui.ctx());
     }
 
     fn keys(&mut self, ctx: &egui::Context) {
@@ -173,7 +177,7 @@ impl SuitApp {
             self.save();
         }
         // The rest are plain keys, which belong to a text field while one is being typed in.
-        if ctx.text_edit_focused() || self.dialog.is_some() {
+        if ctx.text_edit_focused() || self.dialog.is_some() || self.grouping.is_some() {
             return;
         }
         let pressed = |key| ctx.input(|input| input.key_pressed(key));

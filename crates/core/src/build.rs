@@ -10,6 +10,11 @@ use crate::{
 
 const UNSET: NodeId = NodeId(0);
 
+/// Stands for a variable that does not exist yet: the parameter of a function, or the time
+/// step of an updater, in a tree that is still being built. Inserting the tree into a deck
+/// makes a variable for it, and for every mention of it inside what it is the parameter of.
+pub const UNBOUND: VarId = VarId(0);
+
 impl<T> Node<T> {
     pub fn unset(item: T) -> Node<T> {
         Node { id: UNSET, item }
@@ -65,6 +70,78 @@ impl Deck {
             node.id = fresh();
         }
         renumber_command(&mut node.item, &mut fresh);
+        self.bind_command(&mut node.item);
+    }
+
+    /// Makes variables for the [`UNBOUND`] parameters in `command`.
+    fn bind_command(&mut self, command: &mut Command) {
+        match command {
+            Command::LetObject { value, .. } => self.bind_object(value),
+            Command::Apply { call, .. } => self.bind_args(&mut call.args),
+            Command::Play { anims } => anims.iter_mut().for_each(|anim| self.bind_anim(anim)),
+            Command::Attach { updater, .. } => {
+                if let Updater::Every { dt, call } = updater
+                    && *dt == UNBOUND
+                {
+                    *dt = self.fresh_var("dt");
+                    let dt = *dt;
+                    for_each_expr(&mut call.args, &mut |expr| rename(expr, UNBOUND, dt));
+                }
+                let (Updater::Always(call) | Updater::Every { call, .. }) = updater;
+                self.bind_args(&mut call.args);
+            }
+            Command::LetValue { .. }
+            | Command::Add { .. }
+            | Command::Remove { .. }
+            | Command::Wait { .. }
+            | Command::Detach { .. }
+            | Command::Raw(_) => {}
+        }
+    }
+
+    fn bind_object(&mut self, node: &mut Node<Object>) {
+        match &mut node.item {
+            Object::New { args, .. } => self.bind_args(args),
+            Object::Chain { base, call } => {
+                self.bind_object(base);
+                self.bind_args(&mut call.args);
+            }
+            Object::Group { .. } | Object::Copy(_) => {}
+        }
+    }
+
+    fn bind_anim(&mut self, node: &mut Node<Anim>) {
+        match &mut node.item {
+            Anim::Prim { args, .. } => self.bind_args(args),
+            Anim::Animate { calls, .. } => {
+                for call in calls {
+                    self.bind_args(&mut call.args);
+                }
+            }
+            Anim::Par { items, .. } | Anim::Seq { items, .. } => {
+                items.iter_mut().for_each(|item| self.bind_anim(item))
+            }
+        }
+    }
+
+    fn bind_args(&mut self, args: &mut Args) {
+        for (_, arg) in args {
+            match arg {
+                Arg::Fun { param, body } if *param == UNBOUND => {
+                    // A function of one number that gives a point traces a curve, and the
+                    // number along a curve is traditionally `t`.
+                    let name = if matches!(**body, Expr::Vec3(_)) {
+                        "t"
+                    } else {
+                        "x"
+                    };
+                    *param = self.fresh_var(name);
+                    rename(body, UNBOUND, *param);
+                }
+                Arg::Object(object) => self.bind_object(object),
+                _ => {}
+            }
+        }
     }
 }
 
@@ -230,6 +307,37 @@ fn renumber_anim(node: &mut Node<Anim>, fresh: &mut impl FnMut() -> NodeId) {
         Anim::Par { items, .. } | Anim::Seq { items, .. } => {
             items.iter_mut().for_each(|item| renumber_anim(item, fresh))
         }
+    }
+}
+
+/// Calls `visit` on every expression given as an argument in `args`.
+fn for_each_expr(args: &mut Args, visit: &mut impl FnMut(&mut Expr)) {
+    for (_, arg) in args {
+        match arg {
+            Arg::Expr(expr) => visit(expr),
+            Arg::Fun { body, .. } => visit(body),
+            Arg::Object(_) | Arg::Rate(_) => {}
+        }
+    }
+}
+
+/// Makes every mention of the variable `from` in `expr` one of `to`.
+fn rename(expr: &mut Expr, from: VarId, to: VarId) {
+    match expr {
+        Expr::Var(var) if *var == from => *var = to,
+        Expr::Vec3(parts) => parts.iter_mut().for_each(|part| rename(part, from, to)),
+        Expr::Call { args, .. } => args.iter_mut().for_each(|arg| rename(arg, from, to)),
+        Expr::If {
+            cond,
+            then,
+            otherwise,
+        } => {
+            for part in [cond, then, otherwise] {
+                rename(part, from, to);
+            }
+        }
+        Expr::Query { args, .. } => for_each_expr(args, &mut |arg| rename(arg, from, to)),
+        _ => {}
     }
 }
 

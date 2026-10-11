@@ -42,6 +42,27 @@ const PALETTE: [(&str, &str); 12] = [
     ("Number line", "NumberLine"),
 ];
 
+/// The rest of the catalogue, in a menu.
+const MORE: [(&str, &str); 17] = [
+    ("Ellipse", "Ellipse"),
+    ("Rounded rectangle", "RoundedRectangle"),
+    ("Regular polygon", "RegularPolygon"),
+    ("Polygon", "Polygon"),
+    ("Arc", "Arc"),
+    ("Dashed line", "DashedLine"),
+    ("Double arrow", "DoubleArrow"),
+    ("Brace under…", "Brace"),
+    ("Frame around…", "SurroundingRectangle"),
+    ("Number", "DecimalNumber"),
+    ("Whole number", "Integer"),
+    ("LaTeX text", "Tex"),
+    ("Styled text", "MarkupText"),
+    ("Grid", "NumberPlane"),
+    ("Graph of a function", "FunctionGraph"),
+    ("Curve", "ParametricFunction"),
+    ("Number that can change", "ValueTracker"),
+];
+
 #[derive(Default)]
 pub struct Stage {
     picture: Cached<StageKey>,
@@ -96,6 +117,37 @@ impl SuitApp {
                 let browser = Browser::new(Purpose::Picture, &self.deck_folder());
                 self.dialog = Some(Dialog::Picture(browser));
             }
+            let more = ui
+                .menu_button("More", |ui| {
+                    for (label, ctor) in MORE {
+                        if ui.button(label).clicked() {
+                            // Some go around another object: the picked one, or the newest.
+                            match self.session.add_object_about(ctor, self.picked) {
+                                Some(var) => self.picked = Some(var),
+                                None => {
+                                    let what = label.trim_end_matches('…').to_lowercase();
+                                    self.notice =
+                                        Some(format!("A {what} needs an object: add one first."));
+                                }
+                            }
+                            ui.close();
+                        }
+                    }
+                    ui.separator();
+                    if ui
+                        .button("Named value")
+                        .on_hover_text("A number with a name, for formulas to use")
+                        .clicked()
+                    {
+                        self.session.add_value();
+                        ui.close();
+                    }
+                })
+                .response
+                .on_hover_text("The rest of what can be put on a slide");
+            more.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "More objects")
+            });
         });
         ui.add_space(2.0);
         // Move the playback on before drawing its controls, so that they show the frame

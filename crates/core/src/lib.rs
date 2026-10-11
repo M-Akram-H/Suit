@@ -9,7 +9,7 @@ mod time;
 mod walk;
 
 pub use ast::*;
-pub use build::SlideBuilder;
+pub use build::{SlideBuilder, UNBOUND};
 pub use color::Rgba;
 pub use ids::{NodeId, SlideId, VarId};
 pub use sym::Sym;

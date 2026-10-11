@@ -4,7 +4,9 @@
 use suit_core::{
     Anim, Arg, Args, Call, Command, Deck, Expr, Node, Object, Opts, Place, Sym, Updater, VarId,
 };
-use suit_sig::{Pass, PyForm, Signature};
+use suit_sig::{Pass, Signature};
+
+use crate::formula::{self, Names};
 
 pub struct Pretty<'a> {
     pub deck: &'a Deck,
@@ -256,70 +258,15 @@ impl Pretty<'_> {
         }
     }
 
+    /// In the notation formulas are typed in, so that what is read here can be typed there.
     pub fn expr(&self, expr: &Expr) -> String {
-        match expr {
-            Expr::Real(value) => number(*value),
-            Expr::Int(value) => value.to_string(),
-            Expr::Bool(value) => value.to_string(),
-            Expr::Str(value) => format!("{value:?}"),
-            Expr::Vec3(parts) => {
-                let [x, y, z] = &**parts;
-                format!("⟨{}, {}, {}⟩", self.expr(x), self.expr(y), self.expr(z))
-            }
-            Expr::Color(color) => color.hex(),
-            Expr::Const(name) => name.to_string(),
-            Expr::Var(var) => self.var(*var).to_owned(),
-            Expr::Place(place) => self.place(place),
-            Expr::Call { fun, args } => {
-                let args: Vec<String> = args.iter().map(|arg| self.expr(arg)).collect();
-                let form = self
-                    .sig
-                    .fns
-                    .get(fun)
-                    .and_then(|overloads| overloads.first())
-                    .map(|f| &f.py);
-                match (form, args.as_slice()) {
-                    (Some(PyForm::Infix(_)), [left, right]) => format!("{left} {fun} {right}"),
-                    (Some(PyForm::Prefix(op)), [operand]) => format!("{op}{operand}"),
-                    (Some(PyForm::Index(_)), [vector]) => format!("{vector}.{fun}"),
-                    _ => format!("{fun}({})", args.join(", ")),
-                }
-            }
-            Expr::If {
-                cond,
-                then,
-                otherwise,
-            } => {
-                format!(
-                    "if {} then {} else {}",
-                    self.expr(cond),
-                    self.expr(then),
-                    self.expr(otherwise)
-                )
-            }
-            Expr::Query {
-                target,
-                query,
-                args,
-            } => {
-                let passes = self
-                    .sig
-                    .queries
-                    .get(query)
-                    .and_then(|overloads| overloads.first())
-                    .map(|sig| {
-                        sig.params
-                            .iter()
-                            .map(|p| (p.name.clone(), p.pass))
-                            .collect()
-                    });
-                format!(
-                    "{}.{query}({})",
-                    self.place(target),
-                    self.args(args, passes)
-                )
-            }
-        }
+        let names = Names {
+            deck: self.deck,
+            sig: self.sig,
+            objects: &[],
+            values: &[],
+        };
+        formula::write(expr, &names)
     }
 }
 

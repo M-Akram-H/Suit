@@ -3,10 +3,15 @@
 use eframe::egui::{self, Align2, FontId, Rect, Sense, pos2, vec2};
 use suit_check::{ObjectState, State};
 use suit_codegen::pretty::Pretty;
-use suit_core::{Anim, Call, Command, Expr, Node, Place, Presence, SlideContent, Time};
+use suit_core::{
+    Anim, Arg, Call, Command, Expr, Node, Place, Presence, SlideContent, Sym, Time, Updater, VarId,
+};
+use suit_engine::Session;
+use suit_sig::{AnimParam, AnimParamType, Role};
 
 use crate::{
     SuitApp,
+    editors::{self, Scope, Slot},
     style::{self, ROW},
 };
 
@@ -176,6 +181,7 @@ impl SuitApp {
             .as_ref()
             .is_some_and(|object| object.state == State::Is(Presence::On));
         let mut add = None;
+        let mut duplicate = false;
         ui.horizontal_wrapped(|ui| {
             ui.add_enabled_ui(target.is_some(), |ui| {
                 let Some(target) = &target else {
@@ -195,6 +201,33 @@ impl SuitApp {
                         anims: vec![Node::unset(starting_animation(target, on_slide))],
                     });
                 }
+                // Every animation that suits the object as it is now, by what it is for.
+                let choices = subject
+                    .as_ref()
+                    .map(|object| animations_for(&self.session, object))
+                    .unwrap_or_default();
+                let other = ui
+                    .menu_button("▾", |ui| {
+                        for (purpose, anims) in &choices {
+                            ui.weak(*purpose);
+                            for (name, anim) in anims {
+                                if ui.button(name.as_str()).clicked() {
+                                    add = Some(Command::Play {
+                                        anims: vec![Node::unset(anim.clone())],
+                                    });
+                                    ui.close();
+                                }
+                            }
+                        }
+                        if choices.is_empty() {
+                            ui.weak("There is no animation for this object as it is now.");
+                        }
+                    })
+                    .response
+                    .on_hover_text("Every animation that suits the selected object");
+                other.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Other animations")
+                });
                 if ui
                     .button("Change")
                     .on_hover_text("Change the selected object instantly, between two frames")
@@ -234,6 +267,61 @@ impl SuitApp {
                     duration: Time::from_secs(1.0),
                 });
             }
+            let more = ui
+                .menu_button("More", |ui| {
+                    ui.add_enabled_ui(target.is_some(), |ui| {
+                        if ui
+                            .button("Keep doing…")
+                            .on_hover_text(
+                                "Have the selected object do something again on every frame: \
+                                 stay next to another one, follow a number, keep turning",
+                            )
+                            .clicked()
+                            && let Some(object) = &subject
+                        {
+                            add = Some(Command::Attach {
+                                target: Place::var(object.var),
+                                updater: Updater::Always(following(&self.session, object.var)),
+                            });
+                            ui.close();
+                        }
+                        if ui
+                            .button("Stop keeping on")
+                            .on_hover_text("From here on, the selected object does that no more")
+                            .clicked()
+                            && let Some(target) = &target
+                        {
+                            add = Some(Command::Detach {
+                                target: target.clone(),
+                            });
+                            ui.close();
+                        }
+                        if ui
+                            .button("Duplicate")
+                            .on_hover_text("Make a copy of the selected object, next to it")
+                            .clicked()
+                        {
+                            duplicate = true;
+                            ui.close();
+                        }
+                    });
+                    if ui
+                        .button("Group…")
+                        .on_hover_text("Put objects together, to move and animate them as one")
+                        .clicked()
+                    {
+                        let free = !self
+                            .session
+                            .grouped()
+                            .contains(&self.picked.unwrap_or(VarId(0)));
+                        self.grouping = Some(self.picked.filter(|_| free).into_iter().collect());
+                        ui.close();
+                    }
+                })
+                .response;
+            more.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "More steps")
+            });
             ui.separator();
             let step = self.session.step;
             let count = self.session.steps().len();
@@ -265,7 +353,200 @@ impl SuitApp {
         if let Some(command) = add {
             self.session.insert_step(command);
         }
+        if duplicate && let Some(object) = &subject {
+            self.picked = self.session.duplicate(object.var).or(self.picked);
+        }
     }
+
+    /// Choosing what goes into a group.
+    pub(crate) fn grouping(&mut self, ctx: &egui::Context) {
+        let Some(mut chosen) = self.grouping.take() else {
+            return;
+        };
+        let session = &self.session;
+        let grouped = session.grouped();
+        let free: Vec<&ObjectState> = session
+            .objects()
+            .iter()
+            .filter(|object| !grouped.contains(&object.var))
+            .collect();
+        let mut states = free
+            .iter()
+            .filter(|object| chosen.contains(&object.var))
+            .map(|object| &object.state);
+        let first = states.next();
+        let mixed = states.any(|state| Some(state) != first);
+        let mut done = None;
+        egui::Window::new("Group")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.set_width(360.0);
+                ui.label(
+                    "Tick what belongs together. The group can then be moved, arranged and \
+                     animated as one; its members keep their names.",
+                );
+                ui.add_space(4.0);
+                if free.len() < 2 {
+                    ui.weak("There are not two objects here that are free to be grouped.");
+                }
+                egui::ScrollArea::vertical()
+                    .max_height(260.0)
+                    .show(ui, |ui| {
+                        for object in &free {
+                            let mut ticked = chosen.contains(&object.var);
+                            let state = match object.state {
+                                State::Is(Presence::On) => "",
+                                State::Is(Presence::Off) => "  (not on the slide)",
+                                State::Is(Presence::Spent) => "  (used up)",
+                                State::Mixed => "  (partly on the slide)",
+                            };
+                            let label = format!("{}{state}", session.name(object.var));
+                            if ui.checkbox(&mut ticked, label).changed() {
+                                match ticked {
+                                    true => chosen.push(object.var),
+                                    false => chosen.retain(|var| *var != object.var),
+                                }
+                            }
+                        }
+                    });
+                if mixed {
+                    ui.colored_label(
+                        style::WARNING,
+                        "Some of these are on the slide and some are not. Show or hide them \
+                         first, so that they match.",
+                    );
+                }
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    let ready = chosen.len() >= 2 && !mixed;
+                    if ui
+                        .add_enabled(ready, egui::Button::new("Group these"))
+                        .clicked()
+                    {
+                        done = Some(true);
+                    }
+                    if ui.button("Cancel").clicked() {
+                        done = Some(false);
+                    }
+                });
+            });
+        match done {
+            None => self.grouping = Some(chosen),
+            Some(false) => {}
+            Some(true) => {
+                // In the order they were made, which is the order they are drawn in.
+                chosen.sort();
+                self.picked = self.session.add_group(&chosen).or(self.picked);
+            }
+        }
+    }
+}
+
+/// What an object that is to keep doing something starts by doing: staying under the
+/// newest other object there is, or failing that, where it is told.
+fn following(session: &Session, var: VarId) -> Call {
+    let other = session
+        .objects()
+        .iter()
+        .rev()
+        .find(|object| object.var != var && object.kind.as_str() != "ValueTracker");
+    match other {
+        Some(other) => Call::new("next_to")
+            .arg("mobject_or_point", &Place::var(other.var))
+            .arg("direction", Expr::konst("DOWN")),
+        None => Call::new("move_to").arg("point_or_mobject", Expr::vec3(0.0, 0.0, 0.0)),
+    }
+}
+
+/// Every animation of the catalogue that `object` can be given as it is now, with whatever
+/// else it needs filled in, sorted by what it is for.
+fn animations_for(
+    session: &Session,
+    object: &ObjectState,
+) -> Vec<(&'static str, Vec<(Sym, Anim)>)> {
+    let sig = &session.sig;
+    let scope = Scope::new(sig, &session.deck, session.objects(), Vec::new());
+    let target = Place::var(object.var);
+    let presence = match object.state {
+        State::Is(presence) => Some(presence),
+        State::Mixed => None,
+    };
+    let takes = |role: Role, state: &State| match role.requires() {
+        Some(needed) => *state == State::Is(needed),
+        None => true,
+    };
+    let purposes = [
+        "Bring it in",
+        "Draw attention to it",
+        "Change it",
+        "Turn it into another",
+        "Take it away",
+    ];
+    let mut sorted: Vec<(&str, Vec<(Sym, Anim)>)> = purposes
+        .iter()
+        .map(|purpose| (*purpose, Vec::new()))
+        .collect();
+    if presence == Some(Presence::On) {
+        // Not one of the catalogue's animations but all of its changes, made smoothly.
+        let glide = Call::new("shift").arg("vectors", Expr::konst("RIGHT"));
+        sorted[2].1.push((
+            "Move, turn, resize, recolour…".into(),
+            Anim::animate(&target, vec![glide]),
+        ));
+    }
+    'anims: for (name, anim) in &sig.anims {
+        let objects: Vec<(&AnimParam, Role, &Sym)> = anim
+            .params
+            .iter()
+            .filter_map(|param| match &param.ty {
+                AnimParamType::Object { role, kind } => Some((param, *role, kind)),
+                AnimParamType::Value(_) => None,
+            })
+            .collect();
+        let Some(&(first, role, kind)) = objects.first() else {
+            continue;
+        };
+        if !sig.is_subkind(&object.kind, kind) || !takes(role, &object.state) {
+            continue;
+        }
+        let purpose = match (objects.len(), role) {
+            (2.., _) => 3,
+            (_, Role::Intro) => 0,
+            (_, Role::Use | Role::Flash) => 1,
+            (_, Role::Mut) => 2,
+            (_, Role::Outro | Role::Consume) => 4,
+        };
+        let mut built = Anim::prim(name).arg(&first.name, &target);
+        for param in anim.params.iter().filter(|param| param.required) {
+            if param.name == first.name {
+                continue;
+            }
+            let value = match &param.ty {
+                // Another object that fits, as it is now: the newest there is.
+                AnimParamType::Object { role, kind } => session
+                    .objects()
+                    .iter()
+                    .rev()
+                    .find(|other| {
+                        other.var != object.var
+                            && sig.is_subkind(&other.kind, kind)
+                            && takes(*role, &other.state)
+                    })
+                    .map(|other| Arg::from(&Place::var(other.var))),
+                AnimParamType::Value(_) => editors::starting_value(&scope, &Slot::from(param)),
+            };
+            match value {
+                Some(value) => built = built.arg(&param.name, value),
+                // Nothing to give it: the animation is not on offer.
+                None => continue 'anims,
+            }
+        }
+        sorted[purpose].1.push((name.clone(), built));
+    }
+    sorted.retain(|(_, anims)| !anims.is_empty());
+    sorted
 }
 
 /// The animation a new step starts with: bring the object in if it is not on the slide,

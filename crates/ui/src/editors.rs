@@ -3,20 +3,62 @@
 
 use eframe::egui::{self, Color32, RichText};
 use suit_check::{ObjectState, State};
-use suit_codegen::pretty::Pretty;
-use suit_core::{Arg, Args, Deck, Expr, Place, Presence, Rgba, Sym};
+use suit_codegen::{
+    formula::{self, Names},
+    pretty::Pretty,
+};
+use suit_core::{Arg, Args, Deck, Expr, Place, Presence, Rgba, Sym, UNBOUND, VarId};
 use suit_sig::{AnimParam, AnimParamType, Base, Constant, Param, Pass, Signature, Type};
 
 use crate::style;
 
-/// What an editor may refer to: the catalogue, and the objects that exist at this point.
+/// What an editor may refer to: the catalogue, and the objects and values that exist at
+/// this point.
+#[derive(Clone)]
 pub struct Scope<'a> {
     pub sig: &'a Signature,
     pub deck: &'a Deck,
     pub objects: &'a [ObjectState],
+    /// The same objects, as formulas name them.
+    named: Vec<VarId>,
+    /// The values a formula may read here: the named ones, then the parameters of whatever
+    /// is being edited.
+    values: Vec<VarId>,
 }
 
-impl Scope<'_> {
+impl<'a> Scope<'a> {
+    pub fn new(
+        sig: &'a Signature,
+        deck: &'a Deck,
+        objects: &'a [ObjectState],
+        values: Vec<VarId>,
+    ) -> Scope<'a> {
+        Scope {
+            sig,
+            deck,
+            objects,
+            named: objects.iter().map(|object| object.var).collect(),
+            values,
+        }
+    }
+
+    /// The same, inside something that has `parameter`: a function, or a step that is
+    /// repeated with the time passed.
+    pub fn inside(&self, parameter: VarId) -> Scope<'a> {
+        let mut scope = self.clone();
+        scope.values.push(parameter);
+        scope
+    }
+
+    fn names(&self) -> Names<'_> {
+        Names {
+            deck: self.deck,
+            sig: self.sig,
+            objects: &self.named,
+            values: &self.values,
+        }
+    }
+
     fn pretty(&self) -> Pretty<'_> {
         Pretty {
             deck: self.deck,
@@ -175,24 +217,97 @@ pub(crate) fn starting_value(scope: &Scope, slot: &Slot) -> Option<Arg> {
             Some(Expr::vec3(0.0, 0.0, 0.0).into())
         }
         Type::Rate => Some(Arg::rate("smooth")),
-        Type::Union(_) | Type::Fun(..) => None,
+        // The identity, or a point that moves to the right; its parameter gets a variable
+        // of its own when the step goes into the deck.
+        Type::Fun(_, Base::Vec) => {
+            let along = [Expr::Var(UNBOUND), Expr::Real(0.0), Expr::Real(0.0)];
+            Some(Arg::fun(UNBOUND, Expr::Vec3(Box::new(along))))
+        }
+        Type::Fun(..) => Some(Arg::fun(UNBOUND, Expr::Var(UNBOUND))),
+        Type::Union(_) => Some(0.0_f64.into()),
     }
 }
 
 /// Edits one argument according to the type its parameter has.
 pub fn value(ui: &mut egui::Ui, scope: &Scope, ty: &Type, arg: &mut Arg) -> bool {
-    match (ty, arg) {
-        (Type::Rate, Arg::Rate(rate)) => rate_choice(ui, scope, rate),
-        (Type::Base(base), Arg::Expr(expr)) => match base {
-            Base::Real => real(ui, scope, expr),
-            Base::Int => int(ui, scope, expr),
-            Base::Bool => boolean(ui, scope, expr),
-            Base::Str => text(ui, scope, expr),
-            Base::Color => color(ui, scope, expr),
-            Base::Vec => vector(ui, scope, expr),
+    match arg {
+        Arg::Rate(rate) => rate_choice(ui, scope, rate),
+        Arg::Object(inline) => {
+            ui.label(RichText::new(scope.pretty().object(&inline.item)).monospace());
+            false
+        }
+        Arg::Fun { param, body } => {
+            let mut changed = false;
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(format!("{} ↦", scope.pretty().var(*param))).monospace())
+                    .on_hover_text("A rule: what comes out for each value that goes in.");
+                changed = formula(ui, &scope.inside(*param), body);
+            });
+            changed
+        }
+        // An object is chosen, never computed.
+        Arg::Expr(expr) => match ty {
+            Type::Mob(kind) => object(ui, scope, kind, expr),
+            _ => expression(ui, scope, ty, expr),
         },
-        (Type::Mob(kind), Arg::Expr(expr)) => object(ui, scope, kind, expr),
-        (Type::Union(options), Arg::Expr(expr)) => {
+    }
+}
+
+/// A value: with the widget for its type where it is a plain one, and as a formula where
+/// it is computed or where that was asked for with the `fx` button.
+fn expression(ui: &mut egui::Ui, scope: &Scope, ty: &Type, expr: &mut Expr) -> bool {
+    let asked = ui.id().with("as a formula");
+    let mut as_formula = ui.data(|data| data.get_temp::<bool>(asked).unwrap_or(false));
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        changed = match as_formula {
+            true => formula(ui, scope, expr),
+            false => typed(ui, scope, ty, expr),
+        };
+        let shown = as_formula || !is_plain(expr);
+        let hint = match shown {
+            true => {
+                "This is a formula: it can use numbers, names of objects and values, \
+                     and what objects can be asked, like circle.center or t.value."
+            }
+            false => "Write this as a formula instead, to compute it from other things.",
+        };
+        if ui
+            .selectable_label(shown, RichText::new("fx").small())
+            .on_hover_text(hint)
+            .clicked()
+        {
+            as_formula = !as_formula;
+        }
+    });
+    ui.data_mut(|data| data.insert_temp(asked, as_formula));
+    changed
+}
+
+/// Whether `expr` is written out rather than computed.
+fn is_plain(expr: &Expr) -> bool {
+    let numeral = |expr: &Expr| matches!(expr, Expr::Real(_) | Expr::Int(_));
+    match expr {
+        Expr::Vec3(parts) => parts.iter().all(numeral),
+        Expr::Call { fun, args } if &**fun == "*" => {
+            matches!(args.as_slice(), [amount, Expr::Const(_)] if numeral(amount))
+        }
+        Expr::If { .. } | Expr::Query { .. } | Expr::Call { .. } => false,
+        _ => true,
+    }
+}
+
+/// The widget for a value of type `ty`. Each falls back to a formula for what it cannot show.
+fn typed(ui: &mut egui::Ui, scope: &Scope, ty: &Type, expr: &mut Expr) -> bool {
+    match ty {
+        Type::Base(Base::Real) => real(ui, scope, expr),
+        Type::Base(Base::Int) => int(ui, scope, expr),
+        Type::Base(Base::Bool) => boolean(ui, scope, expr),
+        Type::Base(Base::Str) => text(ui, scope, expr),
+        Type::Base(Base::Color) => color(ui, scope, expr),
+        Type::Base(Base::Vec) => vector(ui, scope, expr),
+        Type::Mob(kind) => object(ui, scope, kind, expr),
+        Type::Union(options) => {
             let kind = options.iter().find_map(|option| match option {
                 Type::Mob(kind) => Some(kind),
                 _ => None,
@@ -201,34 +316,55 @@ pub fn value(ui: &mut egui::Ui, scope: &Scope, ty: &Type, arg: &mut Arg) -> bool
                 Some(kind) if options.contains(&Type::Base(Base::Vec)) => {
                     point_or_object(ui, scope, kind, expr)
                 }
-                _ => formula(ui, &scope.pretty().expr(expr)),
+                _ => formula(ui, scope, expr),
             }
         }
-        (_, Arg::Object(inline)) => formula(ui, &scope.pretty().object(&inline.item)),
-        (_, Arg::Fun { param, body }) => {
-            let pretty = scope.pretty();
-            formula(
-                ui,
-                &format!("{} ↦ {}", pretty.var(*param), pretty.expr(body)),
-            )
-        }
-        (_, Arg::Expr(expr)) => formula(ui, &scope.pretty().expr(expr)),
-        (_, Arg::Rate(rate)) => formula(ui, rate),
+        Type::Fun(..) | Type::Rate => formula(ui, scope, expr),
     }
 }
 
-/// Something written as a formula, which this version shows but cannot edit.
-fn formula(ui: &mut egui::Ui, text: &str) -> bool {
-    ui.label(RichText::new(text).monospace())
-        .on_hover_text("This is a formula. It can be read here, but not edited yet.");
-    false
+/// A formula, typed in. What is typed is taken as soon as it is a formula; until then the
+/// field says what is wrong with it and the value stays as it was.
+pub fn formula(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
+    let names = scope.names();
+    let id = ui.id().with("formula");
+    let field = id.with("field");
+    // What is in the field, and what is the matter with it.
+    let kept = ui.data(|data| data.get_temp::<(String, Option<String>)>(id));
+    let typing = ui.memory(|memory| memory.has_focus(field));
+    // While nobody is typing, the field shows the formula as it is.
+    let (mut text, mut problem) = kept
+        .filter(|_| typing)
+        .unwrap_or_else(|| (formula::write(expr, &names), None));
+    let mut changed = false;
+    ui.vertical(|ui| {
+        let edit = egui::TextEdit::singleline(&mut text)
+            .id(field)
+            .font(egui::TextStyle::Monospace)
+            .desired_width(200.0);
+        if ui.add(edit).changed() {
+            match formula::parse(&text, &names) {
+                Ok(read) => {
+                    changed = read != *expr;
+                    *expr = read;
+                    problem = None;
+                }
+                Err(mistake) => problem = Some(mistake.message),
+            }
+        }
+        if let Some(problem) = &problem {
+            ui.colored_label(style::ERROR, problem);
+        }
+    });
+    ui.data_mut(|data| data.insert_temp(id, (text, problem)));
+    changed
 }
 
 fn real(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
     let mut number = match expr {
         Expr::Real(number) => *number,
         Expr::Int(number) => *number as f64,
-        other => return formula(ui, &scope.pretty().expr(other)),
+        other => return formula(ui, scope, other),
     };
     let changed = ui
         .add(
@@ -246,14 +382,14 @@ fn real(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
 fn int(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
     match expr {
         Expr::Int(number) => ui.add(egui::DragValue::new(number).speed(0.1)).changed(),
-        other => formula(ui, &scope.pretty().expr(other)),
+        other => formula(ui, scope, other),
     }
 }
 
 fn boolean(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
     match expr {
         Expr::Bool(flag) => ui.checkbox(flag, "").changed(),
-        other => formula(ui, &scope.pretty().expr(other)),
+        other => formula(ui, scope, other),
     }
 }
 
@@ -262,7 +398,7 @@ fn text(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
         Expr::Str(text) => ui
             .add(egui::TextEdit::singleline(text).desired_width(190.0))
             .changed(),
-        other => formula(ui, &scope.pretty().expr(other)),
+        other => formula(ui, scope, other),
     }
 }
 
@@ -277,13 +413,13 @@ fn color(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
         Some(Constant::Color(rgba)) => Some(*rgba),
         _ => None,
     };
-    let (current, shown) = match expr {
+    let (current, shown) = match &*expr {
         Expr::Const(name) => match named(name) {
             Some(rgba) => (rgba, name.to_string()),
-            None => return formula(ui, name),
+            None => return formula(ui, scope, expr),
         },
         Expr::Color(rgba) => (*rgba, rgba.hex()),
-        other => return formula(ui, &scope.pretty().expr(other)),
+        _ => return formula(ui, scope, expr),
     };
     let mut changed = false;
     ui.horizontal(|ui| {
@@ -341,10 +477,10 @@ fn vector(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
         }
         Expr::Call { fun, args } if &**fun == "*" => match args.as_slice() {
             [Expr::Real(_), direction] if direction_of(direction).is_some() => VectorForm::Scaled,
-            _ => return formula(ui, &scope.pretty().expr(expr)),
+            _ => return formula(ui, scope, expr),
         },
         other if direction_of(other).is_some() => VectorForm::Direction,
-        other => return formula(ui, &scope.pretty().expr(other)),
+        _ => return formula(ui, scope, expr),
     };
 
     let mut changed = false;

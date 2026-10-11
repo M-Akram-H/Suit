@@ -237,3 +237,31 @@ fn a_manim_that_never_finishes_is_stopped_by_hand() {
     settle(&mut session);
     assert_eq!(session.preview, Preview::Ready);
 }
+
+#[test]
+#[ignore = "needs Manim"]
+fn manim_makes_every_object_as_it_is_first_added() {
+    let _alone = alone();
+    let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let mut session = Session::blank().with_preview(sidecar, || {});
+    session.record_ahead_of_time(false);
+    let kinds: Vec<String> = session.sig.ctors.keys().map(|c| c.to_string()).collect();
+    session.add_object("Circle").unwrap();
+    for ctor in kinds.iter().filter(|ctor| *ctor != "ImageMobject") {
+        let var = session.add_object(ctor).expect(ctor);
+        settle(&mut session);
+        assert_eq!(session.preview, Preview::Ready, "{ctor}");
+        assert_eq!(session.checked.diagnostics, [], "{ctor}");
+        if ctor != "ValueTracker" {
+            let shown = session.snapshot().expect("the step is shown");
+            assert!(shown.boxes[&var].on, "{ctor} is on the slide");
+        }
+    }
+    let group = session.add_group(&[session.objects()[0].var, session.objects()[1].var]);
+    settle(&mut session);
+    assert_eq!(session.preview, Preview::Ready);
+    session.duplicate(group.unwrap()).unwrap();
+    settle(&mut session);
+    assert_eq!(session.preview, Preview::Ready);
+    assert_eq!(session.checked.diagnostics, []);
+}

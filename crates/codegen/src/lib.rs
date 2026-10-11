@@ -3,6 +3,7 @@
 //! Compositional: one Manim call per node. The input must have been checked; facts the
 //! checker established (run times, live waits, layers) are read from its notes.
 
+pub mod formula;
 pub mod pretty;
 mod python;
 
@@ -569,13 +570,19 @@ impl Exporter<'_> {
             Expr::Bool(false) => "False".to_owned(),
             Expr::Str(value) => string(value),
             Expr::Vec3(parts) => {
-                let [x, y, z] = &**parts;
-                format!(
-                    "np.array([{}, {}, {}])",
-                    self.expr(x),
-                    self.expr(y),
-                    self.expr(z)
-                )
+                // Manim adds to points in place, which a whole-number array refuses; so
+                // whole numbers are written as the reals they stand for, and anything
+                // computed is made real by the array itself.
+                let part = |part: &Expr| match part {
+                    Expr::Int(whole) => float(*whole as f64),
+                    other => self.expr(other),
+                };
+                let written = parts.each_ref().map(part).join(", ");
+                let plain = |part: &Expr| matches!(part, Expr::Real(_) | Expr::Int(_));
+                match parts.iter().all(plain) {
+                    true => format!("np.array([{written}])"),
+                    false => format!("np.array([{written}], dtype=float)"),
+                }
             }
             Expr::Color(color) => format!("ManimColor({})", string(&color.hex())),
             Expr::Const(name) => name.to_string(),
