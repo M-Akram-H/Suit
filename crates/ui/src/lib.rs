@@ -38,6 +38,8 @@ pub struct SuitApp {
     pub picked: Option<VarId>,
     /// The outcome of the last action in the bar.
     notice: Option<String>,
+    /// When the preview now being waited for was first seen to be on its way.
+    asking_since: Option<f64>,
     dialog: Option<Dialog>,
     screenshot: Option<PathBuf>,
     /// Frames drawn since the preview arrived; a screenshot waits for a few.
@@ -55,6 +57,7 @@ impl SuitApp {
             thumbnails: Vec::new(),
             picked: None,
             notice: None,
+            asking_since: None,
             dialog: None,
             screenshot: None,
             settled: 0,

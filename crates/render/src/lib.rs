@@ -5,12 +5,16 @@
 
 use std::{
     collections::BTreeMap,
-    env, fs,
+    env, fmt, fs,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
-    sync::atomic::{AtomicU64, Ordering},
-    time::Duration,
+    process::{Child, ChildStdin, Command, Stdio},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        mpsc::{self, Receiver, RecvTimeoutError},
+    },
+    thread,
+    time::{Duration, Instant},
 };
 
 use serde::{Deserialize, de::DeserializeOwned};
@@ -113,6 +117,55 @@ pub struct Sidecar {
     work: PathBuf,
 }
 
+/// Why a run produced nothing.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Failure {
+    /// Its result was no longer wanted, so Manim was told to stop.
+    Abandoned,
+    /// Manim was still busy after this long, and was stopped.
+    TooSlow(Duration),
+    /// Anything else, in words.
+    Broken(String),
+}
+
+impl fmt::Display for Failure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Failure::Abandoned => f.write_str("Stopped."),
+            Failure::TooSlow(limit) => write!(
+                f,
+                "Manim was still busy after {} seconds, so it was stopped.",
+                limit.as_secs()
+            ),
+            Failure::Broken(reason) => f.write_str(reason),
+        }
+    }
+}
+
+impl From<String> for Failure {
+    fn from(reason: String) -> Failure {
+        Failure::Broken(reason)
+    }
+}
+
+/// How long a run may take, and whether anyone still wants its result. Manim is stopped as
+/// soon as either says so.
+#[derive(Clone, Copy)]
+pub struct Watch<'a> {
+    pub limit: Duration,
+    pub wanted: &'a dyn Fn() -> bool,
+}
+
+impl Watch<'static> {
+    /// Waits ten minutes, whatever happens.
+    pub fn patient() -> Watch<'static> {
+        Watch {
+            limit: Duration::from_secs(600),
+            wanted: &|| true,
+        }
+    }
+}
+
 static RUNS: AtomicU64 = AtomicU64::new(0);
 
 /// A name no other run or server has, in this process or another.
@@ -130,6 +183,12 @@ const SERVER: &str = include_str!("server.py");
 /// Files of ours this old were left behind by a Suit that was closed while Manim ran.
 const STALE: Duration = Duration::from_secs(24 * 60 * 60);
 
+/// How often a run in progress is asked whether it is still wanted.
+const GLANCE: Duration = Duration::from_millis(20);
+
+/// How long Manim gets to stop by itself once told to, before it is stopped by force.
+const GRACE: Duration = Duration::from_secs(3);
+
 /// The files of one probe run; removed again when this is dropped.
 struct Run {
     script: PathBuf,
@@ -145,9 +204,10 @@ impl Drop for Run {
 
 impl Run {
     /// What the script wrote, if it got far enough to write anything.
-    fn read<T: DeserializeOwned>(&self) -> Option<Result<T, String>> {
+    fn read<T: DeserializeOwned>(&self) -> Option<Result<T, Failure>> {
         let json = fs::read_to_string(&self.result).ok()?;
-        Some(serde_json::from_str(&json).map_err(|e| format!("unreadable probe result: {e}")))
+        let parsed = serde_json::from_str(&json);
+        Some(parsed.map_err(|e| Failure::Broken(format!("unreadable probe result: {e}"))))
     }
 }
 
@@ -168,8 +228,8 @@ impl Sidecar {
             .or(from_venv)
             .unwrap_or_else(|| PathBuf::from("python3"));
 
-        // Manim caches typeset text and formulas under the working directory, so a stable
-        // one makes every run after the first much faster.
+        // Manim caches typeset formulas under the working directory, so a stable one makes
+        // every run after the first much faster.
         let cache = env::var_os("XDG_CACHE_HOME")
             .map(PathBuf::from)
             .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
@@ -206,11 +266,17 @@ impl Sidecar {
         for entry in entries.flatten() {
             let name = entry.file_name();
             let name = name.to_string_lossy();
-            let ours = name.starts_with("probe-") || name.starts_with("server-");
+            let ours = ["probe-", "server-", "texts-"]
+                .iter()
+                .any(|prefix| name.starts_with(prefix));
             let age = entry.metadata().and_then(|meta| meta.modified());
             let old = age.is_ok_and(|at| at.elapsed().is_ok_and(|age| age > STALE));
             if ours && old {
-                let _ = fs::remove_file(entry.path());
+                let path = entry.path();
+                let _ = match path.is_dir() {
+                    true => fs::remove_dir_all(path),
+                    false => fs::remove_file(path),
+                };
             }
         }
     }
@@ -223,6 +289,7 @@ impl Sidecar {
         let id = unique();
         let script = self.work.join("server.py");
         let log = self.work.join(format!("server-{id}.log"));
+        let texts = self.work.join(format!("texts-{id}"));
         // Another Suit may be starting its Python on this very file: replace it whole or
         // not at all.
         if fs::read_to_string(&script).ok().as_deref() != Some(SERVER) {
@@ -236,19 +303,32 @@ impl Sidecar {
         let mut child = Command::new(&self.python)
             .arg("-u")
             .arg(&script)
+            .arg(&texts)
             .current_dir(&self.work)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(errors)
             .spawn()
             .map_err(|e| format!("cannot run {}: {e}", self.python.display()))?;
-        let requests = child.stdin.take().expect("stdin was piped");
-        let replies = BufReader::new(child.stdout.take().expect("stdout was piped"));
+        let requests = child.stdin.take();
+        let output = BufReader::new(child.stdout.take().expect("stdout was piped"));
+        // Reading happens on a thread of its own, so that waiting for a reply can be given
+        // up. The thread ends when the process closes its output.
+        let (answered, replies) = mpsc::channel();
+        thread::spawn(move || {
+            for line in output.lines().map_while(Result::ok) {
+                if line.starts_with(REPLY) && answered.send(()).is_err() {
+                    return;
+                }
+            }
+        });
         Ok(Server {
             child,
             requests,
             replies,
             log,
+            texts,
+            usable: true,
         })
     }
 }
@@ -264,49 +344,87 @@ fn last_line(text: &str) -> &str {
 /// A Python process with Manim already imported (`server.py`).
 struct Server {
     child: Child,
-    requests: ChildStdin,
-    replies: BufReader<ChildStdout>,
+    /// `None` once the process has been told there is nothing more to do.
+    requests: Option<ChildStdin>,
+    /// One message per request answered.
+    replies: Receiver<()>,
     /// Where the process's error output goes.
     log: PathBuf,
+    /// The process's own directory of typeset text.
+    texts: PathBuf,
+    /// False once the process is gone or had to be stopped by force.
+    usable: bool,
 }
 
 /// Marks the one line of output that answers a request.
 const REPLY: char = '\u{1e}';
+/// Starts a line of input that takes a request back.
+const CANCEL: char = '\u{18}';
 
 impl Server {
-    /// Runs one script to completion. `Err` means the process is gone.
-    fn run(&mut self, run: &Run) -> Result<(), String> {
-        let request = format!("{}\t{}\n", run.script.display(), run.result.display());
-        let sent = self
-            .requests
-            .write_all(request.as_bytes())
-            .and_then(|()| self.requests.flush());
-        if sent.is_err() {
+    fn say(&mut self, line: &str) -> bool {
+        let Some(requests) = &mut self.requests else {
+            return false;
+        };
+        let sent = requests
+            .write_all(line.as_bytes())
+            .and_then(|()| requests.flush());
+        sent.is_ok()
+    }
+
+    /// Runs one script to completion, or until `watch` has had enough.
+    fn run(&mut self, run: &Run, watch: Watch) -> Result<(), Failure> {
+        let script = run.script.display().to_string();
+        if !self.say(&format!("{script}\t{}\n", run.result.display())) {
             return Err(self.gone());
         }
-        let mut line = String::new();
+        let started = Instant::now();
         loop {
-            line.clear();
-            match self.replies.read_line(&mut line) {
-                Ok(0) | Err(_) => return Err(self.gone()),
-                Ok(_) if line.starts_with(REPLY) => return Ok(()),
-                Ok(_) => {}
+            match self.replies.recv_timeout(GLANCE) {
+                Ok(()) => return Ok(()),
+                Err(RecvTimeoutError::Disconnected) => return Err(self.gone()),
+                Err(RecvTimeoutError::Timeout) => {}
             }
+            let failure = match ((watch.wanted)(), started.elapsed() > watch.limit) {
+                (false, _) => Failure::Abandoned,
+                (true, true) => Failure::TooSlow(watch.limit),
+                (true, false) => continue,
+            };
+            // Ask nicely first: a script notices between two steps or two frames, and a
+            // process that stops by itself can be used again.
+            let asked = self.say(&format!("{CANCEL}{script}\n"));
+            if !asked || self.replies.recv_timeout(GRACE).is_err() {
+                self.usable = false;
+                let _ = self.child.kill();
+            }
+            return Err(failure);
         }
     }
 
     /// Why the process is no longer there, from the end of its error output.
-    fn gone(&self) -> String {
+    fn gone(&mut self) -> Failure {
+        self.usable = false;
         let log = fs::read_to_string(&self.log).unwrap_or_default();
-        format!("Manim did not run: {}", last_line(&log))
+        Failure::Broken(format!("Manim did not run: {}", last_line(&log)))
     }
 }
 
 impl Drop for Server {
     fn drop(&mut self) {
+        // With its input closed the process leaves by itself, between two writes rather
+        // than in the middle of one.
+        self.requests = None;
+        let patience = Instant::now();
+        while self.usable && patience.elapsed() < Duration::from_millis(500) {
+            if matches!(self.child.try_wait(), Ok(Some(_)) | Err(_)) {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
         let _ = self.child.kill();
         let _ = self.child.wait();
         let _ = fs::remove_file(&self.log);
+        let _ = fs::remove_dir_all(&self.texts);
     }
 }
 
@@ -336,8 +454,9 @@ impl Prober {
         deck: &Deck,
         sig: &Signature,
         checked: &Checked,
-    ) -> Result<Snapshots, String> {
-        self.run(suit_codegen::probe(deck, sig, checked))
+        watch: Watch,
+    ) -> Result<Snapshots, Failure> {
+        self.run(suit_codegen::probe(deck, sig, checked), watch)
     }
 
     /// Slide `slide` as Manim plays it, frame for frame. Takes about as long as the slide
@@ -348,21 +467,23 @@ impl Prober {
         sig: &Signature,
         checked: &Checked,
         slide: usize,
-    ) -> Result<Clip, String> {
-        self.run(suit_codegen::probe_frames(deck, sig, checked, slide))
+        watch: Watch,
+    ) -> Result<Clip, Failure> {
+        self.run(suit_codegen::probe_frames(deck, sig, checked, slide), watch)
     }
 
-    fn run<T: DeserializeOwned>(&mut self, script: String) -> Result<T, String> {
+    fn run<T: DeserializeOwned>(&mut self, script: String, watch: Watch) -> Result<T, Failure> {
         let run = self.sidecar.prepare(script)?;
         let server = match &mut self.server {
             Some(server) => server,
             None => self.server.insert(self.sidecar.serve()?),
         };
-        if let Err(reason) = server.run(&run) {
+        let outcome = server.run(&run, watch);
+        if !server.usable {
             self.server = None;
-            return Err(reason);
         }
-        run.read()
-            .unwrap_or_else(|| Err("Manim produced no result for this deck.".to_owned()))
+        outcome?;
+        let nothing = || Failure::Broken("Manim produced no result for this deck.".to_owned());
+        run.read().unwrap_or_else(|| Err(nothing()))
     }
 }

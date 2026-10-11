@@ -7,20 +7,21 @@ mod present;
 mod preview;
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     path::{Path, PathBuf},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
 use suit_check::{Checked, Diagnostic, ObjectState, check};
 use suit_core::{Command, Deck, DeckConfig, Node, NodeId, SlideContent, SlideId, VarId};
-use suit_render::{Sidecar, Snapshot, Snapshots};
+use suit_render::{Clip, Sidecar, Snapshot, Snapshots};
 use suit_sig::Signature;
 
 pub use crate::present::Presenter;
-use crate::preview::Worker;
-pub use crate::preview::{Preview, Recording};
+pub use crate::preview::Preview;
+use crate::preview::{Shared, Worker};
 
 /// The deck shown when none is opened.
 const SAMPLE: &str = include_str!("../../../examples/sample.suit.json");
@@ -70,19 +71,23 @@ pub struct Session {
     requested: Option<u64>,
     /// The revision the snapshots were made from.
     shown: Option<u64>,
-    /// The slides recorded for playing.
-    recordings: BTreeMap<usize, Recording>,
-    /// The revisions and slides recordings have been asked for and have not arrived.
-    recordings_wanted: BTreeSet<(u64, usize)>,
-    /// Per slide, why its recording failed, and for which revision of the deck.
-    recording_problems: BTreeMap<usize, (u64, String)>,
+    /// Per slide, what its recording depends on (`preview::render_keys`).
+    keys: Vec<u64>,
+    /// The recordings made, by what they are recordings of.
+    recordings: HashMap<u64, Clip>,
+    /// The recordings asked for that have not arrived.
+    recordings_wanted: BTreeSet<u64>,
+    /// Why recordings could not be made.
+    recording_problems: BTreeMap<u64, String>,
+    records_ahead: bool,
+    shared: Arc<Shared>,
 }
 
 impl Session {
     pub fn new(deck: Deck, path: Option<PathBuf>) -> Session {
         let sig = Signature::builtin();
         let checked = check(&deck, &sig);
-        Session {
+        let mut session = Session {
             path,
             deck,
             sig,
@@ -101,10 +106,15 @@ impl Session {
             worker: None,
             requested: None,
             shown: None,
-            recordings: BTreeMap::new(),
+            keys: Vec::new(),
+            recordings: HashMap::new(),
             recordings_wanted: BTreeSet::new(),
             recording_problems: BTreeMap::new(),
-        }
+            records_ahead: true,
+            shared: Arc::default(),
+        };
+        session.unsettle();
+        session
     }
 
     pub fn open(path: &Path) -> Result<Session, String> {
@@ -130,7 +140,8 @@ impl Session {
     /// Keeps a preview up to date in the background, using the Python `sidecar` found.
     /// `wake` is called, from another thread, whenever a new preview is ready to be taken.
     pub fn with_preview(mut self, sidecar: Sidecar, wake: impl Fn() + Send + 'static) -> Session {
-        self.worker = Some(Worker::start(sidecar, self.sig.clone(), wake));
+        let shared = self.shared.clone();
+        self.worker = Some(Worker::start(sidecar, self.sig.clone(), shared, wake));
         self
     }
 

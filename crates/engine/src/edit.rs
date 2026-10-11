@@ -62,6 +62,7 @@ impl Session {
         self.checked = check(&self.deck, &self.sig);
         self.revision += 1;
         self.changed_at = Instant::now();
+        self.unsettle();
         self.select(self.slide, self.step);
     }
 

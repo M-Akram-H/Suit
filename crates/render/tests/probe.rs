@@ -1,11 +1,15 @@
 //! Runs real Manim, so these are ignored unless asked for:
 //! `cargo test -p suit-render -- --ignored`
 
-use std::{path::Path, thread, time::Instant};
+use std::{
+    path::Path,
+    thread,
+    time::{Duration, Instant},
+};
 
 use suit_check::check;
-use suit_core::{Anim, Deck, DeckConfig, Object};
-use suit_render::{Prober, Sidecar};
+use suit_core::{Anim, Command, Deck, DeckConfig, Object, Raw, RawIface, Time};
+use suit_render::{Failure, Prober, Sidecar, Watch};
 use suit_sig::Signature;
 
 fn deck(text: &str) -> Deck {
@@ -33,7 +37,9 @@ fn a_kept_process_answers_repeated_probes() {
         let deck = deck(text);
         let checked = check(&deck, &sig);
         let started = Instant::now();
-        let snapshots = prober.probe(&deck, &sig, &checked).expect("Manim runs");
+        let snapshots = prober
+            .probe(&deck, &sig, &checked, Watch::patient())
+            .expect("Manim runs");
         times.push(started.elapsed());
         processes.push(prober.process().expect("it is kept"));
         assert_eq!(snapshots.error, None);
@@ -65,7 +71,7 @@ fn a_failing_step_is_reported_with_what_came_before() {
     );
     let checked = check(&deck, &sig);
     let snapshots = prober()
-        .probe(&deck, &sig, &checked)
+        .probe(&deck, &sig, &checked, Watch::patient())
         .expect("the probe itself runs");
     assert!(snapshots.error.is_some());
     assert_eq!(
@@ -96,7 +102,7 @@ fn a_slide_is_recorded_frame_for_frame() {
     let mut prober = prober();
     for (slide, report) in checked.slides.iter().enumerate() {
         let clip = prober
-            .probe_frames(&deck, &sig, &checked, slide)
+            .probe_frames(&deck, &sig, &checked, slide, Watch::patient())
             .expect("Manim runs");
         assert_eq!(clip.error, None);
         // Manim plays exactly as many frames as the checker says it will.
@@ -107,7 +113,9 @@ fn a_slide_is_recorded_frame_for_frame() {
         );
     }
 
-    let clip = prober.probe_frames(&deck, &sig, &checked, 1).unwrap();
+    let clip = prober
+        .probe_frames(&deck, &sig, &checked, 1, Watch::patient())
+        .unwrap();
     let ends: Vec<u32> = clip.marks.iter().map(|(_, end)| *end).collect();
     assert_eq!(
         ends,
@@ -148,13 +156,108 @@ fn two_manims_take_turns_in_the_shared_directory() {
 
     let problems = || {
         let mut prober = prober();
-        let runs = (0..20).map(|_| prober.probe(&deck, &sig, &checked));
-        runs.filter_map(|result| result.map_or_else(Some, |snapshots| snapshots.error))
-            .collect::<Vec<String>>()
+        let runs = (0..20).map(|_| prober.probe(&deck, &sig, &checked, Watch::patient()));
+        runs.filter_map(|result| match result {
+            Ok(snapshots) => snapshots.error,
+            Err(failure) => Some(failure.to_string()),
+        })
+        .collect::<Vec<String>>()
     };
     let (here, there) = thread::scope(|scope| {
         let there = scope.spawn(problems);
         (problems(), there.join().unwrap())
     });
     assert_eq!((here, there), (Vec::new(), Vec::new()));
+}
+
+/// A slide that takes Manim a good while to play through: sixty seconds of something moving.
+fn a_long_slide() -> Deck {
+    let mut deck = deck("slow");
+    let mut slide = deck.add_slide("Long");
+    let dot = slide.object("dot", Object::new("Dot"));
+    slide.add(&[&dot]);
+    slide.play(vec![
+        Anim::prim("Indicate").arg("mobject", &dot).run_time(60.0),
+    ]);
+    deck
+}
+
+#[test]
+#[ignore = "needs Manim"]
+fn a_run_nobody_wants_is_stopped_and_the_process_kept() {
+    let sig = Signature::builtin();
+    let deck = a_long_slide();
+    let checked = check(&deck, &sig);
+    let mut prober = prober();
+    prober
+        .probe(&deck, &sig, &checked, Watch::patient())
+        .expect("Manim runs");
+    let process = prober.process();
+
+    // Wanted for a fifth of a second only.
+    let started = Instant::now();
+    let briefly = || started.elapsed() < Duration::from_millis(200);
+    let watch = Watch {
+        wanted: &briefly,
+        ..Watch::patient()
+    };
+    let outcome = prober.probe_frames(&deck, &sig, &checked, 1, watch);
+    assert_eq!(outcome.err(), Some(Failure::Abandoned));
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "it stops between two frames, not at the end: {:?}",
+        started.elapsed()
+    );
+    assert_eq!(prober.process(), process, "stopped by asking, not by force");
+
+    // The same goes for running out of time.
+    let limit = Duration::from_millis(200);
+    let watch = Watch {
+        limit,
+        ..Watch::patient()
+    };
+    let outcome = prober.probe_frames(&deck, &sig, &checked, 1, watch);
+    assert_eq!(outcome.err(), Some(Failure::TooSlow(limit)));
+    assert_eq!(prober.process(), process);
+    // And it is none the worse for it.
+    let snapshots = prober.probe(&deck, &sig, &checked, Watch::patient());
+    assert_eq!(snapshots.expect("Manim runs").error, None);
+}
+
+#[test]
+#[ignore = "needs Manim"]
+fn a_manim_that_hangs_is_replaced() {
+    let sig = Signature::builtin();
+    let mut deck = deck("stuck");
+    // Python that never gets to the next step, so asking it to stop is not heard.
+    let python = "import time\ntime.sleep(600)".to_owned();
+    let iface = RawIface {
+        duration: Time::from_secs(1.0),
+        ..RawIface::default()
+    };
+    deck.add_slide("Stuck")
+        .push(Command::Raw(Raw { python, iface }));
+    let checked = check(&deck, &sig);
+    let mut prober = prober();
+    let healthy = self::deck("fine");
+    let healthy_checked = check(&healthy, &sig);
+    prober
+        .probe(&healthy, &sig, &healthy_checked, Watch::patient())
+        .expect("Manim runs");
+    let process = prober.process();
+
+    let limit = Duration::from_millis(300);
+    let watch = Watch {
+        limit,
+        ..Watch::patient()
+    };
+    let started = Instant::now();
+    let outcome = prober.probe(&deck, &sig, &checked, watch);
+    assert_eq!(outcome.err(), Some(Failure::TooSlow(limit)));
+    assert!(started.elapsed() < Duration::from_secs(8));
+    assert_eq!(prober.process(), None, "it had to be stopped by force");
+
+    let snapshots = prober.probe(&healthy, &sig, &healthy_checked, Watch::patient());
+    assert_eq!(snapshots.expect("a new Manim runs").error, None);
+    assert_ne!(prober.process(), process);
 }

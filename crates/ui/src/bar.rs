@@ -7,6 +7,9 @@ use suit_engine::{Preview, Session};
 
 use crate::{SuitApp, style};
 
+/// How many seconds Manim is waited for before a way to stop it is offered.
+const PATIENCE: f64 = 4.0;
+
 /// A question the bar is waiting on.
 pub enum Dialog {
     /// Asking for the file to open.
@@ -98,13 +101,42 @@ impl SuitApp {
             }
             ui.separator();
 
+            let now = ui.input(|input| input.time);
+            let running = self.session.preview == Preview::Running;
+            let since = *self.asking_since.get_or_insert(now);
+            if !running {
+                self.asking_since = None;
+            }
             match &self.session.preview {
                 Preview::Running => {
                     ui.spinner();
                     ui.weak("Asking Manim…");
+                    // What takes this long may never finish; nobody should have to wait
+                    // it out or close the window.
+                    if now - since > PATIENCE {
+                        if ui
+                            .small_button("Stop")
+                            .on_hover_text("Stop Manim. The canvas keeps what it last showed.")
+                            .clicked()
+                        {
+                            self.session.stop_preview();
+                        }
+                    } else {
+                        ui.ctx()
+                            .request_repaint_after(std::time::Duration::from_millis(500));
+                    }
                 }
                 Preview::Failed(reason) => {
                     ui.colored_label(style::WARNING, format!("Preview stopped: {reason}"));
+                    if ui.small_button("Try again").clicked() {
+                        self.session.refresh_preview();
+                    }
+                }
+                Preview::Stopped => {
+                    ui.colored_label(style::WARNING, "Preview stopped.");
+                    if ui.small_button("Try again").clicked() {
+                        self.session.refresh_preview();
+                    }
                 }
                 Preview::Ready => {}
             }

@@ -1,3 +1,8 @@
+class _Abandoned(BaseException):
+    """Nobody wants the result any more. Not an `Exception`, so that nothing on the way out
+    mistakes it for a problem with the deck."""
+
+
 class _Probe:
     """Records what is on scene, as outlines the editor can draw: after every step, or at
     every frame of one slide."""
@@ -17,6 +22,12 @@ class _Probe:
 
     def name(self, var, mobject):
         self.names[var] = mobject
+
+    @staticmethod
+    def check():
+        """Stops the run if whoever started it has said the result is not wanted."""
+        if not globals().get("_wanted", lambda: True)():
+            raise _Abandoned
 
     def enter(self, slide):
         self.slide = slide
@@ -62,6 +73,7 @@ class _Probe:
     def step(self, node):
         from manim.utils.family import extract_mobject_family_members
 
+        self.check()
         owners = self.owners()
         members = extract_mobject_family_members(
             self.scene.mobjects, use_z_index=True, only_those_with_points=True
@@ -113,6 +125,7 @@ class _Probe:
         """What is drawn right now, as indices into the pool of distinct outlines."""
         from manim.utils.family import extract_mobject_family_members
 
+        self.check()
         members = extract_mobject_family_members(
             self.scene.mobjects, use_z_index=True, only_those_with_points=True
         )

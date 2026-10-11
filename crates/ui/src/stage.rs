@@ -136,7 +136,7 @@ impl SuitApp {
             .as_ref()
             .is_some_and(|dropped| dropped.ask_at.is_none())
             && (self.session.preview_is_current()
-                || matches!(self.session.preview, Preview::Failed(_)))
+                || matches!(self.session.preview, Preview::Failed(_) | Preview::Stopped))
         {
             self.stage.dropped = None;
         }

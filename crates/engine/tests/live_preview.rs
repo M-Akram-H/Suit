@@ -4,15 +4,22 @@
 use std::{
     path::Path,
     sync::{
-        Arc,
+        Arc, Mutex, MutexGuard, PoisonError,
         atomic::{AtomicUsize, Ordering},
     },
     thread,
     time::{Duration, Instant},
 };
 
+use suit_core::{Command, Raw, RawIface, Time};
 use suit_engine::{Preview, Session};
 use suit_render::Sidecar;
+
+/// Manim runs one at a time per cache directory, so tests that time it must not overlap.
+fn alone() -> MutexGuard<'static, ()> {
+    static TURN: Mutex<()> = Mutex::new(());
+    TURN.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 /// Ticks like a user interface would until the preview shows the deck as it is.
 fn settle(session: &mut Session) -> Duration {
@@ -32,6 +39,7 @@ fn settle(session: &mut Session) -> Duration {
 #[test]
 #[ignore = "needs Manim"]
 fn edits_reach_the_preview_by_themselves() {
+    let _alone = alone();
     let woken = Arc::new(AtomicUsize::new(0));
     let counter = woken.clone();
     let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
@@ -90,8 +98,11 @@ fn edits_reach_the_preview_by_themselves() {
 #[test]
 #[ignore = "needs Manim"]
 fn a_slide_can_be_recorded_for_playing() {
+    let _alone = alone();
     let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
     let mut session = Session::sample().with_preview(sidecar, || {});
+    // Only what is asked for, so that the test can tell what was.
+    session.record_ahead_of_time(false);
     session.select(1, None);
     assert!(session.clip().is_none());
     session.record_slide();
@@ -127,4 +138,102 @@ fn a_slide_can_be_recorded_for_playing() {
         session.clip().is_none(),
         "an edit makes the recording stale"
     );
+}
+
+/// Ticks until `done`, for at most `limit`.
+fn until(session: &mut Session, limit: Duration, done: impl Fn(&Session) -> bool) -> Duration {
+    let started = Instant::now();
+    while !done(session) {
+        assert!(started.elapsed() < limit, "not within {limit:?}");
+        session.tick();
+        thread::sleep(Duration::from_millis(5));
+    }
+    started.elapsed()
+}
+
+#[test]
+#[ignore = "needs Manim"]
+fn slides_are_recorded_ahead_and_an_edit_cuts_in() {
+    let _alone = alone();
+    let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let mut session = Session::sample().with_preview(sidecar, || {});
+    settle(&mut session);
+
+    // Nobody asked, and the selected slide is recorded all the same.
+    let minute = Duration::from_secs(60);
+    let first = until(&mut session, minute, |session| session.clip_of(0).is_some());
+    println!("the first slide was recorded {first:?} after the preview");
+
+    // The others are on their way. A change to the last slide does not wait for them, and
+    // takes nothing away from the slides before it.
+    session.select(5, None);
+    session.add_object("Circle");
+    assert!(session.clip_of(0).is_some());
+    let cut_in = settle(&mut session);
+    println!("an edit reached the preview in {cut_in:?} while slides were being recorded");
+    assert!(
+        cut_in < Duration::from_secs(2),
+        "recording gives way: {cut_in:?}"
+    );
+
+    until(&mut session, 2 * minute, |session| {
+        (0..6).all(|slide| session.clip_of(slide).is_some())
+    });
+    for (slide, report) in session.checked.slides.iter().enumerate() {
+        assert_eq!(session.recording_problem_of(slide), None);
+        let frames = session.clip_of(slide).unwrap().frames.len() as u32;
+        assert_eq!(
+            frames,
+            report.frames + report.gap_frames,
+            "slide {}",
+            slide + 1
+        );
+    }
+
+    // Undoing the change finds the last slide's old recording gone but the rest in place,
+    // and a title is not part of what a slide looks like.
+    session.select(2, None);
+    session.edit_slide(|slide| slide.title = "Renamed".to_owned());
+    assert!((0..6).all(|slide| session.clip_of(slide).is_some()));
+    session.select(2, Some(0));
+    session.delete_step();
+    assert!(session.clip_of(1).is_some() && session.clip_of(2).is_none());
+    session.undo();
+    assert!(
+        session.clip_of(2).is_some(),
+        "a recording is of the slide as it was, and it is that again"
+    );
+}
+
+#[test]
+#[ignore = "needs Manim"]
+fn a_manim_that_never_finishes_is_stopped_by_hand() {
+    let _alone = alone();
+    let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let mut session = Session::blank().with_preview(sidecar, || {});
+    settle(&mut session);
+
+    let python = "import time\ntime.sleep(600)".to_owned();
+    let iface = RawIface {
+        duration: Time::from_secs(1.0),
+        ..RawIface::default()
+    };
+    session.insert_step(Command::Raw(Raw { python, iface }));
+    let patience = Instant::now();
+    while patience.elapsed() < Duration::from_millis(600) {
+        session.tick();
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(session.preview, Preview::Running);
+
+    session.stop_preview();
+    let ten = Duration::from_secs(10);
+    until(&mut session, ten, |session| {
+        session.preview == Preview::Stopped
+    });
+
+    // With the step gone, a new Manim shows the deck again.
+    session.delete_step();
+    settle(&mut session);
+    assert_eq!(session.preview, Preview::Ready);
 }

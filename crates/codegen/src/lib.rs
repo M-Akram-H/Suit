@@ -290,8 +290,15 @@ impl Exporter<'_> {
                 }
                 let _ = writeln!(out, "{INDENT}_probe.step({})", node.id.0);
             }
-            if recording {
-                let _ = writeln!(out, "{INDENT}_probe.mark({})", node.id.0);
+            match self.mode {
+                Mode::Frames { .. } if recording => {
+                    let _ = writeln!(out, "{INDENT}_probe.mark({})", node.id.0);
+                }
+                // The slides before the recorded one are where a run can be stopped early.
+                Mode::Frames { .. } => {
+                    let _ = writeln!(out, "{INDENT}_probe.check()");
+                }
+                _ => {}
             }
         }
     }
