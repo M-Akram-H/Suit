@@ -1,0 +1,11 @@
+# Only what the image is built from is sent to Docker.
+target
+.venv
+.git
+out
+media
+decks
+docs
+tools
+*.png
+**/__pycache__

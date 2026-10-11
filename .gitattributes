@@ -1,0 +1,8 @@
+# Scripts that run inside Linux, in a container or out of it, keep Linux line endings
+# wherever the files are checked out. With Windows line endings they do not start.
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+Dockerfile text eol=lf
+docker/* text eol=lf
+*.png binary

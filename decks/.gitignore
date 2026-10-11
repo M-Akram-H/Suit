@@ -1,0 +1,3 @@
+# Your decks go here when Suit runs in Docker: this folder is the one the container sees.
+*
+!.gitignore

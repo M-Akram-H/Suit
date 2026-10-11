@@ -1,0 +1,36 @@
+# Suit in a container, with Manim and LaTeX in it, shown in a web browser.
+#
+#   docker compose up            build it the first time, start it, and then open
+#                                http://localhost:6080
+#   docker compose down          put it away again
+#
+# Decks are opened from and saved to the folder `decks` next to this file.
+# docs/02-installing.md says more, and what can be changed.
+
+services:
+  suit:
+    build: .
+    image: suit:latest
+    init: true
+    # What follows the editor's name: nothing for the sample deck, `--new` for an empty
+    # one, or the name of a deck in the decks folder. For once only:
+    #   docker compose run --rm --service-ports suit talk.suit.json
+    command: []
+    ports:
+      # Only this computer can reach it. There is no password in front of the screen, so
+      # think twice before opening it to a network by removing the address.
+      - "127.0.0.1:${SUIT_PORT:-6080}:6080"
+    environment:
+      # The size of the screen inside, which the browser scales to its window.
+      SUIT_SCREEN: ${SUIT_SCREEN:-1600x900}
+      SUIT_PORT: ${SUIT_PORT:-6080}
+    volumes:
+      - ./decks:/decks
+      # Formulas and texts that have been typeset once are kept, so that the next start
+      # does not typeset them again.
+      - suit-cache:/home/suit/.cache
+    # Manim's drawings pass between the editor and the screen through shared memory.
+    shm_size: 512m
+
+volumes:
+  suit-cache:

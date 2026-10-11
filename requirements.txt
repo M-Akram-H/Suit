@@ -1,0 +1,8 @@
+# What Suit runs to draw and to render: Manim, and manim-slides for the exported decks.
+# These are the versions Suit's catalogue and its specification are written against.
+#
+#   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+#
+# Manim also needs Cairo, Pango and LaTeX on the system: see docs/02-installing.md.
+manim==0.21.0
+manim-slides==5.7.0

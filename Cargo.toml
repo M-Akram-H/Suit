@@ -6,6 +6,8 @@ members = ["crates/*", "apps/*"]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.90"
+license = "PolyForm-Noncommercial-1.0.0"
+repository = "https://github.com/M-Akram-H/Suit"
 
 [workspace.dependencies]
 suit-core = { path = "crates/core" }

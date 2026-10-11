@@ -1,0 +1,662 @@
+{
+  "config": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "background": "#000000",
+    "gap": 0.1,
+    "gap_on_loops": false
+  },
+  "slides": [
+    {
+      "id": 1,
+      "title": "A curve",
+      "config": {
+        "looping": false,
+        "auto_next": false,
+        "skip": false,
+        "playback_rate": 1.0,
+        "reversed_playback_rate": 1.0,
+        "notes": "The graph of 1/x. It has no value at 0, so it comes in two pieces.",
+        "direction": "horizontal"
+      },
+      "content": {
+        "blueprint": {
+          "body": [
+            {
+              "id": 3,
+              "item": {
+                "let_object": {
+                  "var": 2,
+                  "value": {
+                    "id": 4,
+                    "item": {
+                      "chain": {
+                        "base": {
+                          "id": 5,
+                          "item": {
+                            "new": {
+                              "ctor": "NumberPlane",
+                              "args": []
+                            }
+                          }
+                        },
+                        "call": {
+                          "method": "set_opacity",
+                          "args": [
+                            [
+                              "opacity",
+                              {
+                                "expr": {
+                                  "real": 0.45
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 6,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 7,
+                      "item": {
+                        "prim": {
+                          "ctor": "FadeIn",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 2
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 9,
+              "item": {
+                "let_object": {
+                  "var": 8,
+                  "value": {
+                    "id": 10,
+                    "item": {
+                      "chain": {
+                        "base": {
+                          "id": 11,
+                          "item": {
+                            "new": {
+                              "ctor": "MathTex",
+                              "args": [
+                                [
+                                  "tex_strings",
+                                  {
+                                    "expr": {
+                                      "str": "f(x) = \\frac{1}{x}"
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          }
+                        },
+                        "call": {
+                          "method": "to_corner",
+                          "args": [
+                            [
+                              "corner",
+                              {
+                                "expr": {
+                                  "const": "UL"
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 14,
+              "item": {
+                "let_object": {
+                  "var": 13,
+                  "value": {
+                    "id": 15,
+                    "item": {
+                      "new": {
+                        "ctor": "Plot",
+                        "args": [
+                          [
+                            "function",
+                            {
+                              "fun": {
+                                "param": 12,
+                                "body": {
+                                  "call": {
+                                    "fun": "/",
+                                    "args": [
+                                      {
+                                        "int": 1
+                                      },
+                                      {
+                                        "var": 12
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          [
+                            "asymptotes",
+                            {
+                              "expr": {
+                                "bool": true
+                              }
+                            }
+                          ],
+                          [
+                            "color",
+                            {
+                              "expr": {
+                                "const": "BLUE"
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 16,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 17,
+                      "item": {
+                        "prim": {
+                          "ctor": "Create",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 13
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {
+                            "run_time": 2.0
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 18,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 19,
+                      "item": {
+                        "prim": {
+                          "ctor": "Write",
+                          "args": [
+                            [
+                              "vmobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 8
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 20,
+      "title": "Its slope",
+      "config": {
+        "looping": false,
+        "auto_next": false,
+        "skip": false,
+        "playback_rate": 1.0,
+        "reversed_playback_rate": 1.0,
+        "notes": "The line touches the graph at one point. Its slope is the derivative there.",
+        "direction": "horizontal"
+      },
+      "content": {
+        "blueprint": {
+          "body": [
+            {
+              "id": 22,
+              "item": {
+                "let_object": {
+                  "var": 21,
+                  "value": {
+                    "id": 23,
+                    "item": {
+                      "new": {
+                        "ctor": "Tangent",
+                        "args": [
+                          [
+                            "graph",
+                            {
+                              "expr": {
+                                "place": {
+                                  "root": 13
+                                }
+                              }
+                            }
+                          ],
+                          [
+                            "at",
+                            {
+                              "expr": {
+                                "real": 0.5
+                              }
+                            }
+                          ],
+                          [
+                            "dot",
+                            {
+                              "expr": {
+                                "bool": true
+                              }
+                            }
+                          ],
+                          [
+                            "color",
+                            {
+                              "expr": {
+                                "const": "YELLOW"
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 24,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 25,
+                      "item": {
+                        "prim": {
+                          "ctor": "Create",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 21
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 27,
+              "item": {
+                "let_object": {
+                  "var": 26,
+                  "value": {
+                    "id": 28,
+                    "item": {
+                      "chain": {
+                        "base": {
+                          "id": 29,
+                          "item": {
+                            "new": {
+                              "ctor": "MathTex",
+                              "args": [
+                                [
+                                  "tex_strings",
+                                  {
+                                    "expr": {
+                                      "str": "\\text{slope} ="
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          }
+                        },
+                        "call": {
+                          "method": "next_to",
+                          "args": [
+                            [
+                              "mobject_or_point",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 8
+                                  }
+                                }
+                              }
+                            ],
+                            [
+                              "direction",
+                              {
+                                "expr": {
+                                  "const": "DOWN"
+                                }
+                              }
+                            ],
+                            [
+                              "aligned_edge",
+                              {
+                                "expr": {
+                                  "const": "LEFT"
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 31,
+              "item": {
+                "let_object": {
+                  "var": 30,
+                  "value": {
+                    "id": 32,
+                    "item": {
+                      "chain": {
+                        "base": {
+                          "id": 33,
+                          "item": {
+                            "new": {
+                              "ctor": "DecimalNumber",
+                              "args": [
+                                [
+                                  "number",
+                                  {
+                                    "expr": {
+                                      "real": -4.0
+                                    }
+                                  }
+                                ],
+                                [
+                                  "color",
+                                  {
+                                    "expr": {
+                                      "const": "YELLOW"
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          }
+                        },
+                        "call": {
+                          "method": "next_to",
+                          "args": [
+                            [
+                              "mobject_or_point",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 26
+                                  }
+                                }
+                              }
+                            ],
+                            [
+                              "direction",
+                              {
+                                "expr": {
+                                  "const": "RIGHT"
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 34,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 35,
+                      "item": {
+                        "prim": {
+                          "ctor": "FadeIn",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 26
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    },
+                    {
+                      "id": 36,
+                      "item": {
+                        "prim": {
+                          "ctor": "FadeIn",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 30
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 37,
+              "item": {
+                "attach": {
+                  "target": {
+                    "root": 30
+                  },
+                  "updater": {
+                    "always": {
+                      "method": "set_value",
+                      "args": [
+                        [
+                          "number",
+                          {
+                            "expr": {
+                              "query": {
+                                "target": {
+                                  "root": 21
+                                },
+                                "query": "slope",
+                                "args": []
+                              }
+                            }
+                          }
+                        ]
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 38,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 39,
+                      "item": {
+                        "prim": {
+                          "ctor": "Glide",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 21
+                                  }
+                                }
+                              }
+                            ],
+                            [
+                              "to",
+                              {
+                                "expr": {
+                                  "real": 3.0
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {
+                            "run_time": 4.0
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 40,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 41,
+                      "item": {
+                        "prim": {
+                          "ctor": "Glide",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 21
+                                  }
+                                }
+                              }
+                            ],
+                            [
+                              "to",
+                              {
+                                "expr": {
+                                  "real": 0.4
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {
+                            "run_time": 3.0
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "names": {
+    "2": "grid",
+    "8": "rule",
+    "12": "x",
+    "13": "graph",
+    "21": "tangent",
+    "26": "label",
+    "30": "slope"
+  },
+  "next_id": 41
+}

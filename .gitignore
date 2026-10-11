@@ -4,3 +4,5 @@
 /media
 __pycache__/
 *.pyc
+# Settings of one's own for docker compose
+/.env
