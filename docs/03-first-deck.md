@@ -57,9 +57,10 @@ with it, because Manim fills nothing unless told how much.
 2. Clear the stage: click the circle on the canvas, then **Animate ▾ → Take it away →
    FadeOut**. Do the same for the text.
 
-   To have both fade at the same moment, select the first FadeOut step, click
-   **Add animation** in Properties, and choose the other object there. Then delete the
-   second step.
+   That gives two steps, one after the other. To have both fade at the same moment
+   instead, select the first FadeOut step and click **Add animation** in Properties. In
+   the animation that is added, choose **FadeOut** from the menu at its top and the text
+   as its **object**. Then delete the second step.
 
 ## A graph and its tangent
 
