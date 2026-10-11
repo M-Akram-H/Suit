@@ -1,6 +1,6 @@
 # Manim Core — abstract syntax, AST, type system and semantics
 
-Draft 0.3 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
+Draft 0.4 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
 
 Manim has no syntax of its own: a scene is a Python method that calls a library. What this
 document formalises is the small language *embedded* in those calls — make objects, change
@@ -80,9 +80,13 @@ The editor's canvas uses the reference interpretation directly rather than a sec
 generated *probe* script (`suit-cli probe`) runs the deck in Manim with animations skipped to
 their end state and reports, after every command, the outline, fill and stroke of everything
 on scene and which variable each outline belongs to. The canvas rasterises those outlines, so
-what it shows for text, formulas and graphs is what Manim will draw. The one difference from
-a real render is the one skipping makes: a time-based updater sees a single long frame per
-step instead of many short ones.
+what it shows for text, formulas and graphs is what Manim will draw. A picture has no
+outline; it is reported as its pixels, three of its corners, and how opaque it is. Manim's
+camera draws it from the pixels and all four corners **[src]**; the fourth follows from the
+other three unless the picture has been warped by something that is not linear, which
+nothing in the catalogue does. The one difference from a real render is the
+one skipping makes: a time-based updater sees a single long frame per step instead of many
+short ones.
 
 To *play* a slide, a second probe (`suit-cli probe --frames N`) runs the slides before it
 skipped and then plays that one for real, frame for frame, writing down what is drawn in
@@ -92,6 +96,12 @@ between. It is also a standing check of P3 (§6.7): the recording has exactly `f
 frames, plus the gap, or the tests fail. A still `wait` is the one thing not passed to Manim
 as is: recording makes Manim treat every wait as live, so its frames are written down as
 one frame repeated, which is what E-Wait-Still says they are.
+
+Neither probe changes what a deck means, and both can be given up half-way: they ask, after
+every command and at every frame, whether their result is still wanted. What a slide's
+frames depend on is the deck's configuration and the commands of that slide and of the
+slides before it (E-Deck threads `ρ` and `W` forwards only), so a recording stays good
+through every change to a later slide, to a title, or to a note.
 
 Σ should be generated, not typed in: a script imports the installed Manim, dumps constructor
 and method signatures by introspection, and merges a small hand-written overlay holding what
@@ -165,6 +175,46 @@ Reading notes.
 
 Deliberately absent in 0.1: user-defined functions, loops, 3D scenes, camera moves, sound,
 `wait_until`. See §8.
+
+### 3.1 Formulas: a concrete syntax for `Expr`
+
+Everything above is abstract. Expressions are the one category people write by hand, in the
+editor's settings, so they have a concrete syntax: that of a spreadsheet rather than of
+Python. `crates/codegen/src/formula.rs` reads and writes it.
+
+```
+e ::= if e then e else e
+    | e or e  |  e and e  |  not e
+    | e < e  |  e <= e  |  e > e  |  e >= e  |  e = e  |  e != e
+    | e + e  |  e - e  |  e * e  |  e / e  |  - e  |  e ^ e
+    | h(e, …)                                a function of Σ: sin(x), max(a, b)
+    | e.x | e.y | e.z                        a component of a point
+    | p.q | p.q(e, …) | p.q(l = e, …)        ask an object: circle.center, axes.c2p(1, 2)
+    | (e, e) | (e, e, e)                     a point or direction; two components mean z = 0
+    | 1.5 | 2 | true | "text" | #58c4dd      literals; 2 is an integer, 2.0 a real
+    | k                                      a constant of Σ: UP, PI, BLUE
+    | name | `name` | p[i]                   a value or an object, and the parts of an object
+    | (e)
+```
+
+Listed loosest first; `+ - * /` and `and`, `or` associate to the left, comparisons do not
+chain, and `-2 ^ 2` is `-(2 ^ 2)`. Each operator is the function of Σ of the same name
+(`=` is `==`, `^` is `pow`, a leading `-` is `neg`), as §3 says operators are.
+
+- **Names** are display names, so they may be several words long: `dot 2`. Where several
+  words could be a name, the longest name wins. A name that could not be told from something
+  else — it contains other characters, or a word like `and`, or is spelled like a constant —
+  is written in backticks.
+- A name stands for the innermost value of that name (a parameter, then a named value), else
+  for the newest object of that name.
+- **Asking an object.** `p.q` is the query `q` of Σ, or `get_q` if there is no `q`:
+  `circle.center` is `circle.get_center()`. Arguments go by position or by parameter name.
+  Of anything that is not an object, `.x`, `.y`, `.z` are components instead.
+- `⟨e, e, e⟩` is read as a point too, so the notation of §3 can be typed as it stands.
+
+Writing is the inverse of reading: `read(write(e)) = e` for every expression, which is what
+lets a formula be shown, edited, and put back. Whether it makes sense — that `sin` is given a
+number — is not syntax; it is §5.2, as for every other expression.
 
 ---
 
@@ -915,6 +965,11 @@ Four things the translation does on purpose:
   `AddTextLetterByLetter` otherwise pick a length from the text, which would make durations
   depend on a render. Composites get one only when it was set; theirs follows from their
   children.
+
+A fifth is a precaution rather than a rule of Manim's: **points are arrays of reals.**
+`⟨e₁, e₂, e₃⟩` becomes `np.array([…])` with integer literals written as reals, and with
+`dtype=float` when a component is computed. An array of integers refuses real arithmetic in
+place **[run]**, and nothing promises that Manim never does that to a point it is handed.
 
 Variables become Python names made of the display name and the variable's id (`circle_17`),
 which are unique and cannot shadow anything Manim exports.

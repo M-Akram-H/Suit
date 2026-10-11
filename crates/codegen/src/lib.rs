@@ -570,9 +570,10 @@ impl Exporter<'_> {
             Expr::Bool(false) => "False".to_owned(),
             Expr::Str(value) => string(value),
             Expr::Vec3(parts) => {
-                // Manim adds to points in place, which a whole-number array refuses; so
-                // whole numbers are written as the reals they stand for, and anything
-                // computed is made real by the array itself.
+                // An array of whole numbers refuses real arithmetic in place, and nothing
+                // says Manim never does that to a point it is given. So whole numbers are
+                // written as the reals they stand for, and anything computed is made real
+                // by the array itself.
                 let part = |part: &Expr| match part {
                     Expr::Int(whole) => float(*whole as f64),
                     other => self.expr(other),
