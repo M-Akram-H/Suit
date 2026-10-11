@@ -8,6 +8,8 @@ use suit_codegen::{
     pretty::Pretty,
 };
 use suit_core::{Arg, Args, Deck, Expr, Place, Presence, Rgba, Sym, UNBOUND, VarId};
+use suit_engine::stretches;
+use suit_render::Remark;
 use suit_sig::{AnimParam, AnimParamType, Base, Constant, Param, Pass, Signature, Type};
 
 use crate::style;
@@ -24,6 +26,8 @@ pub struct Scope<'a> {
     /// The values a formula may read here: the named ones, then the parameters of whatever
     /// is being edited.
     values: Vec<VarId>,
+    /// What Manim remarked on when it last ran the deck: what graphs found, for one.
+    remarks: &'a [Remark],
 }
 
 impl<'a> Scope<'a> {
@@ -39,7 +43,22 @@ impl<'a> Scope<'a> {
             objects,
             named: objects.iter().map(|object| object.var).collect(),
             values,
+            remarks: &[],
         }
+    }
+
+    /// The same, knowing what Manim remarked on.
+    pub fn knowing(mut self, remarks: &'a [Remark]) -> Scope<'a> {
+        self.remarks = remarks;
+        self
+    }
+
+    /// What the graph `var` found out about its rule, if Manim has made it.
+    fn found_by(&self, var: VarId) -> Option<&'a Remark> {
+        let remarks = self.remarks.iter().rev();
+        remarks
+            .into_iter()
+            .find(|remark| remark.var == var && remark.what == "plot")
     }
 
     /// The same, inside something that has `parameter`: a function, or a step that is
@@ -99,7 +118,7 @@ impl From<&Param> for Slot {
             name: param.name.clone(),
             ty: param.ty.clone(),
             required: param.required,
-            variadic: param.pass == Pass::Variadic,
+            variadic: matches!(param.pass, Pass::Variadic | Pass::List),
             sampled: false,
         }
     }
@@ -359,11 +378,16 @@ pub fn formula(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
         .unwrap_or_else(|| (formula::write(expr, &names), None));
     let mut changed = false;
     ui.vertical(|ui| {
-        let edit = egui::TextEdit::singleline(&mut text)
+        // A field takes the room it is given, and a table gives a column the room its
+        // fields took: without a floor the two settle on next to nothing.
+        ui.set_min_width(200.0);
+        let mut output = egui::TextEdit::singleline(&mut text)
             .id(field)
             .font(egui::TextStyle::Monospace)
-            .desired_width(200.0);
-        if ui.add(edit).changed() {
+            .desired_width(200.0)
+            .show(ui);
+        take_the_keyboard(ui, &mut output, text.chars().count());
+        if output.response.response.changed() {
             match formula::parse(&text, &names) {
                 Ok(read) => {
                     changed = read != *expr;
@@ -418,12 +442,30 @@ fn boolean(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
 /// keyboard.
 const TYPE_HERE: &str = "type here";
 
-/// Has the first text setting drawn next take the keyboard with all of it selected, so
-/// that what is typed replaces it: for a text that has just been put on the slide, or
-/// that was double-clicked.
+/// Has the first text or formula drawn next take the keyboard with all of it selected, so
+/// that what is typed replaces it: for a text or a graph that has just been put on the
+/// slide, or that was double-clicked.
 pub fn type_into_the_text(ctx: &egui::Context) {
     let now = ctx.input(|input| input.time);
     ctx.data_mut(|data| data.insert_temp(egui::Id::new(TYPE_HERE), now));
+}
+
+/// Gives the field just drawn the keyboard, with its `length` characters selected, if
+/// that was asked for a moment ago and no field before it has taken it.
+fn take_the_keyboard(ui: &egui::Ui, output: &mut egui::text_edit::TextEditOutput, length: usize) {
+    let now = ui.input(|input| input.time);
+    let asked = ui.data_mut(|data| data.remove_temp::<f64>(egui::Id::new(TYPE_HERE)));
+    // A wish that found no field at the time has lapsed.
+    if asked.is_some_and(|at| now - at < 1.0) {
+        let response = &output.response.response;
+        response.request_focus();
+        let all = egui::text::CCursorRange::two(
+            egui::text::CCursor::new(0),
+            egui::text::CCursor::new(length),
+        );
+        output.state.cursor.set_char_range(Some(all));
+        output.state.clone().store(ui.ctx(), response.id);
+    }
 }
 
 fn text(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
@@ -432,24 +474,109 @@ fn text(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
             let mut output = egui::TextEdit::singleline(text)
                 .desired_width(190.0)
                 .show(ui);
-            let now = ui.input(|input| input.time);
-            let asked = ui.data_mut(|data| data.remove_temp::<f64>(egui::Id::new(TYPE_HERE)));
-            // Asked a moment ago; a wish that found no text at the time has lapsed.
-            if asked.is_some_and(|at| now - at < 1.0) {
-                let response = &output.response.response;
-                response.request_focus();
-                let (start, end) = (0, text.chars().count());
-                let all = egui::text::CCursorRange::two(
-                    egui::text::CCursor::new(start),
-                    egui::text::CCursor::new(end),
-                );
-                output.state.cursor.set_char_range(Some(all));
-                output.state.store(ui.ctx(), response.id);
-            }
+            take_the_keyboard(ui, &mut output, text.chars().count());
             output.response.response.changed()
         }
         other => formula(ui, scope, other),
     }
+}
+
+/// The settings of a graph that are its own: where it is drawn, and its asymptotes. The
+/// rule and the rest are settings like any other. `var` is the graph, for saying what
+/// Manim found when it made it.
+pub fn graph(ui: &mut egui::Ui, scope: &Scope, args: &mut Args, var: Option<VarId>) -> bool {
+    let names = scope.names();
+    let found = var.and_then(|var| scope.found_by(var));
+    /// Whether an argument is the one called `name`.
+    fn is(name: &str) -> impl Fn(&(Sym, Arg)) -> bool + '_ {
+        move |(given, _)| &**given == name
+    }
+    let mut changed = false;
+
+    // Where: stretches written by hand, or nothing for wherever the rule has a value.
+    let given: Vec<(Expr, Expr)> = args
+        .iter()
+        .filter(|arg| is("on")(arg))
+        .filter_map(|(_, arg)| match arg {
+            Arg::Expr(Expr::Vec3(parts)) => Some((parts[0].clone(), parts[1].clone())),
+            _ => None,
+        })
+        .collect();
+    let id = ui.id().with("drawn on");
+    let field = id.with("field");
+    let kept = ui.data(|data| data.get_temp::<(String, Option<String>)>(id));
+    let typing = ui.memory(|memory| memory.has_focus(field));
+    let (mut text, mut problem) = kept
+        .filter(|_| typing)
+        .unwrap_or_else(|| (formula::write_stretches(&given, &names), None));
+    ui.horizontal(|ui| {
+        ui.label("drawn on");
+        let edit = egui::TextEdit::singleline(&mut text)
+            .id(field)
+            .font(egui::TextStyle::Monospace)
+            .hint_text("wherever it has a value")
+            .desired_width(200.0);
+        let response = ui.add(edit).on_hover_text(
+            "Leave this empty and the graph is drawn wherever its rule has a value. Or say \
+             where yourself: [0.1, 7], or several stretches, [-1, -0.1] ∪ [0.1, 1].",
+        );
+        if response.changed() {
+            match formula::parse_stretches(&text, &names) {
+                Ok(read) => {
+                    changed |= read != given;
+                    args.retain(|arg| !is("on")(arg));
+                    let stretch =
+                        |(from, to)| Arg::Expr(Expr::Vec3(Box::new([from, to, Expr::Real(0.0)])));
+                    args.extend(read.into_iter().map(|ends| ("on".into(), stretch(ends))));
+                    problem = None;
+                }
+                Err(mistake) => problem = Some(mistake.message),
+            }
+        }
+    });
+    if let Some(problem) = &problem {
+        ui.colored_label(style::ERROR, problem);
+    }
+    ui.data_mut(|data| data.insert_temp(id, (text, problem)));
+    if let Some(found) = found {
+        if found.pieces.is_empty() {
+            let nowhere = "The rule has no value anywhere here, so nothing is drawn.";
+            ui.colored_label(style::WARNING, nowhere);
+        } else if found.missing || found.pieces != found.asked {
+            ui.weak(format!(
+                "Drawn on {}: where the rule has a value near the picture.",
+                stretches(&found.pieces)
+            ));
+        }
+    }
+
+    // Asymptotes: found whether shown or not, so that the box can say what it would show.
+    let mut shown = args
+        .iter()
+        .any(|(name, arg)| &**name == "asymptotes" && *arg == Arg::Expr(Expr::Bool(true)));
+    ui.horizontal(|ui| {
+        if ui.checkbox(&mut shown, "Show asymptotes").changed() {
+            args.retain(|arg| !is("asymptotes")(arg));
+            if shown {
+                args.push(("asymptotes".into(), true.into()));
+            }
+            changed = true;
+        }
+        if let Some(found) = found {
+            let number = |value: &f64| format!("{}", (value * 1000.0).round() / 1000.0 + 0.0);
+            let lines = found.vertical.iter().map(|x| format!("x = {}", number(x)));
+            let levels = found
+                .horizontal
+                .iter()
+                .map(|y| format!("y = {}", number(y)));
+            let all: Vec<String> = lines.chain(levels).collect();
+            ui.weak(match all.is_empty() {
+                true => "none found".to_owned(),
+                false => format!("found: {}", all.join(", ")),
+            });
+        }
+    });
+    changed
 }
 
 /// A range: where it starts, where it ends, and how far apart the points in it are.

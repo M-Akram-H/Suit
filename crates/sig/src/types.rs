@@ -44,6 +44,9 @@ pub enum Pass {
     Keyword,
     /// Zero or more positional arguments; the name may repeat in `Args`.
     Variadic,
+    /// Zero or more values passed together by name, as a list; the name may repeat in
+    /// `Args`, once for every value.
+    List,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

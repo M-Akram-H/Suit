@@ -18,7 +18,8 @@ use std::{
 };
 
 use suit_check::{Checked, Diagnostic, Severity};
-use suit_core::{Deck, SlideContent};
+use suit_codegen::formula::{self, Names};
+use suit_core::{Arg, Command, Deck, Expr, Object, SlideContent, VarId};
 use suit_render::{Clip, Failure, Prober, Sidecar, Snapshots, Watch};
 use suit_sig::Signature;
 
@@ -69,6 +70,20 @@ impl Shared {
     fn key_of(&self, slide: usize) -> Option<u64> {
         self.keys.lock().ok()?.get(slide).copied()
     }
+}
+
+/// Stretches of the number line, as people write them: `[-1, -0.1] ∪ [0.1, 1]`.
+pub fn stretches(pieces: &[[f64; 2]]) -> String {
+    let number = |value: f64| {
+        let rounded = (value * 100.0).round() / 100.0;
+        // Rounding can leave a minus zero behind.
+        format!("{}", rounded + 0.0)
+    };
+    let written: Vec<String> = pieces
+        .iter()
+        .map(|[from, to]| format!("[{}, {}]", number(*from), number(*to)))
+        .collect();
+    written.join(" ∪ ")
 }
 
 /// For every slide, a number that changes exactly when what Manim draws for it may have:
@@ -373,20 +388,74 @@ impl Session {
                 "undefined" => (
                     format!("Manim draws nothing of {name}: some of its points are not numbers."),
                     "If it is a graph, its rule has no value somewhere in its range, like the \
-                     logarithm of a negative number. Give it a range where it has one.",
+                     logarithm of a negative number. Give it a range where it has one."
+                        .to_owned(),
                 ),
-                other => (format!("Manim remarks on {name}: {other}."), ""),
+                // A graph that was told where to draw, and whose rule has no value on
+                // some of that. Left to itself it looks only where there is one, and
+                // there is nothing to say.
+                "plot" if remark.missing && remark.chosen => {
+                    let rule = self.rule_of(remark.var).unwrap_or_else(|| name.to_owned());
+                    let asked = stretches(&remark.asked);
+                    let help = match remark.pieces.is_empty() {
+                        true => "It has no value anywhere there, so nothing is drawn.".to_owned(),
+                        false => format!(
+                            "It is drawn where it has a value: {}.",
+                            stretches(&remark.pieces)
+                        ),
+                    };
+                    (
+                        format!("The function “{rule}” is not defined on all of {asked}."),
+                        help,
+                    )
+                }
+                "plot" => return None,
+                other => (format!("Manim remarks on {name}: {other}."), String::new()),
             };
-            Diagnostic {
+            Some(Diagnostic {
                 severity: Severity::Warning,
                 code: "manim",
                 slide: remark.slide,
                 node: remark.node,
                 message,
-                help: Some(help.to_owned()).filter(|help| !help.is_empty()),
-            }
+                help: Some(help).filter(|help| !help.is_empty()),
+            })
         };
-        self.remarked = self.snapshots.remarks.iter().map(worded).collect();
+        self.remarked = self.snapshots.remarks.iter().filter_map(worded).collect();
+    }
+
+    /// The rule of the graph `var`, written as it is typed.
+    fn rule_of(&self, var: VarId) -> Option<String> {
+        fn rule(object: &Object) -> Option<&Expr> {
+            match object {
+                Object::New { args, .. } => args.iter().find_map(|(_, arg)| match arg {
+                    Arg::Fun { body, .. } => Some(&**body),
+                    _ => None,
+                }),
+                Object::Chain { base, .. } => rule(&base.item),
+                _ => None,
+            }
+        }
+        let (slide, step) = self.creation(var)?;
+        let Command::LetObject { value, .. } = &self.steps_of(slide)[step].item else {
+            return None;
+        };
+        let names = Names {
+            deck: &self.deck,
+            sig: &self.sig,
+            objects: &[],
+            values: &[],
+        };
+        Some(formula::write(rule(&value.item)?, &names))
+    }
+
+    /// What the graph `var` found out about its rule when Manim made it: where it drew,
+    /// and the asymptotes it came across.
+    pub fn found_by_graph(&self, var: VarId) -> Option<&suit_render::Remark> {
+        let remarks = self.snapshots.remarks.iter().rev();
+        remarks
+            .into_iter()
+            .find(|remark| remark.var == var && remark.what == "plot")
     }
 
     /// How many slides, from the first, the snapshots show as they are now.

@@ -79,7 +79,10 @@ class _World:
             def persistent_id(self, value):
                 # Functions stay the very same: Python cannot write a lambda down, and
                 # the ones here do not hold objects, they look them up.
-                if isinstance(value, types.FunctionType):
+                # A class the script defined itself is kept the same way, there being no
+                # module to find it in again.
+                own = isinstance(value, type) and value.__module__ == "__main__"
+                if isinstance(value, types.FunctionType) or own:
                     kept.append(value)
                     return "function", len(kept) - 1
                 if isinstance(value, np.ndarray) and value.nbytes >= world.BIG:
@@ -155,6 +158,8 @@ class _Probe:
         # What was found odd along the way, for the editor to pass on: each once a slide.
         self.remarks = []
         self.remarked = set()
+        # The objects named since the last look at the scene.
+        self.named = []
         # For a recording: the distinct outlines seen, and per frame the ones drawn.
         self.pool = None
         self.seen = {}
@@ -182,6 +187,7 @@ class _Probe:
 
     def name(self, var, mobject):
         self.world.names[var] = mobject
+        self.named.append(var)
 
     def after(self, node):
         """Step `node` has just been run."""
@@ -340,6 +346,11 @@ class _Probe:
                 "rect": [float(low[0]), float(low[1]), float(high[0]), float(high[1])],
                 "on": any(id(member) in on_scene for member in family),
             }
+        for var in self.named:
+            found = getattr(self.world.names.get(var), "found", None)
+            if isinstance(found, dict):
+                self.remarks.append({"slide": self.slide, "node": node, "var": var, "what": "plot", **found})
+        self.named = []
         self.steps.append({"slide": self.slide, "node": node, "drawn": drawn, "boxes": boxes})
 
     def capture(self):

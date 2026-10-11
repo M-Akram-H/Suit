@@ -27,6 +27,20 @@ def problem(text):
     problems.append(text)
 
 
+# What the catalogue has that Manim has not is checked against its own definition, which
+# is what the export writes into the files that use it.
+OWN = {}
+_here = __import__("pathlib").Path(__file__).resolve().parent
+exec(
+    "import numpy as np\nfrom manim import *\n" + (_here.parent / "crates/codegen/src/plot.py").read_text(),
+    OWN,
+)
+
+
+def find(name):
+    return OWN.get(name) or getattr(manim, name, None) or getattr(manim.mobject.geometry.polygram, name, None)
+
+
 def accepted_names(cls, method="__init__"):
     """Parameter names `cls.method` accepts, following **kwargs up the class hierarchy."""
     names, variadic = set(), False
@@ -48,7 +62,7 @@ def check_params(owner, cls, params, method="__init__"):
     for param in params:
         checked += 1
         name, how = param["name"], param["pass"]
-        if how == "keyword" and name not in names:
+        if how in ("keyword", "list") and name not in names:
             problem(f"{owner}: no parameter named {name!r}")
         if how == "variadic" and not variadic:
             problem(f"{owner}: {name!r} is variadic here but Manim takes no *args")
@@ -61,18 +75,18 @@ sig = json.load(sys.stdin)
 
 for name, kind in sig["kinds"].items():
     checked += 1
-    cls = getattr(manim, name, None) or getattr(manim.mobject.geometry.polygram, name, None)
+    cls = find(name)
     if not inspect.isclass(cls):
         problem(f"kind {name}: not a Manim class")
         continue
     if kind["parent"]:
-        parent = getattr(manim, kind["parent"], None) or getattr(manim.mobject.geometry.polygram, kind["parent"])
+        parent = find(kind["parent"])
         if not issubclass(cls, parent):
             problem(f"kind {name}: not a subclass of {kind['parent']}")
     check_params(f"kind {name}", cls, kind["params"])
 
 for name, ctor in sig["ctors"].items():
-    check_params(f"{name}()", getattr(manim, name), ctor["params"])
+    check_params(f"{name}()", find(name), ctor["params"])
 
 for name, overloads in sig["methods"].items():
     for method in overloads:

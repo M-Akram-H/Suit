@@ -2,6 +2,7 @@
 
 use std::{
     collections::HashMap,
+    panic::{AssertUnwindSafe, catch_unwind},
     path::PathBuf,
     sync::{Arc, LazyLock, Mutex},
 };
@@ -18,6 +19,9 @@ use tiny_skia::{
 const FRAME_HEIGHT: f32 = 8.0;
 /// Manim's stroke widths are hundredths of a scene unit.
 const STROKE_UNIT: f32 = 0.01;
+/// Points further from the middle than this, in scene units, are drawn as if they were
+/// this far: the frame is eight units high, and the rasteriser counts in sixteen bits.
+const FAR: f32 = 100.0;
 
 /// The visible part of the scene, centred on the origin, in scene units.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -101,7 +105,12 @@ impl Raster {
                 Some((_, [dx, dy])) => to_pixels.pre_translate(dx, dy),
                 None => to_pixels,
             };
-            draw(pixmap, drawn, transform);
+            // A shape the rasteriser gives up on is one shape missing from the picture.
+            // It must never be the end of the window, and of what was not saved in it.
+            let painted = catch_unwind(AssertUnwindSafe(|| draw(pixmap, drawn, transform)));
+            if painted.is_err() {
+                eprintln!("suit: a shape could not be drawn and was left out");
+            }
         }
         egui::ColorImage::from_rgba_premultiplied([width as usize, height as usize], pixmap.data())
     }
@@ -204,11 +213,21 @@ fn paint(rgba: [f32; 4]) -> Option<Paint<'static>> {
 fn path(outlines: &[Outline]) -> Option<tiny_skia::Path> {
     let mut builder = PathBuilder::new();
     for outline in outlines {
-        let Some((&[x, y], curves)) = outline.points.split_first() else {
+        // Manim draws nothing of an outline with a point that is not a number.
+        let numbers = |point: &[f32; 2]| point[0].is_finite() && point[1].is_finite();
+        if !outline.points.iter().all(numbers) {
+            continue;
+        }
+        // A graph near a pole has points astronomically far away. What can be seen of a
+        // stroke that leaves the picture is the same wherever beyond its edge it ends.
+        let near = |[x, y]: [f32; 2]| [x.clamp(-FAR, FAR), y.clamp(-FAR, FAR)];
+        let Some((&start, curves)) = outline.points.split_first() else {
             continue;
         };
+        let [x, y] = near(start);
         builder.move_to(x, y);
-        for &[[x1, y1], [x2, y2], [x, y]] in curves.as_chunks::<3>().0 {
+        for &[first, second, end] in curves.as_chunks::<3>().0 {
+            let ([x1, y1], [x2, y2], [x, y]) = (near(first), near(second), near(end));
             builder.cubic_to(x1, y1, x2, y2, x, y);
         }
         if outline.closed {
@@ -248,6 +267,44 @@ mod tests {
     use suit_render::{Drawn, Outline};
 
     use super::*;
+
+    /// The graph of 1/x, joined up across its pole the way Manim joins it, reaches a
+    /// million million units up and down. That used to end the program.
+    #[test]
+    fn points_far_outside_the_picture_or_not_numbers_at_all_do_no_harm() {
+        let stroke = |points: Vec<[f32; 2]>| Drawn {
+            owners: Vec::new(),
+            paths: vec![Outline {
+                points,
+                closed: false,
+            }],
+            fill: [0.0; 4],
+            stroke: [1.0; 4],
+            stroke_width: 4.0,
+            picture: None,
+        };
+        let huge = 1.0e15;
+        let line = |from: [f32; 2], to: [f32; 2]| vec![from, from, to, to];
+        let drawn = [
+            stroke(line([-0.05, -20.0], [0.0, -huge])),
+            stroke(line([0.0, -huge], [0.0, huge])),
+            stroke(line([0.0, huge], [0.05, 20.0])),
+            stroke(line([1.0, f32::NAN], [2.0, 1.0])),
+            stroke(line([f32::INFINITY, 0.0], [2.0, 1.0])),
+            stroke(line([-3.0, 2.0], [3.0, 2.0])),
+        ];
+        let frame = Frame {
+            width: 8.0 * 16.0 / 9.0,
+            height: 8.0,
+        };
+        let image = rasterize(&drawn, frame, Rgba::BLACK, [640, 360], None);
+        let lit = |x: usize, y: usize| image.pixels[y * 640 + x].r() > 128;
+        // The stroke through the pole runs down the middle of the picture, top to bottom.
+        assert!(lit(320, 20) && lit(320, 340));
+        // The ordinary line is where it belongs: two units up, three to either side.
+        assert!(lit(320 - 100, 180 - 90) && lit(320 + 100, 180 - 90));
+        assert!(!lit(100, 300));
+    }
 
     /// Not a check, a measurement: `cargo test -p suit-ui full_hd -- --ignored --nocapture`
     #[test]

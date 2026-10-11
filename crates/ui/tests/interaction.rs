@@ -939,51 +939,82 @@ fn a_setting_can_be_a_formula() {
 fn a_graph_is_made_and_its_rule_rewritten() {
     let mut window = open(Session::blank());
     menu(&mut window, "More objects", "Graph of a function");
-    assert_eq!(
-        headlines(&window),
-        ["New graph (FunctionGraph)", "Create graph"]
-    );
-    assert_eq!(
-        text_of_step(&window, 0),
-        "graph = FunctionGraph(x ↦ sin(x), x_range = (-7.0, 7.0, 0.05))"
-    );
+    assert_eq!(headlines(&window), ["New graph (Plot)", "Create graph"]);
+    assert_eq!(text_of_step(&window, 0), "graph = Plot(x ↦ sin(x))");
 
-    // Its rule and its range are at hand without going to the step that makes it.
+    // Its rule is at hand without going to the step that makes it.
     rewrite(&mut window, "sin(x)", "log(x)");
-    assert_eq!(
-        text_of_step(&window, 0),
-        "graph = FunctionGraph(x ↦ log(x), x_range = (-7.0, 7.0, 0.05))"
-    );
-    for part in ["from", "to", "in steps of"] {
-        assert!(window.query_by_label(part).is_some(), "{part}");
-    }
+    assert_eq!(text_of_step(&window, 0), "graph = Plot(x ↦ log(x))");
     assert_eq!(window.state().session.checked.diagnostics, []);
 
-    // Manim draws nothing of a graph whose rule has no value in part of its range, and
-    // says nothing. The editor says it, where problems are said.
+    // What the graph found when Manim made it: where the rule has a value, and that it
+    // runs off at zero. Left to itself it drew there, so there is nothing to put right.
+    let found = |window: &mut Window, asked: [f64; 2], chosen: bool| {
+        let session = &mut window.state_mut().session;
+        let remark = suit_render::Remark {
+            node: Some(session.steps()[0].id),
+            var: session.objects()[0].var,
+            what: "plot".to_owned(),
+            asked: vec![asked],
+            pieces: vec![[0.0, asked[1]]],
+            chosen,
+            missing: true,
+            vertical: vec![0.0],
+            ..Default::default()
+        };
+        session.install_snapshots(Snapshots {
+            remarks: vec![remark],
+            ..Snapshots::default()
+        });
+        window.run_ok();
+    };
+    found(&mut window, [-7.11, 7.11], false);
+    assert!(
+        window
+            .query_by_label("Drawn on [0, 7.11]: where the rule has a value near the picture.")
+            .is_some()
+    );
+    assert!(window.query_by_label("found: x = 0").is_some());
     assert!(window.query_by_label_contains("ready to export").is_some());
-    let session = &mut window.state_mut().session;
-    let graph = session.objects()[0].var;
-    let made = session.steps()[0].id;
-    session.install_snapshots(Snapshots {
-        remarks: vec![suit_render::Remark {
-            slide: 0,
-            node: Some(made),
-            var: graph,
-            what: "undefined".to_owned(),
-        }],
-        ..Snapshots::default()
-    });
+
+    // The box may be below the edge of the panel, so it is pressed without being pointed at.
+    window.get_by_label("Show asymptotes").click_accesskit();
     window.run_ok();
+    assert_eq!(
+        text_of_step(&window, 0),
+        "graph = Plot(x ↦ log(x), asymptotes = true)"
+    );
+
+    // Where to draw can be said by hand, several stretches at once.
+    rewrite(&mut window, "", "[-2; -1] union [1; 2]");
+    assert_eq!(
+        text_of_step(&window, 0),
+        "graph = Plot(x ↦ log(x), asymptotes = true, on = (-2, -1), on = (1, 2))"
+    );
+    assert_eq!(window.state().session.checked.diagnostics, []);
+    rewrite(&mut window, "[-2; -1] union [1; 2]", "[-7, 7");
+    assert!(
+        window
+            .query_by_label("This stretch has no closing ].")
+            .is_some()
+    );
+    rewrite(&mut window, "[-7, 7", "[-7, 7]");
+    assert_eq!(
+        text_of_step(&window, 0),
+        "graph = Plot(x ↦ log(x), asymptotes = true, on = (-7, 7))"
+    );
+
+    // Told to draw where the rule has no value, the editor says so, in so many words.
+    found(&mut window, [-7.0, 7.0], true);
     assert!(window.query_by_label("Problems (1)").is_some());
     assert!(
         window
-            .query_by_label("Manim draws nothing of graph: some of its points are not numbers.")
+            .query_by_label("The function “log(x)” is not defined on all of [-7, 7].")
             .is_some()
     );
     assert!(
         window
-            .query_by_label_contains("logarithm of a negative number")
+            .query_by_label("It is drawn where it has a value: [0, 7].")
             .is_some()
     );
 

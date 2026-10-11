@@ -76,7 +76,8 @@ impl SuitApp {
             &session.deck,
             session.objects_before(),
             session.values_before(),
-        );
+        )
+        .knowing(&session.snapshots.remarks);
         let subject = self.subject().cloned();
         let mut command = node.item.clone();
         let mut renamed = None;
@@ -238,7 +239,8 @@ impl SuitApp {
             &session.deck,
             session.objects_before_step(slide, Some(step)),
             session.values_before_step(slide, Some(step)),
-        );
+        )
+        .knowing(&session.snapshots.remarks);
         let mut command = node.item.clone();
         let mut renamed = None;
         ui.push_id(("picked", node.id), |ui| {
@@ -277,7 +279,7 @@ fn edit_command(
                 }
             });
             ui.add_space(4.0);
-            edit_object(ui, scope, &mut value.item, true);
+            edit_object(ui, scope, &mut value.item, true, Some(*var));
         }
         Command::LetValue { var, value } => {
             let mut name = scope.deck.names.get(&*var).cloned().unwrap_or_default();
@@ -483,7 +485,13 @@ fn kind_of_object(scope: &Scope, object: &Object) -> Sym {
 
 /// How an object is made: its constructor's settings, then what is done to it straight
 /// away. `outermost` is true for the whole expression, where further calls can be added.
-fn edit_object(ui: &mut egui::Ui, scope: &Scope, object: &mut Object, outermost: bool) {
+fn edit_object(
+    ui: &mut egui::Ui,
+    scope: &Scope,
+    object: &mut Object,
+    outermost: bool,
+    var: Option<VarId>,
+) {
     let kind = kind_of_object(scope, object);
     let mut unwrap = false;
     match object {
@@ -502,7 +510,20 @@ fn edit_object(ui: &mut egui::Ui, scope: &Scope, object: &mut Object, outermost:
                             ..Slot::from(param)
                         })
                         .collect();
-                    ui.push_id("made", |ui| editors::args(ui, scope, &slots, args));
+                    if &**ctor == "Plot" {
+                        // Its rule first, then where and its asymptotes, which have
+                        // editors of their own; then what it shares with every shape.
+                        let own =
+                            |slot: &Slot| ["function", "on", "asymptotes"].contains(&&*slot.name);
+                        let (mut rule, rest): (Vec<Slot>, Vec<Slot>) =
+                            slots.into_iter().partition(own);
+                        rule.retain(|slot| &*slot.name == "function");
+                        ui.push_id("rule", |ui| editors::args(ui, scope, &rule, args));
+                        ui.push_id("graph", |ui| editors::graph(ui, scope, args, var));
+                        ui.push_id("made", |ui| editors::args(ui, scope, &rest, args));
+                    } else {
+                        ui.push_id("made", |ui| editors::args(ui, scope, &slots, args));
+                    }
                 }
                 None => {
                     ui.colored_label(style::ERROR, "The catalogue has no such object.");
@@ -524,7 +545,7 @@ fn edit_object(ui: &mut egui::Ui, scope: &Scope, object: &mut Object, outermost:
             });
         }
         Object::Chain { base, call } => {
-            edit_object(ui, scope, &mut base.item, false);
+            edit_object(ui, scope, &mut base.item, false, var);
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 ui.weak("then");

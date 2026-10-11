@@ -500,7 +500,7 @@ fn everyday_name(ctor: &str) -> String {
         "DashedLine" => "dashed line",
         "DoubleArrow" => "double arrow",
         "DecimalNumber" | "Integer" => "number",
-        "FunctionGraph" => "graph",
+        "FunctionGraph" | "Plot" => "graph",
         "ParametricFunction" => "curve",
         "ValueTracker" => "tracker",
         "SurroundingRectangle" => "frame",
@@ -549,6 +549,7 @@ fn starting_arguments(ctor: &str, about: Option<&Place>) -> Option<Vec<(&'static
         "ImageMobject" => return None,
         "Brace" => vec![("mobject", about?.into())],
         "SurroundingRectangle" => vec![("mobjects", about?.into())],
+        "Plot" => vec![("function", Arg::fun(UNBOUND, call("sin")))],
         // A wave, and a circle: something to see, and to change into what is wanted.
         "FunctionGraph" => vec![
             ("function", Arg::fun(UNBOUND, call("sin"))),

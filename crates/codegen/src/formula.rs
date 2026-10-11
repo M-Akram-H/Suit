@@ -594,6 +594,78 @@ impl Names<'_> {
     }
 }
 
+// ── Stretches ────────────────────────────────────────────────────────────────
+
+/// Reads stretches of the number line as they are written by hand: `[-1, -0.1] ∪ [0.1, 1]`.
+/// The two ends of each are formulas, parted by a comma or a semicolon; the stretches are
+/// joined by `∪`, `U`, `union` or `or`, or just stand side by side. Nothing at all is no
+/// stretch at all.
+pub fn parse_stretches(text: &str, names: &Names) -> Result<Vec<(Expr, Expr)>, Mistake> {
+    let chars: Vec<char> = text.chars().collect();
+    let mistake = |at: usize, message: &str| Mistake {
+        at,
+        message: message.to_owned(),
+    };
+    let example = "Write stretches like [-1, -0.1] ∪ [0.1, 1].";
+    let mut stretches = Vec::new();
+    let mut at = 0;
+    while at < chars.len() {
+        let c = chars[at];
+        if c.is_whitespace() || c == '∪' || c == ',' {
+            at += 1;
+            continue;
+        }
+        if c.is_alphabetic() {
+            let end = (at..chars.len()).find(|&index| !chars[index].is_alphabetic());
+            let end = end.unwrap_or(chars.len());
+            let word: String = chars[at..end].iter().collect();
+            if !["u", "union", "or", "and"].contains(&word.to_lowercase().as_str()) {
+                return Err(mistake(at, example));
+            }
+            at = end;
+            continue;
+        }
+        if c != '[' {
+            return Err(mistake(at, example));
+        }
+        // To the bracket that closes this one, past any brackets inside the formulas.
+        let (mut depth, mut parts, mut close) = (0, vec![at + 1], None);
+        for (index, &inner) in chars.iter().enumerate().skip(at + 1) {
+            match inner {
+                '(' | '[' | '⟨' => depth += 1,
+                ')' | '⟩' => depth -= 1,
+                ']' if depth > 0 => depth -= 1,
+                ']' => {
+                    close = Some(index);
+                    break;
+                }
+                ';' | ',' if depth == 0 => parts.push(index + 1),
+                _ => {}
+            }
+        }
+        let close = close.ok_or_else(|| mistake(at, "This stretch has no closing ]."))?;
+        let &[first, second] = parts.as_slice() else {
+            return Err(mistake(at, "A stretch has two ends: [from, to]."));
+        };
+        let read = |from: usize, to: usize| {
+            let part: String = chars[from..to].iter().collect();
+            parse(&part, names).map_err(|inner| mistake(from + inner.at, &inner.message))
+        };
+        stretches.push((read(first, second - 1)?, read(second, close)?));
+        at = close + 1;
+    }
+    Ok(stretches)
+}
+
+/// Writes stretches so that [`parse_stretches`] reads them back.
+pub fn write_stretches(stretches: &[(Expr, Expr)], names: &Names) -> String {
+    let written: Vec<String> = stretches
+        .iter()
+        .map(|(from, to)| format!("[{}, {}]", write(from, names), write(to, names)))
+        .collect();
+    written.join(" ∪ ")
+}
+
 // ── Writing ──────────────────────────────────────────────────────────────────
 
 /// How tightly each form binds; a form is put in brackets where a tighter one is expected.
@@ -1050,6 +1122,43 @@ mod tests {
         assert_eq!(
             wrong("#12").message,
             "A colour is # and six digits: #58c4dd."
+        );
+    }
+
+    #[test]
+    fn stretches_are_read_as_they_are_written_by_hand() {
+        let world = World::new();
+        let names = world.names();
+        let pair = |from: Expr, to: Expr| (from, to);
+        let one = vec![
+            pair(Expr::Int(-1), Expr::Real(-0.1)),
+            pair(Expr::Real(0.1), 1.into()),
+        ];
+        for text in [
+            "[-1, -0.1] ∪ [0.1, 1]",
+            "[-1; -0.1] union [0.1; 1]",
+            "[-1,-0.1]U[0.1,1]",
+            "[-1, -0.1] or [0.1, 1]",
+            "[-1, -0.1] [0.1, 1]",
+        ] {
+            assert_eq!(parse_stretches(text, &names).as_ref(), Ok(&one), "{text}");
+        }
+        assert_eq!(write_stretches(&one, &names), "[-1, -0.1] ∪ [0.1, 1]");
+        assert_eq!(parse_stretches("  ", &names), Ok(Vec::new()));
+        // The ends are formulas like any other.
+        let turn = parse_stretches("[-PI, max(1, 2) * PI]", &names).unwrap();
+        assert_eq!(write_stretches(&turn, &names), "[-PI, max(1, 2) * PI]");
+
+        let wrong = |text: &str| parse_stretches(text, &names).expect_err(text).message;
+        assert_eq!(
+            wrong("-1, 1"),
+            "Write stretches like [-1, -0.1] ∪ [0.1, 1]."
+        );
+        assert_eq!(wrong("[1]"), "A stretch has two ends: [from, to].");
+        assert_eq!(wrong("[1, 2"), "This stretch has no closing ].");
+        assert_eq!(
+            wrong("[1, squirrel]"),
+            "There is nothing called “squirrel” here."
         );
     }
 }

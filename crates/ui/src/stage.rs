@@ -59,14 +59,15 @@ const MORE: [(&str, &str); 17] = [
     ("LaTeX text", "Tex"),
     ("Styled text", "MarkupText"),
     ("Grid", "NumberPlane"),
-    ("Graph of a function", "FunctionGraph"),
+    ("Graph of a function", "Plot"),
     ("Curve", "ParametricFunction"),
     ("Number that can change", "ValueTracker"),
 ];
 
-/// Whether what `ctor` makes is something written, whose words are its point.
+/// Whether what `ctor` makes is made to be typed: a text, whose words are its point, or
+/// a graph, whose rule is.
 fn written(ctor: &str) -> bool {
-    matches!(ctor, "Text" | "MarkupText" | "MathTex" | "Tex")
+    matches!(ctor, "Text" | "MarkupText" | "MathTex" | "Tex" | "Plot")
 }
 
 #[derive(Default)]
@@ -308,6 +309,11 @@ impl SuitApp {
                 .map_or([0.0; 2], |(_, offset)| offset);
             let corner = |x: f32, y: f32| frame.to_screen(rect, [x + shift[0], y + shift[1]]);
             let area = Rect::from_two_pos(corner(left, bottom), corner(right, top)).expand(4.0);
+            // A graph may reach far beyond the picture; its outline stays with the picture.
+            let area = area.intersect(rect.expand(6.0));
+            if !area.is_positive() {
+                return;
+            }
             // An object that exists but is not shown gets a fainter outline.
             let color = if bounds.on {
                 color

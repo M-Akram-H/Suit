@@ -229,8 +229,15 @@ fn a_run_nobody_wants_is_stopped_and_the_process_kept() {
 fn a_manim_that_hangs_is_replaced() {
     let sig = Signature::builtin();
     let mut deck = deck("stuck");
-    // Python that never gets to the next step, so asking it to stop is not heard.
-    let python = "import time\ntime.sleep(600)".to_owned();
+    // Python that never gets to the next step, so asking it to stop is not heard. It
+    // leaves a mark first: with other tests running it may wait a while for its turn, and
+    // only once it has started is there anything stuck to give up on.
+    let mark = Path::new(env!("CARGO_TARGET_TMPDIR")).join("stuck.mark");
+    let _ = std::fs::remove_file(&mark);
+    let python = format!(
+        "open({:?}, \"w\").write(\"here\")\nimport time\ntime.sleep(600)",
+        mark.display().to_string()
+    );
     let iface = RawIface {
         duration: Time::from_secs(1.0),
         ..RawIface::default()
@@ -246,15 +253,24 @@ fn a_manim_that_hangs_is_replaced() {
         .expect("Manim runs");
     let process = prober.process();
 
-    let limit = Duration::from_millis(300);
+    // Wanted until it has been stuck for a third of a second.
+    let stuck_since = std::cell::Cell::new(None::<Instant>);
+    let wanted = || {
+        if stuck_since.get().is_none() && mark.exists() {
+            stuck_since.set(Some(Instant::now()));
+        }
+        stuck_since
+            .get()
+            .is_none_or(|since| since.elapsed() < Duration::from_millis(300))
+    };
     let watch = Watch {
-        limit,
+        wanted: &wanted,
         ..Watch::patient()
     };
-    let started = Instant::now();
     let outcome = prober.probe(&deck, &sig, &checked, watch);
-    assert_eq!(outcome.err(), Some(Failure::TooSlow(limit)));
-    assert!(started.elapsed() < Duration::from_secs(8));
+    assert_eq!(outcome.err(), Some(Failure::Abandoned));
+    let stuck_for = stuck_since.get().expect("it got to run").elapsed();
+    assert!(stuck_for < Duration::from_secs(8), "{stuck_for:?}");
     assert_eq!(prober.process(), None, "it had to be stopped by force");
 
     let snapshots = prober.probe(&healthy, &sig, &healthy_checked, Watch::patient());
@@ -468,4 +484,87 @@ fn a_graph_of_a_rule_with_no_value_somewhere_is_remarked_on_not_choked_on() {
         (left - 0.1).abs() < 0.01 && (right - 7.0).abs() < 0.06,
         "{left} to {right}"
     );
+}
+
+#[test]
+#[ignore = "needs Manim"]
+fn a_graph_is_drawn_where_its_rule_has_a_value() {
+    let sig = Signature::builtin();
+    use suit_core::{Arg, Expr};
+    // A deck with one graph; `rule` builds it from its parameter.
+    let graph_of = |rule: &dyn Fn(Expr) -> Expr, on: &[[f64; 2]], asymptotes: bool| {
+        let mut deck = Deck::new(DeckConfig::default());
+        let mut slide = deck.add_slide("Graph");
+        let x = slide.var("x");
+        let mut plot = Object::new("Plot").arg("function", Arg::fun(x, rule(Expr::Var(x))));
+        for [from, to] in on {
+            plot = plot.arg("on", Expr::vec3(*from, *to, 0.0));
+        }
+        if asymptotes {
+            plot = plot.arg("asymptotes", true);
+        }
+        let graph = slide.object("graph", plot);
+        slide.play(vec![Anim::prim("Create").arg("mobject", &graph)]);
+        (deck, graph.root)
+    };
+    let mut prober = prober();
+    let mut look = |deck: &Deck| {
+        let checked = check(deck, &sig);
+        assert_eq!(checked.diagnostics, []);
+        let shown = prober
+            .probe(deck, &sig, &checked, Watch::patient())
+            .expect("Manim runs");
+        assert_eq!(shown.error, None);
+        // Playing it is no different, and as long as the timeline says.
+        let clip = prober
+            .probe_frames(deck, &sig, &checked, 0, Watch::patient())
+            .expect("Manim runs");
+        assert_eq!(clip.error, None);
+        let report = &checked.slides[0];
+        assert_eq!(clip.frames.len() as u32, report.frames + report.gap_frames);
+        shown
+    };
+    let near = |found: &[f64], wanted: &[f64]| {
+        found.len() == wanted.len() && found.iter().zip(wanted).all(|(a, b)| (a - b).abs() < 1e-3)
+    };
+    let inverse = |x: Expr| Expr::call("/", vec![Expr::Real(1.0), x]);
+    let logarithm = |x: Expr| Expr::call("log", vec![x]);
+
+    // 1/x, left to itself: two branches that stop short of the pole, and nothing wild.
+    let (deck, graph) = graph_of(&inverse, &[], false);
+    let shown = look(&deck);
+    let found = &shown.remarks[0];
+    assert_eq!((found.var, found.what.as_str()), (graph, "plot"));
+    assert!(!found.missing && !found.chosen);
+    assert_eq!(found.pieces.len(), 2);
+    assert!(found.pieces[0][1] < -0.05 && found.pieces[1][0] > 0.05);
+    assert!(near(&found.vertical, &[0.0]) && near(&found.horizontal, &[0.0]));
+    let last = shown.steps.last().unwrap();
+    assert_eq!(last.drawn.len(), 1, "the curve, and no lines");
+    let far = last.drawn[0].paths.iter().flat_map(|path| &path.points);
+    assert!(far.clone().all(|[x, y]| x.is_finite() && y.abs() < 20.0));
+    assert_eq!(last.drawn[0].paths.len(), 2, "one stroke for each branch");
+
+    // With its asymptotes shown: the two dashed lines are drawn as well.
+    let (deck, _) = graph_of(&inverse, &[], true);
+    let shown = look(&deck);
+    assert!(shown.steps.last().unwrap().drawn.len() > 10, "dashes");
+
+    // The logarithm, left to itself: from nought on, with nothing to put right.
+    let (deck, _) = graph_of(&logarithm, &[], false);
+    let shown = look(&deck);
+    let found = &shown.remarks[0];
+    assert!(found.missing && !found.chosen);
+    assert_eq!(found.pieces.len(), 1);
+    assert!(found.pieces[0][0].abs() < 1e-3 && near(&found.vertical, &[0.0]));
+
+    // Told where: only there, and told of what the rule cannot do there.
+    let (deck, _) = graph_of(&logarithm, &[[-7.0, 7.0]], false);
+    let found = &look(&deck).remarks[0];
+    assert!(found.missing && found.chosen);
+    assert_eq!(found.asked, [[-7.0, 7.0]]);
+    let (deck, _) = graph_of(&inverse, &[[-1.0, -0.1], [0.1, 1.0]], false);
+    let found = &look(&deck).remarks[0];
+    assert!(!found.missing && found.chosen);
+    assert_eq!(found.pieces, [[-1.0, -0.1], [0.1, 1.0]]);
 }

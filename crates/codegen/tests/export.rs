@@ -148,3 +148,38 @@ fn pictures_named_from_the_deck_are_found_from_the_file() {
     // A picture named in full needs no such help.
     assert!(!picture("/somewhere/photo.png").contains("assets_dir"));
 }
+
+#[test]
+fn a_graph_brings_its_definition_along() {
+    let sig = Signature::builtin();
+    let mut deck = Deck::new(DeckConfig::default());
+    let mut slide = deck.add_slide("One");
+    let x = slide.var("x");
+    let rule = suit_core::Arg::fun(x, Expr::call("/", vec![Expr::Real(1.0), Expr::Var(x)]));
+    let graph = slide.object(
+        "graph",
+        Object::new("Plot")
+            .arg("function", rule)
+            .arg("on", Expr::vec3(-1.0, -0.1, 0.0))
+            .arg("on", Expr::vec3(0.1, 1.0, 0.0))
+            .arg("asymptotes", true),
+    );
+    slide.play(vec![Anim::prim("Create").arg("mobject", &graph)]);
+    let checked = check(&deck, &sig);
+    assert_eq!(checked.diagnostics, []);
+    let python = export(&deck, &sig, &checked, &Options::default());
+    // What Manim does not have is defined in the file itself, once, before it is used.
+    assert_eq!(python.matches("class Plot(VMobject):").count(), 1);
+    assert!(python.find("class Plot(VMobject):") < python.find("class Deck(Slide):"));
+    let made = "Plot(lambda x_2: (1.0 / x_2), on=[np.array([-1.0, -0.1, 0.0]), \
+                np.array([0.1, 1.0, 0.0])], asymptotes=True)";
+    assert!(python.contains(made), "{python}");
+
+    // A deck without a graph does not carry it.
+    let mut plain = Deck::new(DeckConfig::default());
+    let mut slide = plain.add_slide("One");
+    let circle = slide.object("circle", Object::new("Circle"));
+    slide.play(vec![Anim::prim("Create").arg("mobject", &circle)]);
+    let checked = check(&plain, &sig);
+    assert!(!export(&plain, &sig, &checked, &Options::default()).contains("class Plot"));
+}

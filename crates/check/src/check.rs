@@ -375,7 +375,7 @@ impl Checker<'_> {
         calls.reverse();
 
         let Object::Group { vector, items } = &base.item else {
-            let copies_group = match &value.item {
+            let copies_group = match &base.item {
                 Object::Copy(source) => self
                     .place_quiet(env, source)
                     .is_some_and(|found| matches!(found.shape, Shape::Group(_))),
@@ -1049,7 +1049,7 @@ impl Checker<'_> {
                 ),
                 Some((_, _, pass)) => {
                     let repeated = args[..index].iter().any(|(earlier, _)| earlier == name);
-                    if repeated && pass != Pass::Variadic {
+                    if repeated && !matches!(pass, Pass::Variadic | Pass::List) {
                         self.error(
                             "arguments",
                             format!("{owner} is given “{name}” twice."),

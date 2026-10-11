@@ -38,14 +38,31 @@ pub struct Snapshots {
 }
 
 /// Something about an object that Manim puts up with and its author would want to know.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 pub struct Remark {
     pub slide: usize,
     /// The step after which it was first seen.
     pub node: Option<NodeId>,
     pub var: VarId,
     /// `undefined`: some of the object's points are not numbers, and Manim draws none of it.
+    /// `plot`: what a graph found out about its rule; the fields below say what.
     pub what: String,
+    /// For a graph: the stretches it was asked to look at, and the ones it drew.
+    #[serde(default)]
+    pub asked: Vec<[f64; 2]>,
+    #[serde(default)]
+    pub pieces: Vec<[f64; 2]>,
+    /// Whether those stretches were named, rather than being the width of the frame.
+    #[serde(default)]
+    pub chosen: bool,
+    /// Whether the rule has no value somewhere on what it was asked to look at.
+    #[serde(default)]
+    pub missing: bool,
+    /// Where it runs off to infinity, and the levels it settles on far out.
+    #[serde(default)]
+    pub vertical: Vec<f64>,
+    #[serde(default)]
+    pub horizontal: Vec<f64>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

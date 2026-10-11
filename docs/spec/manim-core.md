@@ -1,6 +1,6 @@
 # Manim Core — abstract syntax, AST, type system and semantics
 
-Draft 0.5 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
+Draft 0.6 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
 
 Manim has no syntax of its own: a scene is a Python method that calls a library. What this
 document formalises is the small language *embedded* in those calls — make objects, change
@@ -70,6 +70,34 @@ MC is parameterised by a signature, exactly as first-order logic is:
 
 Parameters are inherited along `≤` (Manim forwards `**kwargs` to the superclass), so
 `VMobject`'s `fill_opacity`, `stroke_width`, … are available on every vector kind **[src]**.
+
+A parameter also says how its arguments reach Python: by position, by name, as *the rest*
+(`*args`: any number, by position), or as a *list* (any number, passed together by name).
+The last two are the only parameters a call may give more than one argument.
+
+**One constructor is not Manim's.** `Plot : (function: Real → Real, on: list of Vec,
+step: Real, asymptotes: Bool) → Plot`, with `Plot ≤ VMobject`, is the graph of a rule
+drawn where the rule has a value. Manim's own `FunctionGraph` works the rule out at every
+point of its range and joins up whatever comes out: where the rule has no value it draws
+none of the graph, and across a pole it joins the two branches by a stroke from the bottom
+of the picture to the top **[run]**. `Plot` looks first. Its interpretation is not in
+Manim but in a hundred and fifty lines of Python that the translation writes into every file
+that uses it
+(§7), so it is as much part of the reference interpretation as anything of Manim's:
+
+- it samples the rule on each stretch of `on` (each a pair of numbers; without `on`, the
+  width of the frame) and keeps the runs where the value is a number no further than two
+  frame heights from the middle, each run a stroke of its own;
+- a step out of all proportion to the steps around it ends a run as well, so a staircase is
+  drawn without risers;
+- where a gap is one the rule runs off into — its values grow without end towards a point,
+  or it stops having values at a point it was heading off at — that point is a vertical
+  asymptote; a level the rule settles on far out to either side is a horizontal one. With
+  `asymptotes` they are drawn, dashed.
+
+What it found — the stretches drawn, whether the rule lacked a value anywhere it was told to
+look, the asymptotes — is reported by the probes with the scene, which is how the editor can
+say “the function `log(x)` is not defined on all of [-7, 7]” instead of drawing nothing.
 
 An **interpretation** `𝓘` of Σ gives each symbol its meaning: `𝓘(C)` builds points and style,
 `𝓘(f)` transforms an object, `𝓘(q)` reads one, `𝓘(A)` supplies the per-frame step of an
@@ -222,6 +250,11 @@ chain, and `-2 ^ 2` is `-(2 ^ 2)`. Each operator is the function of Σ of the sa
   `circle.center` is `circle.get_center()`. Arguments go by position or by parameter name.
   Of anything that is not an object, `.x`, `.y`, `.z` are components instead.
 - `⟨e, e, e⟩` is read as a point too, so the notation of §3 can be typed as it stands.
+
+**Stretches** of the number line, which a `Plot` is told to draw on, are written as a
+mathematician writes them and read forgivingly: `[-1, -0.1] ∪ [0.1, 1]`, with `;` for the
+comma and `U`, `union` or `or` for `∪` if that is what is typed. The two ends of each are
+formulas.
 
 Writing is the inverse of reading: `read(write(e)) = e` for every expression, which is what
 lets a formula be shown, edited, and put back. Whether it makes sense — that `sin` is given a
@@ -656,6 +689,8 @@ Warnings are legal programs that are probably not meant:
 | `loop` on the first or last slide | not supported by the RevealJS export **[src]** |
 | `p.animate(rotate(…))` | morphs along straight lines instead of rotating; `Rotate` is meant **[run]** |
 | an updater that reads an object which an animation then consumes | it keeps following the leftover geometry |
+| an object with a point that is not a number | Manim draws none of that object, and says nothing **[run]**; found by running the deck, not by the checker |
+| a `Plot` told to draw on stretches where its rule has no value | it draws where it has one; reported with the rule and the stretches |
 | `Transform` where the source is never used again | `ReplacementTransform` is simpler and keeps kinds exact |
 | an object left `on` at the end of the deck with no later use | harmless; often a forgotten `FadeOut` |
 | two on-scene roots sharing a layer | draw order then depends on edit history (§6.7, P4) |
@@ -960,6 +995,8 @@ Compositional, one Manim call per node.
 | `seq(ā) @ o` | `Succession(…)` |
 | `x[i]`, `copy(p)`, `group(p̄)`, `vgroup(p̄)` | `x_17[i]`, `p.copy()`, `Group(…)`, `VGroup(…)` |
 | `λx. e`, `p.q(…)` | `lambda x: ⟦e⟧`, `p.q(…)` |
+| a list parameter given `w₁ … wₖ` | `l=[⟦w₁⟧, …, ⟦wₖ⟧]` |
+| `Plot(…)` | `Plot(…)`, preceded once in the file by `class Plot(VMobject): …` (§2) |
 | `raw⟨ι⟩(s)` | `s`, verbatim |
 
 Four things the translation does on purpose:
@@ -1021,7 +1058,8 @@ and the ones that matter most are confirmed by `tools/verify_quirks.py` **[run]*
 `DoubleArrow`, `DashedLine`, `Arc`, `Brace`, `SurroundingRectangle`, `Text`, `MarkupText`,
 `MathTex`, `Tex`, `DecimalNumber`, `Integer`, `NumberLine`, `Axes`, `NumberPlane`,
 `FunctionGraph`, `ParametricFunction`, `Table`, `Code`, `VGroup` }; `Mobject` ⊃ `Group`,
-`ImageMobject`, `ValueTracker`.
+`ImageMobject`, `ValueTracker`. And `Plot`, which is Suit's own (§2); the catalogue check
+holds it to its own definition instead of to Manim.
 
 **Methods** (on `Mobject` unless noted). `shift`, `move_to`, `next_to`, `to_edge`,
 `to_corner`, `align_to`, `scale`, `rotate`, `flip`, `stretch`, `set_color`, `set_opacity`,

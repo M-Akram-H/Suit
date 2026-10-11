@@ -21,7 +21,7 @@ use suit_render::{Clip, Sidecar, Snapshot, Snapshots};
 use suit_sig::Signature;
 
 pub use crate::present::{PresentOptions, Presenter};
-pub use crate::preview::Preview;
+pub use crate::preview::{Preview, stretches};
 use crate::preview::{Shared, Worker};
 
 /// The deck shown when none is opened.

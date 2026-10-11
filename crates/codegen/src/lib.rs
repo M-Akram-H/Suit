@@ -67,6 +67,9 @@ pub fn export(deck: &Deck, sig: &Signature, checked: &Checked, options: &Options
 /// The runtime half of the probes; see [`probe`] and [`probe_frames`].
 const PROBE: &str = include_str!("probe.py");
 
+/// What the catalogue has that Manim has not: `Plot`. Written into every file that uses it.
+const PLOT: &str = include_str!("plot.py");
+
 /// What a generated script is for.
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
@@ -132,6 +135,11 @@ fn probe_script(deck: &Deck, sig: &Signature, checked: &Checked, last: usize, ru
     out.push_str("config.dry_run = True\nconfig.verbosity = \"ERROR\"\n");
     out.push_str("config.progress_bar = \"none\"\n\n\n");
     out.push_str(PROBE);
+    // What the slides may call that is not Manim's. A probe's scene outlives the script
+    // that made it, so every script defines all of it, used or not.
+    out.push_str("\n\n");
+    out.push_str(PLOT);
+    out.push_str(RELAYER);
     // Each slide is a text of its own, so that it can be run by itself, starting from
     // what the slides before it left behind.
     out.push_str("\n\n_SLIDES = [\n");
@@ -195,8 +203,38 @@ impl Exporter<'_> {
         if self.checked.notes.values().any(|note| note.copies_group) {
             out.push_str(RELAYER);
         }
+        if self.makes("Plot") {
+            out.push('\n');
+            out.push_str(PLOT);
+            out.push('\n');
+        }
         let _ = writeln!(out, "\nclass {}(Slide):", options.class_name);
         out.push_str("    def construct(self):\n");
+    }
+
+    /// Whether the deck makes an object with the constructor `wanted` anywhere.
+    fn makes(&self, wanted: &str) -> bool {
+        fn made(object: &Object, wanted: &str) -> bool {
+            match object {
+                Object::New { ctor, args } => &**ctor == wanted
+                    || args.iter().any(
+                        |(_, arg)| matches!(arg, Arg::Object(inner) if made(&inner.item, wanted)),
+                    ),
+                Object::Chain { base, .. } => made(&base.item, wanted),
+                Object::Group { .. } | Object::Copy(_) => false,
+            }
+        }
+        let blueprints = self
+            .deck
+            .slides
+            .iter()
+            .filter_map(|slide| match &slide.content {
+                SlideContent::Blueprint(blueprint) => Some(blueprint),
+                SlideContent::Media { .. } => None,
+            });
+        blueprints.flat_map(|blueprint| &blueprint.body).any(
+            |node| matches!(&node.item, Command::LetObject { value, .. } if made(&value.item, wanted)),
+        )
     }
 
     /// Whether some picture of the deck is named relative to where the deck is.
@@ -537,6 +575,12 @@ impl Exporter<'_> {
                 .map(|(_, arg)| self.arg(arg));
             match pass {
                 Pass::Variadic => positional.extend(given),
+                Pass::List => {
+                    let items: Vec<String> = given.collect();
+                    if !items.is_empty() {
+                        keyword.push(format!("{name}=[{}]", items.join(", ")));
+                    }
+                }
                 Pass::Positional if !gap => match given.next() {
                     Some(value) => positional.push(value),
                     None => gap = true,

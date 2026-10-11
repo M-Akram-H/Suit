@@ -234,9 +234,9 @@ impl Pretty<'_> {
     fn args(&self, args: &Args, passes: Option<Vec<(Sym, Pass)>>) -> String {
         let bare = |name: &Sym| {
             passes.as_ref().is_some_and(|passes| {
-                passes
-                    .iter()
-                    .any(|(param, pass)| param == name && *pass != Pass::Keyword)
+                passes.iter().any(|(param, pass)| {
+                    param == name && !matches!(pass, Pass::Keyword | Pass::List)
+                })
             })
         };
         let parts: Vec<String> = args

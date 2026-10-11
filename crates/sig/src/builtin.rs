@@ -55,6 +55,11 @@ fn req(name: &str, ty: Type) -> Param {
 }
 
 /// Zero or more, positional.
+/// Several values of this type, passed together by name.
+fn list(name: &str, ty: Type) -> Param {
+    param(name, ty, false, Pass::List)
+}
+
 fn rest(name: &str, ty: Type) -> Param {
     param(name, ty, false, Pass::Variadic)
 }
@@ -365,6 +370,19 @@ fn kinds_and_ctors(b: &mut Builder) {
         vec![
             req("function", Type::Fun(Base::Real, Base::Real)),
             kw("x_range", VEC),
+        ],
+    );
+
+    // Not Manim's: defined by the export itself (`codegen/src/plot.py`). The graph of a
+    // rule on the stretches where it has a value, with its asymptotes if asked.
+    b.ctor(
+        "Plot",
+        VMOBJECT,
+        vec![
+            req("function", Type::Fun(Base::Real, Base::Real)),
+            list("on", VEC),
+            kw("step", REAL),
+            kw("asymptotes", BOOL),
         ],
     );
 
