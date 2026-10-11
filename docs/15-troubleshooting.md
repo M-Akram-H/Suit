@@ -94,7 +94,9 @@ Manim fills nothing unless given a fill opacity, and a line has no inside at all
 warns and offers the correction ([chapter 5](05-objects.md#colours)).
 
 **A colour given to Axes or a Grid does not show.**
-Use **Then also… → set color** ([chapter 5](05-objects.md#colours)).
+Manim builds their lines separately, and a setting of the whole reaches none of them. Suit
+does not offer such a setting, and warns of one that is there. Use **Then also… → set
+color** ([chapter 5](05-objects.md#colours)).
 
 **A graph does not line up with the ticks of the Axes.**
 A graph is drawn in scene units, and Manim's Axes are not. Use a **Grid** behind a graph

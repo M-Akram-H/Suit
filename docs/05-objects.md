@@ -79,7 +79,8 @@ small menu next to it:
 
 ### Colours
 
-Every object can be given a **color**. Shapes have more:
+Every object can be given a **color** (Axes and a Grid in a way of their own, below).
+Shapes have more:
 
 | Setting | What it colours |
 |---|---|
@@ -92,8 +93,15 @@ Lines, arrows, graphs and tangents have no inside, so a fill is not offered for 
 A colour is picked from Manim's named colours (`BLUE`, `YELLOW`, `GRAY`, and their shades
 such as `BLUE_A` to `BLUE_E`), or written as a formula like `#58c4dd`.
 
-> A colour given to **Axes** or a **Grid** when they are made does not show: Manim builds
-> their lines separately. Colour them with **Then also… → set color**.
+**Axes** and a **Grid** are offered none of these settings. Manim builds their lines
+separately, and a colour or an outline given to the whole reaches none of them. Colour
+them with **Then also… → set color**, and change the width or the opacity of their lines
+with **Then also… → set stroke**: those go to every line.
+
+If a deck gives them such a setting all the same, Suit warns that it shows nothing, and
+Properties offers **Use set color instead** (or **set stroke**, or both), which moves the
+setting to where it shows. A fill has nowhere to go, since there is no inside: take it
+away with **×**.
 
 ## Pictures
 
@@ -124,7 +132,7 @@ copy is an object of its own from then on.
 ## The whole catalogue
 
 Every kind of object Suit knows, with the settings of its own. All of them also take the
-colour settings above.
+colour settings above, except Axes and NumberPlane.
 
 | Object | Settings of its own |
 |---|---|

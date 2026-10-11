@@ -929,4 +929,42 @@ mod tests {
         assert_eq!(sig.inside("NumberPlane"), Some(Inside::Open));
         assert_eq!(sig.inside("ImageMobject"), None);
     }
+
+    #[test]
+    fn what_is_made_of_parts_shows_nothing_of_what_it_inherits() {
+        let sig = Signature::builtin();
+        let unseen = |ctor: &str| -> Vec<&str> {
+            let params = sig.unseen_params(&sig.ctors[ctor]);
+            params.iter().map(|p| p.name.as_str()).collect()
+        };
+        let look = [
+            "fill_color",
+            "fill_opacity",
+            "stroke_color",
+            "stroke_opacity",
+            "stroke_width",
+            "color",
+        ];
+        assert_eq!(unseen("Axes"), look);
+        assert_eq!(unseen("NumberPlane"), look);
+        assert_eq!(unseen("Square"), [] as [&str; 0]);
+        assert_eq!(unseen("NumberLine"), [] as [&str; 0]);
+
+        // A colour and an outline have a call that reaches the parts. A fill has none that
+        // would show: the parts are lines.
+        assert_eq!(sig.call_for("Axes", "color"), Some(("set_color", "color")));
+        assert_eq!(
+            sig.call_for("NumberPlane", "stroke_width"),
+            Some(("set_stroke", "width"))
+        );
+        assert_eq!(sig.call_for("Axes", "fill_color"), None);
+        assert_eq!(sig.call_for("ImageMobject", "stroke_color"), None);
+        assert_eq!(
+            sig.calls_for(
+                "Axes",
+                ["stroke_width", "fill_color", "color", "stroke_color"]
+            ),
+            ["set_color", "set_stroke"]
+        );
+    }
 }

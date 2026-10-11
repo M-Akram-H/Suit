@@ -118,7 +118,7 @@ def made(name, **settings):
 
 
 def look(mobject):
-    """What can be seen of the colours of an object: of each part, the fill if it is not
+    """What can be seen of the look of an object: of each part, the fill if it is not
     fully transparent, and the stroke if there is one."""
     seen = []
     for part in mobject.get_family():
@@ -130,6 +130,8 @@ def look(mobject):
                     part.get_fill_color().to_hex() if filled else None,
                     round(float(part.get_fill_opacity()), 3),
                     part.get_stroke_color().to_hex() if stroked else None,
+                    round(float(part.get_stroke_width()), 3) if stroked else None,
+                    round(float(part.get_stroke_opacity()), 3) if stroked else None,
                 )
             )
     return seen
@@ -150,6 +152,34 @@ def below(name, other):
     return name is not None
 
 
+def unseen(ctor):
+    """The settings of a constructor that reach none of its parts: of what is made of
+    parts, as a group is, those it inherits (`unseen_params` in crates/sig/src/types.rs)."""
+    if not below(ctor["kind"], "VGroup"):
+        return []
+    own = {param["name"] for param in ctor["params"]}
+    found, kind = [], ctor["kind"]
+    while kind is not None:
+        found += [param for param in sig["kinds"][kind]["params"] if param["name"] not in own]
+        kind = sig["kinds"][kind]["parent"]
+    return found
+
+
+# The call that does to a finished object what a setting says of a new one: its method,
+# and the parameter that takes the setting's value (`call_for`, in the same file).
+CALL_FOR = {
+    "color": ("set_color", "color"),
+    "stroke_color": ("set_stroke", "color"),
+    "stroke_width": ("set_stroke", "width"),
+    "stroke_opacity": ("set_stroke", "opacity"),
+}
+
+
+def other(param):
+    """A value for a setting of the look that is not the one any object starts with."""
+    return {"color": manim.ORANGE, "real": 0.5}[param["ty"]["base"]]
+
+
 # What a fill colour does to a new object is what the catalogue says of its inside: the
 # editor offers settings by it, and the checker warns by it.
 for name, ctor in sig["ctors"].items():
@@ -165,12 +195,41 @@ for name, ctor in sig["ctors"].items():
         checked += 1
         if look(made(name, fill_color=manim.ORANGE, fill_opacity=1.0)) == plain:
             problem(f"{name}: its inside is clear, but a fill colour with an opacity shows nothing")
-    # Where there is no inside the checker says to use `color`, except for what is made
-    # of parts.
-    if inside == "open" and not below(ctor["kind"], "VGroup"):
+    # `color` is the one that shows on everything, and what the checker says to use where
+    # there is no inside. Except on what is made of parts.
+    parts = unseen(ctor)
+    if not parts:
         checked += 1
         if look(made(name, color=manim.ORANGE)) == plain:
             problem(f"{name}: `color` shows nothing")
+    # There, nothing that is given for a look shows, alone or with the rest: the editor
+    # does not offer it, and the checker warns of it. The calls offered instead do show.
+    for param in parts:
+        setting, value = param["name"], other(param)
+        checked += 1
+        if look(made(name, **{setting: value})) != plain:
+            problem(f"{name}: is made of parts, but `{setting}` shows something")
+        if setting not in CALL_FOR:
+            continue
+        method, takes = CALL_FOR[setting]
+        checked += 1
+        offered = [
+            overload
+            for overload in sig["methods"].get(method, [])
+            if below(ctor["kind"], overload["receiver"])
+            and any(taken["name"] == takes for taken in overload["params"])
+        ]
+        if not offered:
+            problem(f"{name}: the catalogue has no {method}({takes}) to offer for `{setting}`")
+            continue
+        later = made(name)
+        getattr(later, method)(**{takes: value})
+        if look(later) == plain:
+            problem(f"{name}: {method}({takes}) shows nothing")
+    if parts:
+        checked += 1
+        if look(made(name, **{param["name"]: other(param) for param in parts})) != plain:
+            problem(f"{name}: is made of parts, but its look settings together show something")
 
 for name, overloads in sig["methods"].items():
     for method in overloads:

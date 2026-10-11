@@ -166,6 +166,19 @@ struct Step {
 
 type Effect = Vec<Step>;
 
+/// `“a”`, `“a” and “b”`, `“a”, “b” and “c”`: names of the catalogue as a person says them.
+fn listed(names: &[&str]) -> String {
+    let said: Vec<String> = names
+        .iter()
+        .map(|name| format!("“{}”", name.replace('_', " ")))
+        .collect();
+    match said.split_last() {
+        Some((last, [])) => last.clone(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+        None => String::new(),
+    }
+}
+
 /// Makes the inside of what it is called on visible, whatever it was.
 fn shows_the_fill(call: &Call) -> bool {
     let opacity = call.args.iter().any(|(name, _)| &**name == "opacity");
@@ -399,7 +412,9 @@ impl Checker<'_> {
             let (kind, shape) = self
                 .object(env, value)
                 .unwrap_or((ROOT_KIND.into(), Shape::Opaque));
-            self.unseen_fill(var, &base.item, &calls);
+            if !self.unseen_by_parts(var, &base.item) {
+                self.unseen_fill(var, &base.item, &calls);
+            }
             let tree = Tree::Uniform(Presence::Off);
             env.vars.insert(
                 var,
@@ -1009,6 +1024,54 @@ impl Checker<'_> {
         }
     }
 
+    /// Settings that reach no part of what is made of parts (spec §5.8): Manim takes them,
+    /// and draws the object as if they had not been given. True if `made` is such an
+    /// object, of whose fill there is then nothing more to say.
+    fn unseen_by_parts(&mut self, var: VarId, made: &Object) -> bool {
+        let Object::New { ctor, args } = made else {
+            return false;
+        };
+        let Some(sig) = self.sig.ctors.get(ctor) else {
+            return false;
+        };
+        let unseen = self.sig.unseen_params(sig);
+        if unseen.is_empty() {
+            return false;
+        }
+        // In the order they were given, and each once.
+        let mut given: Vec<&str> = Vec::new();
+        for (name, _) in args {
+            if unseen.iter().any(|param| param.name == *name) && !given.contains(&&**name) {
+                given.push(name);
+            }
+        }
+        if given.is_empty() {
+            return true;
+        }
+        let calls = self.sig.calls_for(&sig.kind, given.iter().copied());
+        let name = self.name(&Place::var(var));
+        let (shows, it) = match given.len() {
+            1 => ("shows", "it"),
+            _ => ("show", "these"),
+        };
+        let help = match calls.len() {
+            0 => None,
+            1 => Some("that reaches"),
+            _ => Some("those reach"),
+        }
+        .map(|reach| format!("Use {} instead: {reach} every part.", listed(&calls)));
+        self.warn(
+            "unseen",
+            format!(
+                "{name} is given {}, which {shows} nothing: Manim makes its parts \
+                 separately, and they get none of {it}.",
+                listed(&given)
+            ),
+            help.as_deref(),
+        );
+        true
+    }
+
     /// A fill colour that nothing shows (spec §5.8): Manim takes it, and draws the object
     /// as if it had not been given.
     fn unseen_fill(&mut self, var: VarId, made: &Object, then: &[&Call]) {
@@ -1024,15 +1087,11 @@ impl Checker<'_> {
         }
         let name = self.name(&Place::var(var));
         match self.sig.inside(kind) {
-            Some(Inside::Open) => {
-                // What is made of parts takes no colour of its own either.
-                let lines = !self.sig.is_subkind(kind, VGROUP_KIND);
-                self.warn(
-                    "unseen",
-                    format!("{name} is given a fill colour, but has no inside to fill."),
-                    lines.then_some("Use “color” instead: that colours the line itself."),
-                );
-            }
+            Some(Inside::Open) => self.warn(
+                "unseen",
+                format!("{name} is given a fill colour, but has no inside to fill."),
+                Some("Use “color” instead: that colours the line itself."),
+            ),
             Some(Inside::Clear) if !then.iter().any(|call| shows_the_fill(call)) => {
                 let at = self.diagnostics.len();
                 self.warn(

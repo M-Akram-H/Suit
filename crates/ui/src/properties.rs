@@ -495,6 +495,7 @@ fn edit_object(
 ) {
     let kind = kind_of_object(scope, object);
     let mut unwrap = false;
+    let mut moved = Vec::new();
     match object {
         Object::New { ctor, args } => {
             ui.weak(format!("A {ctor}"));
@@ -513,13 +514,16 @@ fn edit_object(
                         .collect();
                     colour_first(&mut slots);
                     let inside = scope.sig.inside(&sig.kind);
-                    // Nothing to fill: a fill is not offered, and one that was given stays
-                    // only to be taken away.
-                    if inside == Some(Inside::Open) {
-                        slots.retain(|slot| {
-                            !slot.name.starts_with("fill_") || given(args, &slot.name)
-                        });
-                    }
+                    let apart = scope.sig.unseen_params(sig);
+                    let apart: Vec<Sym> = apart.iter().map(|param| param.name.clone()).collect();
+                    // Nothing to fill, or parts that a setting does not reach: it is not
+                    // offered, and one that was given stays only to be taken away.
+                    let open = inside == Some(Inside::Open);
+                    slots.retain(|slot| {
+                        let fill = slot.name.starts_with("fill_");
+                        let shows = !(open && fill) && !apart.contains(&slot.name);
+                        shows || given(args, &slot.name)
+                    });
                     let filled = given(args, "fill_color");
                     if &**ctor == "Plot" {
                         // Its rule first, then where and its asymptotes, which have
@@ -538,11 +542,12 @@ fn edit_object(
                     // Manim fills nothing unless told how much: a fill colour that has just
                     // been chosen comes with the opacity that shows it.
                     let unseen = given(args, "fill_color") && !given(args, "fill_opacity");
-                    if unseen && !filled && inside == Some(Inside::Clear) {
+                    if !apart.is_empty() {
+                        moved = unseen_by_parts(ui, scope, &sig.kind, &apart, args);
+                    } else if unseen && !filled && inside == Some(Inside::Clear) {
                         args.push(("fill_opacity".into(), 1.0_f64.into()));
                     } else if unseen {
-                        let lines = !scope.sig.is_subkind(&sig.kind, suit_sig::VGROUP_KIND);
-                        unseen_fill(ui, inside, lines, args);
+                        unseen_fill(ui, inside, args);
                     }
                 }
                 None => {
@@ -577,6 +582,11 @@ fn edit_object(
             let depth = chain_depth(&base.item);
             ui.push_id(("then", depth), |ui| edit_call(ui, scope, &kind, call));
         }
+    }
+    // What was a setting is done to the new object first, before whatever else is.
+    for call in moved {
+        let inner = std::mem::replace(object, Object::Copy(Place::var(VarId(0))));
+        *object = inner.then(call);
     }
     if unwrap && let Object::Chain { base, .. } = object {
         *object = std::mem::replace(&mut base.item, Object::Copy(Place::var(VarId(0))));
@@ -613,8 +623,7 @@ fn colour_first(slots: &mut Vec<Slot>) {
 }
 
 /// Says that the fill colour among `args` shows nothing, and offers what was meant.
-/// `lines` is false for what is made of parts, which takes no colour of its own either.
-fn unseen_fill(ui: &mut egui::Ui, inside: Option<Inside>, lines: bool, args: &mut Args) {
+fn unseen_fill(ui: &mut egui::Ui, inside: Option<Inside>, args: &mut Args) {
     let (why, offer) = match inside {
         Some(Inside::Open) => ("There is no inside to fill here.", "Use color instead"),
         Some(Inside::Clear) => ("The inside is fully transparent.", "Add fill opacity"),
@@ -625,7 +634,7 @@ fn unseen_fill(ui: &mut egui::Ui, inside: Option<Inside>, lines: bool, args: &mu
         ui.colored_label(style::WARNING, "⚠");
         ui.weak(why);
         // The line's own colour cannot be offered where there is one already.
-        let offered = !open || (lines && !given(args, "color"));
+        let offered = !open || !given(args, "color");
         if !offered || !ui.button(offer).clicked() {
             return;
         }
@@ -634,6 +643,71 @@ fn unseen_fill(ui: &mut egui::Ui, inside: Option<Inside>, lines: bool, args: &mu
             _ => args.push(("fill_opacity".into(), 1.0_f64.into())),
         }
     });
+}
+
+/// Says which of the settings among `args` reach no part of an object of `kind`, which is
+/// made of parts, and offers the calls that do. `unseen` are the settings that reach none.
+/// Returns the calls if they are asked for, which have then taken their settings with them.
+fn unseen_by_parts(
+    ui: &mut egui::Ui,
+    scope: &Scope,
+    kind: &Sym,
+    unseen: &[Sym],
+    args: &mut Args,
+) -> Vec<Call> {
+    // In the order they were given, and each once: as Problems names them.
+    let mut given: Vec<&str> = Vec::new();
+    for (name, _) in args.iter() {
+        if unseen.contains(name) && !given.contains(&&**name) {
+            given.push(name);
+        }
+    }
+    if given.is_empty() {
+        return Vec::new();
+    }
+    let methods = scope.sig.calls_for(kind, given.iter().copied());
+    let said = |names: &[&str], quoted: bool| {
+        let said: Vec<String> = names
+            .iter()
+            .map(|name| match quoted {
+                true => format!("“{}”", editors::label(name)),
+                false => editors::label(name),
+            })
+            .collect();
+        match said.split_last() {
+            Some((last, [])) => last.clone(),
+            Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+            None => String::new(),
+        }
+    };
+    let shows = if given.len() == 1 { "shows" } else { "show" };
+    let why = format!(
+        "{} {shows} nothing here: the parts are made separately.",
+        said(&given, true)
+    );
+    let offer = format!("Use {} instead", said(&methods, false));
+
+    let mut asked = Vec::new();
+    ui.horizontal_wrapped(|ui| {
+        ui.colored_label(style::WARNING, "⚠");
+        ui.weak(why);
+        // A fill has no call that would show: the parts are lines.
+        if methods.is_empty() || !ui.button(offer).clicked() {
+            return;
+        }
+        asked = methods.iter().map(|method| Call::new(method)).collect();
+        for (name, value) in std::mem::take(args) {
+            let call = scope.sig.call_for(kind, &name).and_then(|(method, param)| {
+                let call = asked.iter_mut().find(|call| &*call.method == method)?;
+                unseen.contains(&name).then_some((call, param))
+            });
+            match call {
+                Some((call, param)) => call.args.push((param.into(), value)),
+                None => args.push((name, value)),
+            }
+        }
+    });
+    asked
 }
 
 fn chain_depth(object: &Object) -> usize {

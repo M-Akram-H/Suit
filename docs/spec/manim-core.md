@@ -1,6 +1,6 @@
 # Manim Core — abstract syntax, AST, type system and semantics
 
-Draft 0.9 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
+Draft 0.10 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
 
 Manim has no syntax of its own: a scene is a Python method that calls a library. What this
 document formalises is the small language *embedded* in those calls — make objects, change
@@ -77,7 +77,7 @@ does, and is inherited along `≤` as well, down to the kind that says otherwise
 
 - `open`: there is no inside. `Line` and the kinds below it, `ParametricFunction`, `Plot`,
   `Axes`. A fill colour shows nothing; `color` colours the line itself (except on `Axes`,
-  whose parts are made apart from it).
+  which are made of parts: see below).
 - `clear`: an inside that starts fully transparent, which is every other vector kind:
   Manim's `fill_opacity` is 0 unless a class says otherwise **[src]**. A fill colour shows
   once a fill opacity comes with it.
@@ -88,6 +88,35 @@ It changes no rule of §5: `fill_color` stays a parameter of every vector kind, 
 Manim. It is what the warning of §5.8 goes by, and what an editor offers settings by.
 `tools/check_catalog.py` makes an object of every constructor with and without a fill
 colour and compares what can be seen of the two **[run]**.
+
+Nor does every setting reach what is drawn. A kind `κ ≤ VGroup` is *made of parts*: Manim
+makes the parts from the constructor's own parameters, and hands the ones it inherits along
+`≤` to the group, which draws nothing itself **[src]**. Write `unseen(C)` for these: the
+inherited parameters of `C` if its kind is `≤ VGroup`, and none otherwise. The catalogue has
+two such constructors, `Axes` and `NumberPlane`, and for both `unseen` is `color` with the
+fill and the stroke settings. None of the six shows anything there, alone or with the
+others **[run]**.
+
+What a setting says of a new object, a method says of a finished one, and a method goes to
+every part of its receiver:
+
+| Setting | The call that reaches the parts |
+|---|---|
+| `color = e` | `set_color(color = e)` |
+| `stroke_color = e` | `set_stroke(color = e)` |
+| `stroke_width = e` | `set_stroke(width = e)` |
+| `stroke_opacity = e` | `set_stroke(opacity = e)` |
+
+The fill settings have none that would show: the parts are lines. Where both calls are
+made, `set_color` comes first. Among settings `stroke_color` counts over `color` wherever
+the two are written, and of two calls the later one counts **[run]**.
+
+As with `inside`, no rule of §5 changes: the six stay parameters of `Axes`, as they are in
+Manim. `unseen` is what the second such warning of §5.8 goes by, and an editor does not
+offer what is in it. `tools/check_catalog.py` makes every object that is made of parts with
+each of these settings and with all of them, and with each call of the table, and compares
+what can be seen with the plain object; and it makes every other vector object with and
+without `color`, which shows on all of them **[run]**.
 
 A parameter also says how its arguments reach Python: by position, by name, as *the rest*
 (`*args`: any number, by position), or as a *list* (any number, passed together by name).
@@ -734,7 +763,8 @@ Warnings are legal programs that are probably not meant:
 | `p.animate(rotate(…))` | morphs along straight lines instead of rotating; `Rotate` is meant **[run]** |
 | an updater that reads an object which an animation then consumes | it keeps following the leftover geometry |
 | an object with a point that is not a number | Manim draws none of that object, and says nothing **[run]**; found by running the deck, not by the checker |
-| `let x = C(…, fill_color = e)` with no `fill_opacity`, where `inside(C)` is `open`, or is `clear` and nothing in the deck calls `set_opacity` or `set_fill(opacity = …)` on `x` | Manim takes the colour and shows nothing of it (§2) **[run]** |
+| `let x = C(…, fill_color = e)` with no `fill_opacity`, where `unseen(C)` is empty and `inside(C)` is `open`, or is `clear` and nothing in the deck calls `set_opacity` or `set_fill(opacity = …)` on `x` | Manim takes the colour and shows nothing of it (§2) **[run]** |
+| `let x = C(…, l = e)` with `l ∈ unseen(C)` | Manim takes the setting and no part of `x` gets it (§2) **[run]**; reported once for `x`, with the calls that do reach the parts |
 | a `Plot` told to draw on stretches where its rule has no value | it draws where it has one; reported with the rule and the stretches |
 | `Transform` where the source is never used again | `ReplacementTransform` is simpler and keeps kinds exact |
 | an object left `on` at the end of the deck with no later use | harmless; often a forgotten `FadeOut` |
@@ -1099,7 +1129,8 @@ prints all of it: 37 kinds, 32 of them with a constructor, 22 methods and 17 que
 counted once), 31 animations, 45 rate functions, 28 functions and 103 constants.
 `tools/check_catalog.py` checks every kind and its parent, every parameter name, every
 method and query, the defaults of the animations, and every rate function, constant and
-inside in it against the installed Manim.
+inside in it against the installed Manim, and what is `unseen` on the kinds that are made
+of parts.
 Roles for animations are from the `introducer` / `remover` flags and clean-up code **[src]**,
 and the ones that matter most are confirmed by `tools/verify_quirks.py` **[run]**.
 
@@ -1147,7 +1178,8 @@ Mobject                               no constructor
 
 The other 32 kinds each have a constructor of their own name. Every one of them takes
 `color`, which is `Mobject`'s, and those below `VMobject` take its `fill_color`,
-`fill_opacity`, `stroke_color`, `stroke_opacity` and `stroke_width` as well (§2).
+`fill_opacity`, `stroke_color`, `stroke_opacity` and `stroke_width` as well (§2). The two
+below `VGroup` take all six and show none of them: they are `unseen` there (§2).
 `elem(Mobject) = Mobject` and `elem(VMobject) = VMobject`, inherited the same way. With
 `Plot` and `Tangent` come the method `touch`, the query `slope` and the animation `Glide`
 (`mut`, on a `Tangent`); the catalogue check holds these to their own definitions instead of

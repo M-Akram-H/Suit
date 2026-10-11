@@ -15,7 +15,7 @@ use egui_kittest::{
     kittest::{By, Queryable},
 };
 use suit_codegen::pretty::Pretty;
-use suit_core::{Anim, Command, Deck, DeckConfig, Expr, Object, Time, VarId};
+use suit_core::{Anim, Call, Command, Deck, DeckConfig, Expr, Object, Time, VarId};
 use suit_engine::Session;
 use suit_render::{Bounds, Clip, Drawn, Outline, Snapshot, Snapshots};
 use suit_ui::SuitApp;
@@ -1335,14 +1335,19 @@ fn a_tangent_is_put_on_a_graph_and_sent_along_it() {
     assert_eq!(window.state().session.checked.diagnostics, []);
 }
 
-/// A deck with one object, made with an orange fill and nothing else, and brought in.
-fn filled_orange(ctor: &str, name: &str) -> Window {
+/// A deck with one object, made as given, and brought in.
+fn with_one(name: &str, made: Object) -> Window {
     let mut deck = Deck::new(DeckConfig::default());
     let mut slide = deck.add_slide("Slide 1");
-    let made = Object::new(ctor).arg("fill_color", Expr::konst("ORANGE"));
     let object = slide.object(name, made);
     slide.play(vec![Anim::prim("Create").arg("mobject", &object)]);
     open(Session::new(deck, None))
+}
+
+/// A deck with one object, made with an orange fill and nothing else, and brought in.
+fn filled_orange(ctor: &str, name: &str) -> Window {
+    let made = Object::new(ctor).arg("fill_color", Expr::konst("ORANGE"));
+    with_one(name, made)
 }
 
 #[test]
@@ -1425,6 +1430,67 @@ fn a_fill_colour_that_nothing_shows_is_put_right_with_a_click() {
         "square = Square(fill_color = ORANGE, fill_opacity = 1.0)"
     );
     assert_eq!(window.state().session.checked.diagnostics, []);
+}
+
+#[test]
+fn a_look_given_to_axes_is_moved_to_where_it_shows() {
+    let unseen = "nothing here: the parts are made separately.";
+
+    // Axes are made of parts, which what is given to the whole of them does not reach. A
+    // colour and an outline are not on offer there; what is, is to colour the finished axes.
+    let mut window = open(Session::blank());
+    press(&mut window, "Axes");
+    press(&mut window, "New axes (Axes)");
+    press(&mut window, "Add setting");
+    for setting in [
+        "color",
+        "fill color",
+        "fill opacity",
+        "stroke color",
+        "stroke opacity",
+        "stroke width",
+    ] {
+        assert!(window.query_by_label(setting).is_none(), "{setting}");
+    }
+    press(&mut window, "tips");
+    menu(&mut window, "Then also…", "set color");
+    assert_eq!(
+        text_of_step(&window, 0),
+        "axes = Axes(tips = true).set_color(WHITE)"
+    );
+    assert_eq!(window.state().session.checked.diagnostics, []);
+
+    // A colour and an outline that were given all the same are said to show nothing, and
+    // one click makes of them what does show: done to the new axes before anything else
+    // is, the whole first, so that what is said of the outline stays.
+    let made = Object::new("Axes")
+        .arg("stroke_width", 6.0)
+        .arg("tips", false)
+        .arg("color", Expr::konst("ORANGE"))
+        .then(Call::new("shift").arg("vectors", Expr::konst("UP")));
+    let mut window = with_one("axes", made);
+    assert!(
+        window
+            .query_by_label_contains("which show nothing: Manim makes its parts separately")
+            .is_some()
+    );
+    press(&mut window, "New axes (Axes)");
+    assert!(window.query_by_label_contains(unseen).is_some());
+    press(&mut window, "Use set color and set stroke instead");
+    assert_eq!(
+        text_of_step(&window, 0),
+        "axes = Axes(tips = false).set_color(ORANGE).set_stroke(width = 6.0).shift(UP)"
+    );
+    assert!(window.query_by_label_contains(unseen).is_none());
+    assert_eq!(window.state().session.checked.diagnostics, []);
+
+    // A grid is made the same way. Its lines have no inside, and no call would fill them:
+    // a fill is said to show nothing, and can only be taken away.
+    let made = Object::new("NumberPlane").arg("fill_color", Expr::konst("ORANGE"));
+    let mut window = with_one("grid", made.arg("fill_opacity", 1.0));
+    press(&mut window, "New grid (NumberPlane)");
+    assert!(window.query_by_label_contains(unseen).is_some());
+    assert!(window.query_by_label_contains("instead").is_none());
 }
 
 #[test]

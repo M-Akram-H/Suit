@@ -583,17 +583,20 @@ fn a_change_cannot_build_on_an_earlier_one_in_the_same_sequence() {
     assert_eq!(codes(&deck), ["animate-order", "animate-order"]);
 }
 
+/// What is said of settings that nothing shows, with the help that comes with it; and
+/// nothing in the deck is worse than a warning.
+fn unseen(deck: &Deck) -> Vec<(String, Option<String>)> {
+    let unseen = |d: &&suit_check::Diagnostic| d.code == "unseen";
+    let diagnostics = run(deck).diagnostics;
+    assert!(diagnostics.iter().all(|d| d.severity == Severity::Warning));
+    let said = diagnostics.iter().filter(unseen);
+    said.map(|d| (d.message.clone(), d.help.clone())).collect()
+}
+
 #[test]
 fn a_fill_colour_that_nothing_shows_is_warned_of() {
     let orange = || Expr::konst("ORANGE");
     let filled = |ctor: &str| Object::new(ctor).arg("fill_color", orange());
-    let found = |deck: &Deck| -> Vec<(String, Option<String>)> {
-        let unseen = |d: &&suit_check::Diagnostic| d.code == "unseen";
-        let diagnostics = run(deck).diagnostics;
-        assert!(diagnostics.iter().all(|d| d.severity == Severity::Warning));
-        let said = diagnostics.iter().filter(unseen);
-        said.map(|d| (d.message.clone(), d.help.clone())).collect()
-    };
 
     // A line has no inside: the colour meant is the line's own.
     let mut deck = deck();
@@ -601,7 +604,7 @@ fn a_fill_colour_that_nothing_shows_is_warned_of() {
     let line = slide.object("line", filled("Line"));
     slide.play(vec![fade_in(&line)]);
     assert_eq!(
-        found(&deck),
+        unseen(&deck),
         [(
             "“line” is given a fill colour, but has no inside to fill.".to_owned(),
             Some("Use “color” instead: that colours the line itself.".to_owned())
@@ -614,7 +617,7 @@ fn a_fill_colour_that_nothing_shows_is_warned_of() {
     let c = slide.object("circle", filled("Circle"));
     slide.play(vec![fade_in(&c)]);
     assert_eq!(
-        found(&deck),
+        unseen(&deck),
         [(
             "“circle” is given a fill colour that cannot be seen: its inside starts fully \
              transparent."
@@ -641,7 +644,7 @@ fn a_fill_colour_that_nothing_shows_is_warned_of() {
     // Recolouring the inside does not show it.
     let recolour = Call::new("set_fill").arg("color", Expr::konst("RED"));
     slide.play(vec![Anim::animate(&never, vec![recolour])]);
-    let said = found(&deck);
+    let said = unseen(&deck);
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(said[0].0.starts_with("“triangle”"), "{said:?}");
 
@@ -652,6 +655,74 @@ fn a_fill_colour_that_nothing_shows_is_warned_of() {
     let text = slide.object("text", filled("Text").arg("text", "a"));
     slide.play(vec![fade_in(&dot), fade_in(&text)]);
     assert_eq!(codes(&deck), [] as [&str; 0]);
+}
+
+#[test]
+fn a_look_given_to_what_is_made_of_parts_is_warned_of() {
+    let orange = || Expr::konst("ORANGE");
+    let alone = |name: &str, made: Object| {
+        let mut deck = deck();
+        let mut slide = deck.add_slide("s");
+        let object = slide.object(name, made);
+        slide.play(vec![fade_in(&object)]);
+        deck
+    };
+
+    // Manim hands the colour of axes to the group they are, and makes their lines apart
+    // from it. A setting of the axes' own is another matter.
+    let axes = Object::new("Axes").arg("tips", false);
+    assert_eq!(
+        unseen(&alone("axes", axes.clone().arg("color", orange()))),
+        [(
+            "“axes” is given “color”, which shows nothing: Manim makes its parts \
+             separately, and they get none of it."
+                .to_owned(),
+            Some("Use “set color” instead: that reaches every part.".to_owned())
+        )]
+    );
+
+    // So it is with the outline, on a grid as on axes. The calls are named in the order
+    // to make them in: the whole first, so that what is said of the outline stays.
+    let grid = Object::new("NumberPlane")
+        .arg("stroke_width", 6.0)
+        .arg("color", orange())
+        .arg("stroke_opacity", 0.5);
+    assert_eq!(
+        unseen(&alone("grid", grid)),
+        [(
+            "“grid” is given “stroke width”, “color” and “stroke opacity”, which show \
+             nothing: Manim makes its parts separately, and they get none of these."
+                .to_owned(),
+            Some("Use “set color” and “set stroke” instead: those reach every part.".to_owned())
+        )]
+    );
+
+    // A fill is said once, as one of them, and with an opacity as without. There is no
+    // call to offer for it: the parts are lines.
+    let filled = axes
+        .clone()
+        .arg("fill_color", orange())
+        .arg("fill_opacity", 1.0);
+    assert_eq!(
+        unseen(&alone("axes", filled)),
+        [(
+            "“axes” is given “fill color” and “fill opacity”, which show nothing: Manim \
+             makes its parts separately, and they get none of these."
+                .to_owned(),
+            None
+        )]
+    );
+
+    // Done to the finished axes, it reaches every part, and there is nothing to say.
+    let width = Call::new("set_stroke").arg("width", 6.0);
+    let after = axes
+        .then(Call::new("set_color").arg("color", orange()))
+        .then(width);
+    assert_eq!(codes(&alone("axes", after)), [] as [&str; 0]);
+
+    // A number line has parts as well, but is itself a line: they take its colour.
+    let line = Object::new("NumberLine").arg("color", orange());
+    assert_eq!(codes(&alone("number line", line)), [] as [&str; 0]);
 }
 
 #[test]

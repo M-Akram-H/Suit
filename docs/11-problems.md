@@ -48,6 +48,7 @@ Problems come in two strengths:
 | *“label” keeps following “circle”, which ReplacementTransform uses up.* | The follower would go on following what is left of an object that is gone. | Add **Stop keeping on** before, and **Keep doing…** for the new object after. |
 | *“line” is given a fill colour, but has no inside to fill.* | Manim takes the colour and shows nothing. | **Use color instead**, offered in Properties. |
 | *“circle” is given a fill colour that cannot be seen: its inside starts fully transparent.* | The same, for a shape with no fill opacity. | **Add fill opacity**, offered in Properties. |
+| *“axes” is given “color”, which shows nothing: Manim makes its parts separately, and they get none of it.* | Axes and a Grid are built from lines of their own. A colour or an outline given to the whole reaches none of them. | **Use set color instead** (or **set stroke**), offered in Properties. A fill can only be taken away. |
 
 ## 2. Manim's remarks: found by running the deck
 

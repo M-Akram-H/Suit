@@ -253,6 +253,56 @@ impl Signature {
         self.ancestors(kind).find_map(|k| self.kinds[k].inside)
     }
 
+    /// The settings of `ctor` that show nothing on a new object, whatever they are given
+    /// (spec §2). What is made of parts, as a group is, has its parts made from its own
+    /// settings; those it inherits along `≤` go to the group, which draws nothing itself.
+    pub fn unseen_params<'a>(&'a self, ctor: &'a Ctor) -> Vec<&'a Param> {
+        if !self.is_subkind(&ctor.kind, VGROUP_KIND) {
+            return Vec::new();
+        }
+        let inherited = |param: &&Param| !ctor.params.iter().any(|own| own.name == param.name);
+        self.ctor_params(ctor)
+            .into_iter()
+            .filter(inherited)
+            .collect()
+    }
+
+    /// The call that does to a finished object of `kind` what `setting` says of a new one:
+    /// its method, and the parameter that takes the setting's value. Unlike the setting,
+    /// it reaches every part.
+    pub fn call_for(&self, kind: &str, setting: &str) -> Option<(&'static str, &'static str)> {
+        let (method, param) = match setting {
+            "color" => ("set_color", "color"),
+            "stroke_color" => ("set_stroke", "color"),
+            "stroke_width" => ("set_stroke", "width"),
+            "stroke_opacity" => ("set_stroke", "opacity"),
+            _ => return None,
+        };
+        let known = self.method(kind, method)?;
+        let takes = known.params.iter().any(|p| &*p.name == param);
+        takes.then_some((method, param))
+    }
+
+    /// The methods of [`Signature::call_for`] for all of `settings`, each once, in the order
+    /// to call them in. Among settings what is said of the outline counts over what is
+    /// said of the whole; among calls the later one does, so the whole comes first.
+    pub fn calls_for<'s>(
+        &self,
+        kind: &str,
+        settings: impl IntoIterator<Item = &'s str>,
+    ) -> Vec<&'static str> {
+        let mut methods = Vec::new();
+        for setting in settings {
+            if let Some((method, _)) = self.call_for(kind, setting)
+                && !methods.contains(&method)
+            {
+                methods.push(method);
+            }
+        }
+        methods.sort_by_key(|method| *method != "set_color");
+        methods
+    }
+
     /// Own parameters followed by those inherited along `≤`.
     pub fn ctor_params<'a>(&'a self, ctor: &'a Ctor) -> Vec<&'a Param> {
         let inherited = self
