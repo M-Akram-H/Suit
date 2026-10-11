@@ -832,12 +832,22 @@ Where no rule applies, nothing happens. These are manim-slides' transitions, rea
   forwards, so `REVERSE`, `NEXT` is "show me that step again".
 - `PLAY/PAUSE` cannot restart a clip that has come to rest; that is `REPLAY`.
 
-Suit's own presenter follows this table, with these differences. It starts at the selected
-slide (`⟨k, →, ▶⟩`). At the first clip `PREVIOUS` and `REVERSE` do nothing at all, where
-manim-slides turns its reversed flag on or off before it finds there is nothing to load.
-A clip that is not recorded yet is waited for, and its clock starts when it arrives. Of the
-player's options, `--next-terminates-loop`, `--start-paused`, `--exit-after-last-slide` and
-`--skip-all` have no counterpart yet.
+The player's command line changes the table in four ways **[src]**:
+
+```
+--start-paused            start is ⟨1, →, ‖⟩ instead of ⟨1, →, ▶⟩
+--next-terminates-loop    NEXT on a running clip with scᵢ.loop marks the round as its last:
+                          when the run ends it is  ⟨i, d, ▶⟩ ⟶ ⟨i, d, ■⟩,  or the auto_next
+                          transition if scᵢ.auto_next. A NEXT at ■ moves on as usual.
+--exit-after-last-slide   NEXT (or auto_next) at ⟨n, →, ·⟩ ends the presentation
+--skip-all                every clip is treated as  ¬loop  and  auto_next
+```
+
+Suit's own presenter follows the table and offers the same four choices. It differs in
+three things. It starts at the selected slide (`⟨k, →, ·⟩`). At the first clip `PREVIOUS`
+and `REVERSE` do nothing at all, where manim-slides turns its reversed flag on or off before
+it finds there is nothing to load. And a clip that is not recorded yet is waited for; its
+clock starts when it arrives.
 
 ### 6.7 Properties
 

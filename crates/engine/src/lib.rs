@@ -19,7 +19,7 @@ use suit_core::{Command, Deck, DeckConfig, Node, NodeId, SlideContent, SlideId, 
 use suit_render::{Clip, Sidecar, Snapshot, Snapshots};
 use suit_sig::Signature;
 
-pub use crate::present::Presenter;
+pub use crate::present::{PresentOptions, Presenter};
 pub use crate::preview::Preview;
 use crate::preview::{Shared, Worker};
 

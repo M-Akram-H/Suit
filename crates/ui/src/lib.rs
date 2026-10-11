@@ -7,6 +7,7 @@
 mod bar;
 mod canvas;
 mod editors;
+mod files;
 mod present;
 mod problems;
 mod properties;
@@ -19,7 +20,7 @@ use std::path::PathBuf;
 
 use eframe::egui;
 use suit_core::VarId;
-use suit_engine::Session;
+use suit_engine::{PresentOptions, Session};
 use suit_render::Sidecar;
 
 use crate::{bar::Dialog, canvas::Cached, present::Presenting, stage::Stage};
@@ -33,6 +34,14 @@ pub struct SuitApp {
     stage: Stage,
     /// Set while the deck is being presented full screen instead of edited.
     presenting: Option<Presenting>,
+    /// How presentations are run.
+    pub present_options: PresentOptions,
+    /// Whether the window with the notes is shown while presenting.
+    pub notes_shown: bool,
+    /// Start presenting with the first frame, and close the window when that is over.
+    present_at_start: bool,
+    /// Whether that start has happened.
+    presented_at_start: bool,
     thumbnails: Vec<Cached<(u64, [u32; 2])>>,
     /// The object last clicked on the canvas.
     pub picked: Option<VarId>,
@@ -41,6 +50,8 @@ pub struct SuitApp {
     /// When the preview now being waited for was first seen to be on its way.
     asking_since: Option<f64>,
     dialog: Option<Dialog>,
+    /// Set once the window may close whatever state the deck is in.
+    leaving: bool,
     screenshot: Option<PathBuf>,
     /// Frames drawn since the preview arrived; a screenshot waits for a few.
     settled: u32,
@@ -54,11 +65,16 @@ impl SuitApp {
             previewing: false,
             stage: Stage::default(),
             presenting: None,
+            present_options: PresentOptions::default(),
+            notes_shown: false,
+            present_at_start: false,
+            presented_at_start: false,
             thumbnails: Vec::new(),
             picked: None,
             notice: None,
             asking_since: None,
             dialog: None,
+            leaving: false,
             screenshot: None,
             settled: 0,
         }
@@ -107,6 +123,11 @@ impl SuitApp {
             ui.ctx().request_repaint_after(wait);
         }
         self.take_screenshot(ui.ctx());
+        self.closing(ui.ctx());
+        if self.present_at_start && !self.presented_at_start {
+            self.presented_at_start = true;
+            self.start_presenting(ui.ctx());
+        }
         // Presenting takes the whole window, and every key means something else there.
         if self.presenting.is_some() {
             egui::CentralPanel::default()

@@ -1,11 +1,11 @@
 //! Every way the deck can change. Each public method here is one undo step.
 
-use std::time::Instant;
+use std::{path::Path, time::Instant};
 
 use suit_check::check;
 use suit_core::{
-    Anim, Arg, Blueprint, Call, Command, Expr, Node, NodeId, Object, Place, Slide, SlideConfig,
-    SlideContent, SlideId, VarId,
+    Anim, Arg, Blueprint, Call, Command, Deck, Expr, Node, NodeId, Object, Place, Slide,
+    SlideConfig, SlideContent, SlideId, VarId,
 };
 use suit_sig::{AnimParamType, Role};
 
@@ -233,6 +233,27 @@ impl Session {
     /// Makes a new object after the selected step and brings it onto the slide with the
     /// animation that suits it; selects that animation.
     pub fn add_object(&mut self, ctor: &str) -> Option<VarId> {
+        let args = starting_arguments(ctor);
+        self.add_made(ctor, |_| {
+            args.into_iter()
+                .fold(Object::new(ctor), |object, (name, value)| {
+                    object.arg(name, value)
+                })
+        })
+    }
+
+    /// Puts the picture in `file` on the slide, four units high.
+    pub fn add_picture(&mut self, file: &Path) -> Option<VarId> {
+        let file = file.display().to_string();
+        self.add_made("ImageMobject", |_| {
+            Object::new("ImageMobject")
+                .arg("filename_or_array", file.as_str())
+                .then(Call::new("scale_to_fit_height").arg("height", 4.0))
+        })
+    }
+
+    /// Names what `make` builds, which is a `ctor`, and brings it onto the slide.
+    fn add_made(&mut self, ctor: &str, make: impl FnOnce(&mut Deck) -> Object) -> Option<VarId> {
         self.body()?;
         let kind = self.sig.ctors.get(ctor)?.kind.clone();
         let entrance = ["Write", "Create", "FadeIn"].into_iter().find_map(|name| {
@@ -252,12 +273,8 @@ impl Session {
         });
         let name = self.unused_name(&everyday_name(ctor));
         self.change("Add object", None, |session| {
+            let object = make(&mut session.deck);
             let var = session.deck.fresh_var(&name);
-            let object = starting_arguments(ctor)
-                .into_iter()
-                .fold(Object::new(ctor), |object, (name, value)| {
-                    object.arg(name, value)
-                });
             let mut commands = vec![Command::LetObject {
                 var,
                 value: Node::unset(object),

@@ -5,7 +5,11 @@ use std::path::PathBuf;
 use eframe::egui::{self, Align, Align2, Layout, RichText};
 use suit_engine::{Preview, Session};
 
-use crate::{SuitApp, style};
+use crate::{
+    SuitApp,
+    files::{Answer, Browser, Purpose},
+    style,
+};
 
 /// How many seconds Manim is waited for before a way to stop it is offered.
 const PATIENCE: f64 = 4.0;
@@ -13,24 +17,25 @@ const PATIENCE: f64 = 4.0;
 /// A question the bar is waiting on.
 pub enum Dialog {
     /// Asking for the file to open.
-    Open {
-        path: String,
-        problem: Option<String>,
-    },
-    /// Asking where to save.
+    Open(Browser),
+    /// Asking where to save, and what to go on with once that is done.
     SaveAs {
-        path: String,
-        problem: Option<String>,
+        browser: Browser,
+        then: Option<AfterDiscard>,
     },
+    /// Asking for the picture a new object is to show.
+    Picture(Browser),
     /// Asking whether unsaved changes may be thrown away, before doing `then`.
     Discard { then: AfterDiscard },
 }
 
+/// What was about to happen when unsaved changes got in the way.
 #[derive(Clone, Copy)]
 pub enum AfterDiscard {
     New,
     Open,
     Sample,
+    Quit,
 }
 
 impl SuitApp {
@@ -57,10 +62,7 @@ impl SuitApp {
                     self.save();
                 }
                 if ui.button("Save as…").clicked() {
-                    self.dialog = Some(Dialog::SaveAs {
-                        path: self.suggested_path(),
-                        problem: None,
-                    });
+                    self.ask_where_to_save(None);
                 }
                 ui.separator();
                 if ui.button("Export Python").clicked() {
@@ -99,6 +101,35 @@ impl SuitApp {
             {
                 self.start_presenting(ui.ctx());
             }
+            // Several choices are made in one go, so a click on one leaves the menu open.
+            let stays_open = egui::containers::menu::MenuConfig::new()
+                .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+            let (how, _) = egui::containers::menu::MenuButton::new("▾")
+                .config(stays_open)
+                .ui(ui, |ui| {
+                    let options = &mut self.present_options;
+                    ui.checkbox(
+                        &mut options.start_paused,
+                        "Wait for a key before the first slide",
+                    );
+                    ui.checkbox(
+                        &mut options.next_ends_loops,
+                        "Let a looping slide finish its round before moving on",
+                    );
+                    ui.checkbox(&mut options.leave_after_last, "Leave after the last slide");
+                    ui.checkbox(
+                        &mut options.run_through,
+                        "Run through without waiting for keys",
+                    );
+                    ui.separator();
+                    ui.checkbox(
+                        &mut self.notes_shown,
+                        "Show my notes in a second window (N)",
+                    );
+                });
+            how.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "How to present")
+            });
             ui.separator();
 
             let now = ui.input(|input| input.time);
@@ -171,10 +202,7 @@ impl SuitApp {
     /// Saves to the deck's file, asking for one if it has none.
     pub(crate) fn save(&mut self) {
         if self.session.path.is_none() {
-            self.dialog = Some(Dialog::SaveAs {
-                path: self.suggested_path(),
-                problem: None,
-            });
+            self.ask_where_to_save(None);
             return;
         }
         self.notice = Some(match self.session.save() {
@@ -183,17 +211,28 @@ impl SuitApp {
         });
     }
 
-    fn suggested_path(&self) -> String {
-        let path = self.session.path.clone().unwrap_or_else(|| {
+    fn ask_where_to_save(&mut self, then: Option<AfterDiscard>) {
+        let browser = Browser::new(Purpose::SaveDeck, &self.suggested_path());
+        self.dialog = Some(Dialog::SaveAs { browser, then });
+    }
+
+    /// The deck's file, or a name for it in the folder the editor was started in.
+    fn suggested_path(&self) -> PathBuf {
+        self.session.path.clone().unwrap_or_else(|| {
             std::env::current_dir()
                 .unwrap_or_default()
                 .join("untitled.suit.json")
-        });
-        path.display().to_string()
+        })
+    }
+
+    /// The folder to start looking for files in: the deck's own.
+    pub(crate) fn deck_folder(&self) -> PathBuf {
+        let path = self.suggested_path();
+        path.parent().map(PathBuf::from).unwrap_or(path)
     }
 
     /// Does `then`, first asking about unsaved changes if there are any.
-    fn leave(&mut self, then: AfterDiscard, ctx: &egui::Context) {
+    pub(crate) fn leave(&mut self, then: AfterDiscard, ctx: &egui::Context) {
         match self.session.is_dirty() {
             true => self.dialog = Some(Dialog::Discard { then }),
             false => self.proceed(then, ctx),
@@ -206,11 +245,25 @@ impl SuitApp {
             AfterDiscard::New => self.open(Session::blank(), ctx),
             AfterDiscard::Sample => self.open(Session::sample(), ctx),
             AfterDiscard::Open => {
-                self.dialog = Some(Dialog::Open {
-                    path: self.suggested_path(),
-                    problem: None,
-                });
+                let browser = Browser::new(Purpose::OpenDeck, &self.deck_folder());
+                self.dialog = Some(Dialog::Open(browser));
             }
+            AfterDiscard::Quit => {
+                self.leaving = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        }
+    }
+
+    /// The window is being closed: with unsaved changes, that waits for an answer.
+    pub(crate) fn closing(&mut self, ctx: &egui::Context) {
+        let asked = ctx.input(|input| input.viewport().close_requested());
+        if asked && !self.leaving && self.session.is_dirty() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.stop_presenting(ctx);
+            self.dialog = Some(Dialog::Discard {
+                then: AfterDiscard::Quit,
+            });
         }
     }
 
@@ -218,94 +271,78 @@ impl SuitApp {
         let Some(dialog) = self.dialog.take() else {
             return;
         };
-        let window = |title: &str| {
-            egui::Window::new(title.to_owned())
-                .collapsible(false)
-                .resizable(false)
-                .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
-        };
         // Each arm either puts a dialog back to keep it open, or leaves `self.dialog` empty.
         match dialog {
             Dialog::Discard { then } => {
-                window("Unsaved changes").show(ctx, |ui| {
-                    ui.label("This deck has changes that are not saved. Throw them away?");
-                    ui.add_space(6.0);
-                    ui.horizontal(|ui| {
-                        if ui.button("Throw away").clicked() {
-                            self.proceed(then, ctx);
-                        } else if !ui.button("Keep editing").clicked() {
-                            self.dialog = Some(Dialog::Discard { then });
-                        }
+                let mut choice = None;
+                egui::Window::new("Unsaved changes")
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.label("This deck has changes that are not saved.");
+                        ui.add_space(6.0);
+                        ui.horizontal(|ui| {
+                            if ui.button(RichText::new("Save them").strong()).clicked() {
+                                choice = Some(Unsaved::Save);
+                            }
+                            if ui.button("Throw them away").clicked() {
+                                choice = Some(Unsaved::Discard);
+                            }
+                            if ui.button("Keep editing").clicked() {
+                                choice = Some(Unsaved::Stay);
+                            }
+                        });
                     });
-                });
-            }
-            Dialog::Open {
-                mut path,
-                mut problem,
-            } => {
-                let mut choice = None;
-                window("Open a deck").show(ctx, |ui| {
-                    choice = path_form(ui, "Open", &mut path, &problem);
-                });
                 match choice {
-                    Some(true) => match Session::open(&PathBuf::from(path.trim())) {
-                        Ok(session) => self.open(session, ctx),
-                        Err(reason) => {
-                            problem = Some(reason);
-                            self.dialog = Some(Dialog::Open { path, problem });
-                        }
+                    None => self.dialog = Some(Dialog::Discard { then }),
+                    Some(Unsaved::Stay) => {}
+                    Some(Unsaved::Discard) => self.proceed(then, ctx),
+                    Some(Unsaved::Save) if self.session.path.is_none() => {
+                        self.ask_where_to_save(Some(then));
+                    }
+                    Some(Unsaved::Save) => match self.session.save() {
+                        Ok(()) => self.proceed(then, ctx),
+                        Err(problem) => self.notice = Some(problem),
                     },
-                    Some(false) => {}
-                    None => self.dialog = Some(Dialog::Open { path, problem }),
                 }
             }
-            Dialog::SaveAs {
-                mut path,
-                mut problem,
-            } => {
-                let mut choice = None;
-                window("Save the deck as").show(ctx, |ui| {
-                    choice = path_form(ui, "Save", &mut path, &problem);
-                });
-                match choice {
-                    Some(true) => match self.session.save_as(&PathBuf::from(path.trim())) {
-                        Ok(()) => self.notice = Some("Saved.".to_owned()),
-                        Err(reason) => {
-                            problem = Some(reason);
-                            self.dialog = Some(Dialog::SaveAs { path, problem });
+            Dialog::Open(mut browser) => match browser.show(ctx) {
+                Answer::Pending => self.dialog = Some(Dialog::Open(browser)),
+                Answer::Cancelled => {}
+                Answer::Chosen(path) => match Session::open(&path) {
+                    Ok(session) => self.open(session, ctx),
+                    Err(reason) => self.dialog = Some(Dialog::Open(browser.with_problem(reason))),
+                },
+            },
+            Dialog::SaveAs { mut browser, then } => match browser.show(ctx) {
+                Answer::Pending => self.dialog = Some(Dialog::SaveAs { browser, then }),
+                Answer::Cancelled => {}
+                Answer::Chosen(path) => match self.session.save_as(&path) {
+                    Ok(()) => {
+                        self.notice = Some("Saved.".to_owned());
+                        if let Some(then) = then {
+                            self.proceed(then, ctx);
                         }
-                    },
-                    Some(false) => {}
-                    None => self.dialog = Some(Dialog::SaveAs { path, problem }),
-                }
-            }
+                    }
+                    Err(reason) => {
+                        let browser = browser.with_problem(reason);
+                        self.dialog = Some(Dialog::SaveAs { browser, then });
+                    }
+                },
+            },
+            Dialog::Picture(mut browser) => match browser.show(ctx) {
+                Answer::Pending => self.dialog = Some(Dialog::Picture(browser)),
+                Answer::Cancelled => {}
+                Answer::Chosen(path) => self.picked = self.session.add_picture(&path),
+            },
         }
     }
 }
 
-/// A file path field with a confirm and a cancel button. Returns `Some(true)` when
-/// confirmed, `Some(false)` when cancelled, `None` while still open.
-fn path_form(
-    ui: &mut egui::Ui,
-    confirm: &str,
-    path: &mut String,
-    problem: &Option<String>,
-) -> Option<bool> {
-    ui.label("File");
-    let field = ui.add(egui::TextEdit::singleline(path).desired_width(520.0));
-    if let Some(problem) = problem {
-        ui.colored_label(style::ERROR, problem);
-    }
-    ui.add_space(6.0);
-    let entered = field.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
-    ui.horizontal(|ui| {
-        if ui.button(confirm).clicked() || entered {
-            Some(true)
-        } else if ui.button("Cancel").clicked() {
-            Some(false)
-        } else {
-            None
-        }
-    })
-    .inner
+/// What to do about unsaved changes.
+enum Unsaved {
+    Save,
+    Discard,
+    Stay,
 }

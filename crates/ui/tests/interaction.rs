@@ -1,9 +1,15 @@
 //! The window driven the way a person drives it: clicks, keys and drags, with no display and
 //! no Manim. Where the canvas needs a picture of the scene, the test supplies one.
 
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
-use eframe::egui::{self, Key, accesskit::Role};
+use eframe::egui::{
+    self, Key, Modifiers, ViewportCommand, ViewportEvent, ViewportId, accesskit::Role,
+};
 use egui_kittest::{Harness, kittest::Queryable};
 use suit_codegen::pretty::Pretty;
 use suit_core::{Anim, Command, Expr, Object, Time, VarId};
@@ -661,4 +667,206 @@ fn leaving_returns_to_the_slide_that_was_showing() {
     window.key_press(Key::F5);
     window.step();
     assert_eq!(wait(&mut window).map(|(slide, _)| slide), Some(1));
+}
+
+// ── Files and leaving ────────────────────────────────────────────────────────
+
+/// An empty folder that belongs to one test.
+fn scratch(name: &str) -> PathBuf {
+    let folder = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
+    let _ = fs::remove_dir_all(&folder);
+    fs::create_dir_all(&folder).unwrap();
+    folder.canonicalize().unwrap()
+}
+
+/// Replaces what is in the text field called `label`.
+fn retype(window: &mut Window, label: &str, text: &str) {
+    window.get_by_label(label).click();
+    window.run_ok();
+    window.key_combination_modifiers(Modifiers::COMMAND, &[Key::A]);
+    window.get_by_label(label).type_text(text);
+    window.run_ok();
+}
+
+fn menu(window: &mut Window, menu: &str, item: &str) {
+    press(window, menu);
+    press(window, item);
+}
+
+#[test]
+fn a_deck_is_saved_and_opened_by_walking_through_folders() {
+    let folder = scratch("browsing");
+    fs::create_dir_all(folder.join("talks")).unwrap();
+    fs::write(folder.join("notes.txt"), "not a deck").unwrap();
+    let mut session = Session::blank();
+    session.save_as(&folder.join("first.suit.json")).unwrap();
+    let mut window = open(session);
+    press(&mut window, "Circle");
+    assert!(window.state().session.is_dirty());
+
+    // Saving under another name, one folder down.
+    menu(&mut window, "File", "Save as…");
+    assert!(
+        window.query_by_label("notes.txt").is_none(),
+        "only decks and folders are listed"
+    );
+    press(&mut window, "talks");
+    retype(&mut window, "File name", "second");
+    press(&mut window, "Save");
+    let second = folder.join("talks/second.suit.json");
+    assert!(second.is_file(), "the ending was added");
+    assert_eq!(
+        window.state().session.path.as_deref(),
+        Some(second.as_path())
+    );
+    assert!(!window.state().session.is_dirty());
+
+    // Saving over a file takes saying so twice.
+    press(&mut window, "Square");
+    menu(&mut window, "File", "Save as…");
+    press(&mut window, "Save");
+    assert!(window.query_by_label_contains("already there").is_some());
+    assert!(window.state().session.is_dirty(), "nothing was written yet");
+    press(&mut window, "Save");
+    assert!(!window.state().session.is_dirty());
+
+    // Back up to the first deck, by walking there.
+    menu(&mut window, "File", "Open…");
+    press(&mut window, "↑ Up");
+    window.get_by_label("first.suit.json").click();
+    window.run_ok();
+    press(&mut window, "Open");
+    let first = folder.join("first.suit.json");
+    assert_eq!(
+        window.state().session.path.as_deref(),
+        Some(first.as_path())
+    );
+    assert!(
+        headlines(&window).is_empty(),
+        "the deck that was saved empty"
+    );
+
+    // A file that is not a deck is refused where it is chosen.
+    fs::write(folder.join("broken.suit.json"), "{").unwrap();
+    menu(&mut window, "File", "Open…");
+    window.get_by_label("broken.suit.json").click();
+    window.run_ok();
+    press(&mut window, "Open");
+    assert!(window.query_by_label_contains("is not a deck").is_some());
+    press(&mut window, "Cancel");
+    assert_eq!(
+        window.state().session.path.as_deref(),
+        Some(first.as_path())
+    );
+}
+
+/// What the window asked of the system in the last frame.
+fn asked_of_the_window(window: &Window) -> Vec<ViewportCommand> {
+    let output = window.output().viewport_output.get(&ViewportId::ROOT);
+    output.map_or(Vec::new(), |output| output.commands.clone())
+}
+
+fn close_the_window(window: &mut Window) {
+    let viewports = &mut window.input_mut().viewports;
+    let root = viewports.entry(ViewportId::ROOT).or_default();
+    root.events.push(ViewportEvent::Close);
+    window.step();
+}
+
+#[test]
+fn closing_with_unsaved_changes_asks_first() {
+    let folder = scratch("closing");
+    let mut window = open(Session::blank());
+    close_the_window(&mut window);
+    assert!(
+        !asked_of_the_window(&window).contains(&ViewportCommand::CancelClose),
+        "nothing to lose, nothing to ask"
+    );
+
+    press(&mut window, "Circle");
+    close_the_window(&mut window);
+    assert!(asked_of_the_window(&window).contains(&ViewportCommand::CancelClose));
+    window.run_ok();
+    assert!(window.query_by_label_contains("not saved").is_some());
+    press(&mut window, "Keep editing");
+    assert!(window.query_by_label_contains("not saved").is_none());
+
+    // Saving first: the deck has no file yet, so one is asked for, and then the window goes.
+    close_the_window(&mut window);
+    window.run_ok();
+    press(&mut window, "Save them");
+    retype(&mut window, "Folder", &folder.display().to_string());
+    window.key_press(Key::Enter);
+    window.run_ok();
+    retype(&mut window, "File name", "kept");
+    window.get_by_role_and_label(Role::Button, "Save").click();
+    // A click is three frames; the window is told to close in one of them.
+    let mut asked = Vec::new();
+    for _ in 0..3 {
+        window.step();
+        asked.extend(asked_of_the_window(&window));
+    }
+    assert!(folder.join("kept.suit.json").is_file());
+    assert!(asked.contains(&ViewportCommand::Close));
+}
+
+#[test]
+fn the_notes_say_what_to_say_and_what_comes_next() {
+    let mut session = Session::sample();
+    session.install_recording_for(0, recording(30));
+    session.install_recording_for(1, recording(30));
+    let mut window = open(session);
+    press(&mut window, "Present");
+    assert!(window.query_by_label_contains("Welcome everyone").is_none());
+
+    window.key_press(Key::N);
+    window.step();
+    assert!(window.query_by_label_contains("Welcome everyone").is_some());
+    assert!(window.query_by_label("Slide 1 of 6").is_some());
+    assert!(window.query_by_label("Next: Shapes").is_some());
+
+    // The keys still belong to the presentation, once.
+    assert_eq!(
+        key(&mut window, Key::ArrowRight).map(|(slide, _)| slide),
+        Some(1)
+    );
+    assert!(window.query_by_label("Slide 2 of 6").is_some());
+    assert!(window.query_by_label("No notes for this slide.").is_some());
+    assert!(window.query_by_label("Next: Dots").is_some());
+
+    window.key_press(Key::N);
+    window.step();
+    assert!(
+        window.query_by_label("Slide 2 of 6").is_none(),
+        "N puts them away again"
+    );
+}
+
+#[test]
+fn how_a_presentation_runs_is_chosen_next_to_the_button() {
+    let mut session = Session::blank();
+    session.add_object("Circle");
+    session.install_recording(recording(30));
+    let mut window = open(session);
+    press(&mut window, "How to present");
+    for choice in [
+        "Wait for a key before the first slide",
+        "Leave after the last slide",
+    ] {
+        window.get_by_label(choice).click();
+        window.run_ok();
+    }
+    window.key_press(Key::Escape);
+    window.run_ok();
+    assert!(window.state().present_options.start_paused);
+
+    press(&mut window, "Present");
+    assert_eq!(wait(&mut window), Some((0, Some(0))));
+    assert_eq!(wait(&mut window), Some((0, Some(0))), "it waits for a key");
+    assert_eq!(key(&mut window, Key::ArrowRight), Some((0, Some(15))));
+    assert_eq!(wait(&mut window), Some((0, Some(29))));
+    // Past the only slide: back in the editor.
+    window.key_press(Key::ArrowRight);
+    window.run_ok();
+    assert!(!window.state().is_presenting());
 }

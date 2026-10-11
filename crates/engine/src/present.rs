@@ -19,6 +19,21 @@ enum Run {
     Ended,
 }
 
+/// Choices about how a presentation runs. manim-slides takes the same ones on its command
+/// line; all are off unless asked for.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PresentOptions {
+    /// The first slide waits for a key before it runs (`--start-paused`).
+    pub start_paused: bool,
+    /// NEXT on a looping slide lets the loop finish its round and rest, instead of cutting
+    /// it off; a second NEXT moves on (`--next-terminates-loop`).
+    pub next_ends_loops: bool,
+    /// Going past the last slide ends the presentation (`--exit-after-last-slide`).
+    pub leave_after_last: bool,
+    /// Every slide moves on by itself and none loops: a run-through (`--skip-all`).
+    pub run_through: bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct Presenter {
     /// The slides that are shown, as indices into the deck: all but the skipped ones.
@@ -30,6 +45,11 @@ pub struct Presenter {
     run: Run,
     /// How many frames into its run the slide was when last looked at.
     position: f64,
+    options: PresentOptions,
+    /// NEXT was pressed on a loop that is to finish its round first.
+    ending_loop: bool,
+    /// The presentation went past its last slide and was to end there.
+    over: bool,
 }
 
 impl Presenter {
@@ -48,7 +68,19 @@ impl Presenter {
             reversed: false,
             run: Run::Waiting,
             position: 0.0,
+            options: PresentOptions::default(),
+            ending_loop: false,
+            over: false,
         })
+    }
+
+    /// The same presentation, run with `options`. To be called before it starts.
+    pub fn with(mut self, options: PresentOptions) -> Presenter {
+        self.options = options;
+        if options.start_paused {
+            self.run = Run::Paused { at: 0.0 };
+        }
+        self
     }
 
     /// The slide showing, as an index into the deck.
@@ -59,6 +91,14 @@ impl Presenter {
     /// The slides shown, in order, as indices into the deck.
     pub fn slides(&self) -> &[usize] {
         &self.order
+    }
+
+    /// The slide that NEXT leads to, if any, as an index into the deck.
+    pub fn following(&self) -> Option<usize> {
+        match self.reversed {
+            true => Some(self.slide()),
+            false => self.order.get(self.at + 1).copied(),
+        }
     }
 
     /// Which slide of how many is showing, counted from one.
@@ -77,6 +117,11 @@ impl Presenter {
     /// Whether anything is moving, so that another frame will be wanted soon.
     pub fn is_running(&self) -> bool {
         matches!(self.run, Run::Playing { .. })
+    }
+
+    /// Whether the presentation has gone past its last slide and was to end there.
+    pub fn is_over(&self) -> bool {
+        self.over
     }
 
     /// Brings the presentation to time `now`, in seconds on any steady clock. `frames` is
@@ -102,18 +147,28 @@ impl Presenter {
                 from: 0.0,
             };
         }
+        // In a run-through nothing loops and everything moves on.
+        let through = self.options.run_through;
+        let (looping, auto_next) = (config.looping && !through, config.auto_next || through);
         // Moving on by itself changes these; what is returned is still about this slide.
         let (showing, reversed) = (self.slide(), self.reversed);
         self.position = match self.run {
             Run::Playing { since, from } => {
                 let due = from + (now - since) * rate * f64::from(fps);
-                match (due < frames as f64, config.looping, config.auto_next) {
+                match (due < frames as f64, looping, auto_next) {
                     (true, ..) => due,
-                    // A looping slide never ends, so looping wins over moving on.
-                    (false, true, _) => due % frames as f64,
-                    (false, false, true) if self.load_next() => last,
+                    // A looping slide never ends, so looping wins over moving on, unless
+                    // it was told that this round is its last.
+                    (false, true, _) if !self.ending_loop => {
+                        // Counting from the start of the new round, so that the end of
+                        // this one can be told from the ends of those before it.
+                        let from = due % frames as f64;
+                        self.run = Run::Playing { since: now, from };
+                        from
+                    }
+                    (false, _, true) if self.load_next() => last,
                     // Nothing follows, or nothing is to follow by itself: it rests here.
-                    (false, false, _) => {
+                    (false, ..) => {
                         self.run = Run::Ended;
                         last
                     }
@@ -129,13 +184,20 @@ impl Presenter {
 
     /// NEXT: carry on if paused; otherwise load the next slide, even if this one has not
     /// finished. After a reversed slide, "next" is that same slide, forwards.
-    pub fn next(&mut self, now: f64) {
+    ///
+    /// `looping` says whether the slide showing loops: with
+    /// [`PresentOptions::next_ends_loops`] such a slide finishes its round first.
+    pub fn next(&mut self, now: f64, looping: bool) {
+        let loops = looping && !self.options.run_through;
         match self.run {
             Run::Paused { at } => {
                 self.run = Run::Playing {
                     since: now,
                     from: at,
                 }
+            }
+            Run::Playing { .. } if self.options.next_ends_loops && loops => {
+                self.ending_loop = true;
             }
             _ => {
                 self.load_next();
@@ -150,10 +212,17 @@ impl Presenter {
         } else if self.at + 1 < self.order.len() {
             self.at += 1;
         } else {
+            self.over = self.options.leave_after_last;
             return false;
         }
-        self.run = Run::Waiting;
+        self.load();
         true
+    }
+
+    /// Sets the slide now selected going from its start.
+    fn load(&mut self) {
+        self.run = Run::Waiting;
+        self.ending_loop = false;
     }
 
     /// PREVIOUS: the slide before this one, forwards from its start.
@@ -161,7 +230,7 @@ impl Presenter {
         if self.at > 0 {
             self.at -= 1;
             self.reversed = false;
-            self.run = Run::Waiting;
+            self.load();
         }
     }
 
@@ -171,13 +240,13 @@ impl Presenter {
         if self.at > 0 {
             self.at -= 1;
             self.reversed = true;
-            self.run = Run::Waiting;
+            self.load();
         }
     }
 
     /// REPLAY: the same slide again from where it began, in the direction it was going.
     pub fn replay(&mut self) {
-        self.run = Run::Waiting;
+        self.load();
     }
 
     /// PLAY/PAUSE: stops a running slide where it is, or sets a paused one going again. A
@@ -252,12 +321,12 @@ mod tests {
         at(&mut presenter, &deck, 0.0, 60);
         // NEXT does not wait for the slide to finish.
         at(&mut presenter, &deck, 0.25, 60);
-        presenter.next(0.25);
+        presenter.next(0.25, false);
         assert_eq!(at(&mut presenter, &deck, 0.25, 60), Some((1, 0)));
         assert_eq!(at(&mut presenter, &deck, 0.75, 60), Some((1, 30)));
-        presenter.next(0.75);
-        presenter.next(0.75);
-        presenter.next(0.75);
+        presenter.next(0.75, false);
+        presenter.next(0.75, false);
+        presenter.next(0.75, false);
         assert_eq!(
             presenter.slide(),
             2,
@@ -292,7 +361,7 @@ mod tests {
         );
 
         // NEXT after a reversed slide is that slide forwards, not the one after it.
-        presenter.next(2.0);
+        presenter.next(2.0, false);
         assert!(!presenter.is_reversed());
         assert_eq!(at(&mut presenter, &deck, 2.0, 60), Some((1, 0)));
         assert_eq!(at(&mut presenter, &deck, 2.5, 60), Some((1, 30)));
@@ -313,7 +382,7 @@ mod tests {
         assert!(presenter.is_paused());
         assert_eq!(at(&mut presenter, &deck, 9.0, 120), Some((0, 30)));
         // While paused, NEXT means "carry on", as in manim-slides.
-        presenter.next(9.0);
+        presenter.next(9.0, false);
         assert_eq!(at(&mut presenter, &deck, 9.5, 120), Some((0, 60)));
         presenter.play_pause(9.5);
         presenter.play_pause(10.0);
@@ -340,7 +409,7 @@ mod tests {
         assert_eq!(at(&mut presenter, &deck, 1.25, 60), Some((0, 15)));
         assert_eq!(at(&mut presenter, &deck, 7.5, 60), Some((0, 30)));
 
-        presenter.next(7.5);
+        presenter.next(7.5, false);
         assert_eq!(at(&mut presenter, &deck, 7.5, 60), Some((1, 0)));
         // At twice the speed, a quarter of a second is thirty frames.
         assert_eq!(at(&mut presenter, &deck, 7.75, 60), Some((1, 30)));
@@ -393,5 +462,69 @@ mod tests {
         deck.slides[0].config.skip = true;
         deck.slides[2].config.skip = true;
         assert!(Presenter::new(&deck, 0).is_none());
+    }
+
+    #[test]
+    fn the_ways_a_presentation_can_be_run() {
+        let mut deck = deck(2);
+        deck.slides[0].config.looping = true;
+
+        // Held at the start until a key.
+        let held = PresentOptions {
+            start_paused: true,
+            ..PresentOptions::default()
+        };
+        let mut presenter = Presenter::new(&deck, 0).unwrap().with(held);
+        assert_eq!(at(&mut presenter, &deck, 0.0, 60), Some((0, 0)));
+        assert_eq!(at(&mut presenter, &deck, 9.0, 60), Some((0, 0)));
+        assert!(presenter.is_paused());
+        presenter.next(9.0, true);
+        assert_eq!(
+            at(&mut presenter, &deck, 9.5, 60),
+            Some((0, 30)),
+            "next lets it go"
+        );
+
+        // A loop that finishes its round: NEXT in the middle of the second round lets it
+        // run to its end and rest there; the NEXT after that moves on.
+        let gentle = PresentOptions {
+            next_ends_loops: true,
+            ..PresentOptions::default()
+        };
+        let mut presenter = Presenter::new(&deck, 0).unwrap().with(gentle);
+        at(&mut presenter, &deck, 0.0, 60);
+        assert_eq!(at(&mut presenter, &deck, 1.5, 60), Some((0, 30)));
+        presenter.next(1.5, true);
+        assert_eq!(presenter.slide(), 0);
+        assert_eq!(at(&mut presenter, &deck, 1.75, 60), Some((0, 45)));
+        assert_eq!(at(&mut presenter, &deck, 2.5, 60), Some((0, 59)));
+        assert!(!presenter.is_running());
+        presenter.next(2.5, true);
+        assert_eq!(at(&mut presenter, &deck, 2.5, 60), Some((1, 0)));
+
+        // Leaving after the last slide, and running through without a key.
+        let through = PresentOptions {
+            run_through: true,
+            leave_after_last: true,
+            ..PresentOptions::default()
+        };
+        let mut presenter = Presenter::new(&deck, 0).unwrap().with(through);
+        at(&mut presenter, &deck, 0.0, 60);
+        assert_eq!(
+            at(&mut presenter, &deck, 1.0, 60),
+            Some((0, 59)),
+            "the loop does not loop"
+        );
+        assert_eq!(at(&mut presenter, &deck, 1.0, 60), Some((1, 0)));
+        assert!(!presenter.is_over());
+        at(&mut presenter, &deck, 2.0, 60);
+        assert!(presenter.is_over());
+
+        let mut presenter = Presenter::new(&deck, 1).unwrap();
+        presenter.next(0.0, false);
+        assert!(
+            !presenter.is_over(),
+            "unless asked to, it stays on the last slide"
+        );
     }
 }

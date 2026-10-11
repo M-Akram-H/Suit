@@ -1,14 +1,16 @@
 //! Presenting: the slides full screen, one key press at a time.
 //!
 //! The keys are manim-slides' own (→ next, ← previous, V reverse, R replay, Space
-//! play/pause, F full screen, H hide the mouse, Q quit), plus the ones a clicker sends.
+//! play/pause, F full screen, H hide the mouse, Q quit), plus the ones a clicker sends and
+//! N for the notes: a second window with what to say, what comes next and how long it has
+//! been, to keep on the screen the audience does not see.
 
-use eframe::egui::{self, Align2, Color32, FontId, Key, Sense, vec2};
-use suit_engine::Presenter;
+use eframe::egui::{self, Align2, Color32, FontId, Key, RichText, Sense, vec2};
+use suit_engine::{PresentOptions, Presenter, Session};
 
 use crate::{
     SuitApp,
-    canvas::{Cached, Frame, Raster},
+    canvas::{Cached, Frame, Raster, rasterize},
     style::{UV, WARNING},
 };
 
@@ -24,9 +26,63 @@ pub(crate) struct Presenting {
     showing: (usize, Option<usize>),
     mouse_hidden: bool,
     full_screen: bool,
+    /// When the first slide came on, for the clock in the notes.
+    began: Option<f64>,
+    /// The picture of what comes next, for the notes.
+    coming: Cached<(u64, usize, [u32; 2])>,
+}
+
+/// What a key or a click asks of the presentation.
+#[derive(Clone, Copy, PartialEq)]
+enum Ask {
+    Next,
+    Previous,
+    Reverse,
+    Replay,
+    PlayPause,
+    Mouse,
+    FullScreen,
+    Notes,
+    Leave,
+}
+
+/// The keys pressed in the window that `ui` is in.
+fn asked(ui: &egui::Ui) -> Vec<Ask> {
+    let keys: [(&[Key], Ask); 9] = [
+        (&[Key::ArrowRight, Key::PageDown, Key::Enter], Ask::Next),
+        (&[Key::ArrowLeft, Key::PageUp], Ask::Previous),
+        (&[Key::V], Ask::Reverse),
+        (&[Key::R], Ask::Replay),
+        (&[Key::Space], Ask::PlayPause),
+        (&[Key::H], Ask::Mouse),
+        (&[Key::F], Ask::FullScreen),
+        (&[Key::N], Ask::Notes),
+        (&[Key::Q, Key::Escape], Ask::Leave),
+    ];
+    ui.input(|input| {
+        let pressed = |keys: &[Key]| keys.iter().any(|&key| input.key_pressed(key));
+        keys.iter()
+            .filter(|(keys, _)| pressed(keys))
+            .map(|(_, ask)| *ask)
+            .collect()
+    })
 }
 
 impl SuitApp {
+    /// How presentations are run from now on, and whether the notes are shown with them.
+    pub fn with_presentation(mut self, options: PresentOptions, notes: bool) -> SuitApp {
+        self.present_options = options;
+        self.notes_shown = notes;
+        self
+    }
+
+    /// Starts presenting as soon as the window is up, and closes it when the presentation
+    /// is over: what `--present` on the command line means.
+    pub fn presenting_at_once(mut self) -> SuitApp {
+        self.present_at_start = true;
+        self
+    }
+
     pub fn is_presenting(&self) -> bool {
         self.presenting.is_some()
     }
@@ -47,8 +103,9 @@ impl SuitApp {
             );
             return;
         };
-        // Have Manim record what will be needed: this slide and the ones after it first,
-        // then the ones before, nearest first.
+        let presenter = presenter.with(self.present_options);
+        // Have Manim record what is not recorded yet: this slide and the ones after it
+        // first, then the ones before, nearest first.
         let (place, _) = presenter.place();
         let (before, onward) = presenter.slides().split_at(place - 1);
         for &slide in onward.iter().chain(before.iter().rev()) {
@@ -63,6 +120,8 @@ impl SuitApp {
             showing,
             mouse_hidden: true,
             full_screen: true,
+            began: None,
+            coming: Cached::default(),
         });
         ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
     }
@@ -77,7 +136,13 @@ impl SuitApp {
 
     pub(crate) fn present(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
-        let Some(presenting) = &mut self.presenting else {
+        let Self {
+            presenting: Some(presenting),
+            session,
+            notes_shown,
+            ..
+        } = self
+        else {
             return;
         };
         let whole = ui.max_rect();
@@ -85,40 +150,44 @@ impl SuitApp {
         response.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Presentation")
         });
-
         let now = ctx.input(|input| input.time);
-        let pressed =
-            |keys: &[Key]| ctx.input(|input| keys.iter().any(|&key| input.key_pressed(key)));
-        let presenter = &mut presenting.presenter;
-        if pressed(&[Key::ArrowRight, Key::PageDown, Key::Enter]) || response.clicked() {
-            presenter.next(now);
+
+        // What was asked for, in this window or in the one with the notes.
+        let mut asks = asked(ui);
+        if response.clicked() {
+            asks.push(Ask::Next);
         }
-        if pressed(&[Key::ArrowLeft, Key::PageUp]) {
-            presenter.previous();
+        if *notes_shown {
+            asks.extend(notes(&ctx, session, presenting, now));
         }
-        if pressed(&[Key::V]) {
-            presenter.reverse();
-        }
-        if pressed(&[Key::R]) {
-            presenter.replay();
-            // A slide Manim could not play gets another try.
+        let mut leave = false;
+        for ask in asks {
+            let presenter = &mut presenting.presenter;
             let slide = presenter.slide();
-            if self.session.recording_problem_of(slide).is_some() {
-                self.session.record(slide);
+            match ask {
+                Ask::Next => presenter.next(now, session.deck.slides[slide].config.looping),
+                Ask::Previous => presenter.previous(),
+                Ask::Reverse => presenter.reverse(),
+                Ask::Replay => {
+                    presenter.replay();
+                    // A slide Manim could not play gets another try.
+                    if session.recording_problem_of(slide).is_some() {
+                        session.record(slide);
+                    }
+                }
+                Ask::PlayPause => presenter.play_pause(now),
+                Ask::Mouse => presenting.mouse_hidden = !presenting.mouse_hidden,
+                Ask::FullScreen => {
+                    presenting.full_screen = !presenting.full_screen;
+                    let command = egui::ViewportCommand::Fullscreen(presenting.full_screen);
+                    ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, command);
+                }
+                Ask::Notes => *notes_shown = !*notes_shown,
+                Ask::Leave => leave = true,
             }
         }
-        if pressed(&[Key::Space]) {
-            presenter.play_pause(now);
-        }
-        if pressed(&[Key::H]) {
-            presenting.mouse_hidden = !presenting.mouse_hidden;
-        }
-        if pressed(&[Key::F]) {
-            presenting.full_screen = !presenting.full_screen;
-            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(presenting.full_screen));
-        }
-        let leave = pressed(&[Key::Q, Key::Escape]);
-        let session = &self.session;
+        let session = &*session;
+        let presenter = &mut presenting.presenter;
 
         // Where the presentation is now, and what that looks like.
         let slide = presenter.slide();
@@ -130,9 +199,13 @@ impl SuitApp {
             Some((slide, frame)) => (slide, Some(frame)),
             None => (presenter.slide(), None),
         };
+        if shown.is_some() {
+            presenting.began.get_or_insert(now);
+        }
         if presenter.is_running() {
             ctx.request_repaint();
         }
+        leave |= presenter.is_over();
 
         let painter = ui.painter_at(whole);
         painter.rect_filled(whole, 0.0, Color32::BLACK);
@@ -185,22 +258,121 @@ impl SuitApp {
             Align2::RIGHT_BOTTOM,
             format!("{place} / {count}"),
         );
-        let state = match (presenter.is_paused(), presenter.is_reversed()) {
-            (true, _) => "paused",
-            (false, true) => "rewinding",
-            (false, false) => "",
-        };
         corner(
             whole.left_bottom() + vec2(14.0, -10.0),
             Align2::LEFT_BOTTOM,
-            state.to_owned(),
+            state(presenter).to_owned(),
         );
 
         if presenting.mouse_hidden && response.hovered() {
             ctx.set_cursor_icon(egui::CursorIcon::None);
         }
         if leave {
+            let over = presenter.is_over();
             self.stop_presenting(&ctx);
+            // Started from the command line to present, and that is done.
+            if over && self.present_at_start {
+                self.leaving = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
         }
     }
+}
+
+/// What the presentation is doing, when that is not simply playing.
+fn state(presenter: &Presenter) -> &'static str {
+    match (presenter.is_paused(), presenter.is_reversed()) {
+        (true, _) => "paused",
+        (false, true) => "rewinding",
+        (false, false) => "",
+    }
+}
+
+/// Minutes and seconds.
+fn clock(secs: f64) -> String {
+    let secs = secs.max(0.0) as u64;
+    format!("{}:{:02}", secs / 60, secs % 60)
+}
+
+/// The window with the notes. Returns what was asked for in it.
+fn notes(
+    ctx: &egui::Context,
+    session: &Session,
+    presenting: &mut Presenting,
+    now: f64,
+) -> Vec<Ask> {
+    let id = egui::ViewportId::from_hash_of("notes");
+    let builder = egui::ViewportBuilder::default()
+        .with_title("Suit — notes")
+        .with_inner_size([560.0, 660.0]);
+    let presenter = &presenting.presenter;
+    let slide = &session.deck.slides[presenter.slide()];
+    let (place, count) = presenter.place();
+    let elapsed = presenting.began.map_or(0.0, |began| now - began);
+    let coming = &mut presenting.coming;
+    let mut asks = Vec::new();
+    ctx.show_viewport_immediate(id, builder, |ui, class| {
+        // In a window of its own it has keys of its own; embedded in the presentation it
+        // shares them, and they have been read already.
+        if class != egui::ViewportClass::EmbeddedWindow {
+            asks = asked(ui);
+        }
+        if ui.input(|input| input.viewport().close_requested()) {
+            asks.push(Ask::Notes);
+        }
+        egui::CentralPanel::default().show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(clock(elapsed)).size(30.0).strong());
+                ui.add_space(12.0);
+                ui.vertical(|ui| {
+                    ui.label(format!("Slide {place} of {count}"));
+                    ui.label(RichText::new(&slide.title).strong());
+                });
+                ui.add_space(12.0);
+                ui.colored_label(WARNING, state(presenter));
+            });
+            ui.separator();
+
+            let next = presenter.following();
+            let frame = Frame::of(&session.deck.config);
+            let height = 150.0;
+            egui::Panel::bottom("coming")
+                .show_separator_line(true)
+                .show(ui, |ui| {
+                    ui.add_space(6.0);
+                    let Some(next) = next else {
+                        ui.weak("This is the last slide.");
+                        return;
+                    };
+                    let title = &session.deck.slides[next].title;
+                    ui.weak(format!("Next: {title}"));
+                    let size = vec2(height * frame.aspect(), height);
+                    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+                    let pixels = ui.ctx().pixels_per_point();
+                    let wanted = [size.x * pixels, size.y * pixels].map(|side| side.round() as u32);
+                    let key = (session.generation, next, wanted);
+                    let texture = coming.get(ui.ctx(), "coming", key, || {
+                        // What the next slide rests on once it has played.
+                        let rest = session.snapshots.last_of(next);
+                        let drawn = rest.into_iter().flat_map(|snapshot| &snapshot.drawn);
+                        rasterize(drawn, frame, session.deck.config.background, wanted, None)
+                    });
+                    ui.painter().image(texture, rect, UV, Color32::WHITE);
+                    ui.add_space(6.0);
+                    ui.weak("→ next   ← previous   V rewind   R replay   Space hold   N notes");
+                });
+
+            egui::ScrollArea::vertical()
+                .auto_shrink(false)
+                .show(ui, |ui| match slide.config.notes.trim() {
+                    "" => {
+                        ui.weak("No notes for this slide.");
+                    }
+                    notes => {
+                        ui.label(RichText::new(notes).size(20.0));
+                    }
+                });
+        });
+    });
+    asks
 }

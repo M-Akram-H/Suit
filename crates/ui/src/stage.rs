@@ -8,7 +8,9 @@ use suit_render::Snapshot;
 
 use crate::{
     SuitApp,
+    bar::Dialog,
     canvas::{Cached, Frame, rasterize},
+    files::{Browser, Purpose},
     style::{ACCENT, UV, WARNING},
 };
 
@@ -85,6 +87,14 @@ impl SuitApp {
                 {
                     self.picked = self.session.add_object(ctor);
                 }
+            }
+            if ui
+                .button("Picture")
+                .on_hover_text("Put a picture from a file on the slide")
+                .clicked()
+            {
+                let browser = Browser::new(Purpose::Picture, &self.deck_folder());
+                self.dialog = Some(Dialog::Picture(browser));
             }
         });
         ui.add_space(2.0);
