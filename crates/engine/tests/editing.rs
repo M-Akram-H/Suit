@@ -335,7 +335,9 @@ fn every_object_in_the_catalogue_can_be_added() {
     assert!(kinds.len() >= 29);
     for ctor in &kinds {
         let mut session = Session::blank();
+        // Something to put a brace under, and a graph for a tangent to touch.
         session.add_object("Circle").unwrap();
+        session.add_object("Plot").unwrap();
         let added = session.add_object(ctor);
         assert!(added.is_some(), "{ctor} was not added");
         assert_eq!(session.checked.diagnostics, [], "{ctor}");
@@ -407,5 +409,67 @@ fn objects_are_grouped_copied_and_given_values() {
     );
     session.add_object("Dot");
     assert_eq!(session.values_before(), [value]);
+    assert_eq!(session.checked.diagnostics, []);
+}
+
+#[test]
+fn a_tangent_touches_a_graph_and_goes_along_it() {
+    let text = |session: &Session, step: usize| {
+        let pretty = suit_codegen::pretty::Pretty {
+            deck: &session.deck,
+            sig: &session.sig,
+        };
+        pretty.command(&session.steps()[step].item)
+    };
+    let mut session = Session::blank();
+    assert_eq!(session.add_object("Tangent"), None, "nothing to touch");
+    session.add_object("Circle").unwrap();
+    assert_eq!(
+        session.add_object("Tangent"),
+        None,
+        "a circle is not a graph"
+    );
+
+    session.add_object("Plot").unwrap();
+    let tangent = session.add_object("Tangent").unwrap();
+    assert_eq!(
+        headlines(&session)[4..],
+        ["New tangent (Tangent)", "Create tangent"]
+    );
+    assert_eq!(
+        text(&session, 4),
+        "tangent = Tangent(graph, dot = true, at = 1.0)"
+    );
+    assert_eq!(session.checked.diagnostics, []);
+
+    // Dragged where it is made, it is put elsewhere along the graph, not off it.
+    assert!(session.place_at_creation(tangent, [2.5, 9.0]));
+    assert_eq!(
+        text(&session, 4),
+        "tangent = Tangent(graph, dot = true, at = 2.5)"
+    );
+    // Dragged later, it glides there along the graph, or jumps.
+    session.insert_move(tangent, [-1.0, 0.3], true);
+    assert_eq!(text(&session, 6), "play(Glide(tangent, -1.0))");
+    session.insert_move(tangent, [0.5, 0.0], false);
+    assert_eq!(text(&session, 7), "tangent.touch(0.5)");
+    assert_eq!(session.checked.diagnostics, []);
+
+    // How steep the graph is where it touches is a number like any other: a number on
+    // the slide can keep showing it.
+    let number = session.add_object("DecimalNumber").unwrap();
+    let slope = Expr::Query {
+        target: Place::var(tangent),
+        query: "slope".into(),
+        args: Vec::new(),
+    };
+    session.insert_step(Command::Attach {
+        target: Place::var(number),
+        updater: suit_core::Updater::Always(Call::new("set_value").arg("number", slope)),
+    });
+    assert_eq!(
+        text(&session, 10),
+        "always number.set_value(number = tangent.slope)"
+    );
     assert_eq!(session.checked.diagnostics, []);
 }

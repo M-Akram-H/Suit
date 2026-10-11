@@ -1,6 +1,6 @@
 # Manim Core — abstract syntax, AST, type system and semantics
 
-Draft 0.6 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
+Draft 0.7 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
 
 Manim has no syntax of its own: a scene is a Python method that calls a library. What this
 document formalises is the small language *embedded* in those calls — make objects, change
@@ -98,6 +98,32 @@ that uses it
 What it found — the stretches drawn, whether the rule lacked a value anywhere it was told to
 look, the asymptotes — is reported by the probes with the scene, which is how the editor can
 say “the function `log(x)` is not defined on all of [-7, 7]” instead of drawing nothing.
+
+**Nor are a second constructor, a method, a query and an animation**, all four for showing
+what a derivative is. They are defined the same way, next to `Plot`:
+
+```
+Tangent : (graph: Plot, at: Real = 0, length: Real = 3, dot: Bool = false) → Tangent      Tangent ≤ Line
+touch   : (Tangent; x: Real)
+slope   : (Tangent) → Real
+Glide   : (mobject: mut Tangent, to: Real)                run time 1, rate smooth
+```
+
+`Tangent(g, at = x)` is the segment of the given length, centred on the graph's point at
+`x`, with the graph's steepness there. The steepness is not asked of anyone: it is the
+central difference of `g`'s rule over a step of `10⁻⁵·max(1, |x|)`, so the rule alone
+decides it. `touch(x)` puts the segment at another `x`, and `slope` reads the steepness
+where it is now. Where the rule has no value, `touch` leaves the segment where it was; a
+tangent that never had a place is reported like a `Plot`'s findings.
+
+`Glide` exists because `p.animate(touch(x))` is not what it seems (compare the `rotate`
+row of §5.8): `.animate` moves the two ends of the segment straight to where they end up,
+and between its first frame and its last the segment touches nothing. `Glide` is defined
+on the parameter instead: at progress `α` it is `touch(x₀ + ϱ(α)·(x − x₀))`, with `x₀` where
+the tangent was when the animation began. Every frame of it is a tangent **[run]**.
+
+A graph that has been shifted or stretched after it was drawn takes its tangents with it:
+the point and the steepness are carried over by the same shift and stretch.
 
 An **interpretation** `𝓘` of Σ gives each symbol its meaning: `𝓘(C)` builds points and style,
 `𝓘(f)` transforms an object, `𝓘(q)` reads one, `𝓘(A)` supplies the per-frame step of an
@@ -997,6 +1023,7 @@ Compositional, one Manim call per node.
 | `λx. e`, `p.q(…)` | `lambda x: ⟦e⟧`, `p.q(…)` |
 | a list parameter given `w₁ … wₖ` | `l=[⟦w₁⟧, …, ⟦wₖ⟧]` |
 | `Plot(…)` | `Plot(…)`, preceded once in the file by `class Plot(VMobject): …` (§2) |
+| `Tangent(…)`, `Glide(…)` | themselves, preceded once by `class Tangent(Line): …` and `class Glide(Animation): …` |
 | `raw⟨ι⟩(s)` | `s`, verbatim |
 
 Four things the translation does on purpose:
@@ -1058,8 +1085,9 @@ and the ones that matter most are confirmed by `tools/verify_quirks.py` **[run]*
 `DoubleArrow`, `DashedLine`, `Arc`, `Brace`, `SurroundingRectangle`, `Text`, `MarkupText`,
 `MathTex`, `Tex`, `DecimalNumber`, `Integer`, `NumberLine`, `Axes`, `NumberPlane`,
 `FunctionGraph`, `ParametricFunction`, `Table`, `Code`, `VGroup` }; `Mobject` ⊃ `Group`,
-`ImageMobject`, `ValueTracker`. And `Plot`, which is Suit's own (§2); the catalogue check
-holds it to its own definition instead of to Manim.
+`ImageMobject`, `ValueTracker`. And `Plot` and `Tangent ≤ Line`, which are Suit's own (§2),
+with the method `touch`, the query `slope` and the animation `Glide` (`mut`, on a
+`Tangent`); the catalogue check holds these to their own definitions instead of to Manim.
 
 **Methods** (on `Mobject` unless noted). `shift`, `move_to`, `next_to`, `to_edge`,
 `to_corner`, `align_to`, `scale`, `rotate`, `flip`, `stretch`, `set_color`, `set_opacity`,

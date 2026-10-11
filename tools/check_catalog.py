@@ -32,7 +32,10 @@ def problem(text):
 OWN = {}
 _here = __import__("pathlib").Path(__file__).resolve().parent
 exec(
-    "import numpy as np\nfrom manim import *\n" + (_here.parent / "crates/codegen/src/plot.py").read_text(),
+    "import numpy as np\nfrom manim import *\n"
+    + (_here.parent / "crates/codegen/src/plot.py").read_text()
+    + "\n\n"
+    + (_here.parent / "crates/codegen/src/tangent.py").read_text(),
     OWN,
 )
 
@@ -90,7 +93,7 @@ for name, ctor in sig["ctors"].items():
 
 for name, overloads in sig["methods"].items():
     for method in overloads:
-        cls = getattr(manim, method["receiver"])
+        cls = find(method["receiver"])
         if not callable(getattr(cls, name, None)):
             problem(f"{method['receiver']}.{name}: no such method")
             continue
@@ -99,7 +102,7 @@ for name, overloads in sig["methods"].items():
 for name, overloads in sig["queries"].items():
     for query in overloads:
         checked += 1
-        cls = getattr(manim, query["receiver"])
+        cls = find(query["receiver"])
         member = inspect.getattr_static(cls, name, None)
         if member is None:
             problem(f"{query['receiver']}.{name}: no such member")
@@ -107,7 +110,7 @@ for name, overloads in sig["queries"].items():
             problem(f"{query['receiver']}.{name}: property flag is wrong")
 
 for name, anim in sig["anims"].items():
-    cls = getattr(manim, name, None)
+    cls = find(name)
     if not (inspect.isclass(cls) and issubclass(cls, manim.Animation)):
         problem(f"animation {name}: not a Manim animation")
         continue

@@ -183,3 +183,57 @@ fn a_graph_brings_its_definition_along() {
     let checked = check(&plain, &sig);
     assert!(!export(&plain, &sig, &checked, &Options::default()).contains("class Plot"));
 }
+
+#[test]
+fn a_tangent_brings_its_definition_and_its_animation_along() {
+    let sig = Signature::builtin();
+    let mut deck = Deck::new(DeckConfig::default());
+    let mut slide = deck.add_slide("One");
+    let x = slide.var("x");
+    let rule = suit_core::Arg::fun(x, Expr::call("sin", vec![Expr::Var(x)]));
+    let graph = slide.object("graph", Object::new("Plot").arg("function", rule));
+    let tangent = slide.object(
+        "tangent",
+        Object::new("Tangent")
+            .arg("graph", &graph)
+            .arg("at", 0.5)
+            .arg("dot", true),
+    );
+    slide.play(vec![Anim::prim("Create").arg("mobject", &graph)]);
+    slide.play(vec![Anim::prim("Create").arg("mobject", &tangent)]);
+    slide.play(vec![
+        Anim::prim("Glide")
+            .arg("mobject", &tangent)
+            .arg("to", 3.0)
+            .run_time(2.0),
+    ]);
+    slide.apply(&tangent, Call::new("touch").arg("x", 1.0));
+    let checked = check(&deck, &sig);
+    assert_eq!(checked.diagnostics, []);
+    let python = export(&deck, &sig, &checked, &Options::default());
+    for class in [
+        "class Plot(VMobject):",
+        "class Tangent(Line):",
+        "class Glide(Animation):",
+    ] {
+        assert_eq!(python.matches(class).count(), 1, "{class}");
+        assert!(
+            python.find(class) < python.find("class Deck(Slide):"),
+            "{class}"
+        );
+    }
+    assert!(
+        python.contains("tangent_6 = Tangent(graph_3, at=0.5, dot=True)"),
+        "{python}"
+    );
+    assert!(python.contains("self.play(Glide(tangent_6, 3.0, run_time=2.0))"));
+    assert!(python.contains("tangent_6.touch(1.0)"));
+
+    // A tangent to a circle is no tangent of this kind.
+    let mut wrong = Deck::new(DeckConfig::default());
+    let mut slide = wrong.add_slide("One");
+    let circle = slide.object("circle", Object::new("Circle"));
+    let line = slide.object("line", Object::new("Tangent").arg("graph", &circle));
+    slide.play(vec![Anim::prim("Create").arg("mobject", &line)]);
+    assert_eq!(check(&wrong, &sig).diagnostics.len(), 1);
+}

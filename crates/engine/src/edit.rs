@@ -2,12 +2,13 @@
 
 use std::{collections::BTreeSet, path::Path, time::Instant};
 
+use suit_check::ObjectState;
 use suit_check::check;
 use suit_core::{
     Anim, Arg, Blueprint, Call, Command, Deck, Expr, Node, NodeId, Object, Place, Slide,
     SlideConfig, SlideContent, SlideId, UNBOUND, VarId,
 };
-use suit_sig::{AnimParamType, Role, VGROUP_KIND};
+use suit_sig::{AnimParamType, ROOT_KIND, Role, Type, VGROUP_KIND};
 
 use crate::{MERGE_WINDOW, Moment, Session, Target};
 
@@ -246,9 +247,39 @@ impl Session {
     }
 
     pub fn add_object_about(&mut self, ctor: &str, about: Option<VarId>) -> Option<VarId> {
-        let kind = self.sig.ctors.get(ctor)?.kind.clone();
-        let about = about.or_else(|| self.objects().last().map(|object| object.var));
-        let args = starting_arguments(ctor, about.map(Place::var).as_ref())?;
+        let made = self.sig.ctors.get(ctor)?;
+        let kind = made.kind.clone();
+        // What it is made around has to be of the right kind: a tangent wants a graph.
+        let wanted = made.params.iter().find_map(|param| match &param.ty {
+            Type::Mob(kind) => Some(kind.clone()),
+            _ => None,
+        });
+        let fits = |object: &&ObjectState| {
+            let kind = wanted.as_deref().unwrap_or(ROOT_KIND);
+            self.sig.is_subkind(&object.kind, kind)
+        };
+        let objects = self.objects();
+        let chosen = objects
+            .iter()
+            .filter(fits)
+            .find(|object| Some(object.var) == about);
+        let about = chosen
+            .or(objects.iter().rev().find(fits))
+            .map(|object| object.var);
+        let mut args = starting_arguments(ctor, about.map(Place::var).as_ref())?;
+        if let (true, Some(graph)) = (ctor == "Tangent", about) {
+            // In the middle of the longest stretch the graph is drawn on, if that is
+            // known; a tangent put where there is no graph touches nothing.
+            let longest = self.found_by_graph(graph).and_then(|found| {
+                let length = |piece: &&[f64; 2]| piece[1] - piece[0];
+                found
+                    .pieces
+                    .iter()
+                    .max_by(|a, b| length(a).total_cmp(&length(b)))
+            });
+            let middle = longest.map_or(1.0, |[from, to]| ((from + to) * 5.0).round() / 10.0);
+            args.push(("at", middle.into()));
+        }
         self.add_made(&everyday_name(ctor), &kind, |_| {
             args.into_iter()
                 .fold(Object::new(ctor), |object, (name, value)| {
@@ -435,9 +466,18 @@ impl Session {
             };
             object = inner;
         }
-        let placed = Object::Chain {
-            base: Box::new(object),
-            call: move_to(to),
+        // A tangent is put somewhere by saying where along its graph it touches.
+        let placed = match &mut object.item {
+            Object::New { ctor, args } if &**ctor == "Tangent" => {
+                let x = (to[0] * 100.0).round() / 100.0;
+                args.retain(|(name, _)| &**name != "at");
+                args.push(("at".into(), x.into()));
+                object.item
+            }
+            _ => Object::Chain {
+                base: Box::new(object),
+                call: move_to(to),
+            },
         };
         let command = Command::LetObject {
             var,
@@ -453,19 +493,40 @@ impl Session {
         true
     }
 
+    /// The kind of the object `var` at the selected point, if it exists there.
+    fn kind_of(&self, var: VarId) -> Option<&str> {
+        let object = self.objects().iter().find(|object| object.var == var)?;
+        Some(object.kind.as_str())
+    }
+
     /// Adds a step after the selected one that moves `var` to `to`: gliding there if
     /// `animated`, otherwise jumping.
     pub fn insert_move(&mut self, var: VarId, to: [f64; 2], animated: bool) -> Option<NodeId> {
         self.body()?;
         let target = Place::var(var);
-        let command = match animated {
-            true => {
+        // A tangent does not go to a point: it goes along its graph, to an x.
+        let tangent = self
+            .kind_of(var)
+            .is_some_and(|kind| self.sig.is_subkind(kind, "Tangent"));
+        let x = (to[0] * 100.0).round() / 100.0;
+        let command = match (animated, tangent) {
+            (true, true) => {
+                let glide = Anim::prim("Glide").arg("mobject", &target).arg("to", x);
+                Command::Play {
+                    anims: vec![Node::unset(glide)],
+                }
+            }
+            (false, true) => Command::Apply {
+                target,
+                call: Call::new("touch").arg("x", x),
+            },
+            (true, false) => {
                 let anim = Anim::animate(&target, vec![move_to(to)]);
                 Command::Play {
                     anims: vec![Node::unset(anim)],
                 }
             }
-            false => Command::Apply {
+            (false, false) => Command::Apply {
                 target,
                 call: move_to(to),
             },
@@ -501,6 +562,7 @@ fn everyday_name(ctor: &str) -> String {
         "DoubleArrow" => "double arrow",
         "DecimalNumber" | "Integer" => "number",
         "FunctionGraph" | "Plot" => "graph",
+        "Tangent" => "tangent",
         "ParametricFunction" => "curve",
         "ValueTracker" => "tracker",
         "SurroundingRectangle" => "frame",
@@ -550,6 +612,8 @@ fn starting_arguments(ctor: &str, about: Option<&Place>) -> Option<Vec<(&'static
         "Brace" => vec![("mobject", about?.into())],
         "SurroundingRectangle" => vec![("mobjects", about?.into())],
         "Plot" => vec![("function", Arg::fun(UNBOUND, call("sin")))],
+        // Where it touches is added by the caller, who knows where the graph is drawn.
+        "Tangent" => vec![("graph", about?.into()), ("dot", true.into())],
         // A wave, and a circle: something to see, and to change into what is wanted.
         "FunctionGraph" => vec![
             ("function", Arg::fun(UNBOUND, call("sin"))),

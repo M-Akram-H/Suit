@@ -1300,3 +1300,37 @@ fn a_new_text_is_typed_into_straight_away() {
     press(&mut window, "Go to that step");
     assert_eq!(window.state().session.step, Some(2));
 }
+
+#[test]
+fn a_tangent_is_put_on_a_graph_and_sent_along_it() {
+    let mut window = open(Session::blank());
+    menu(&mut window, "More objects", "Tangent to a graph");
+    assert!(headlines(&window).is_empty());
+    assert!(
+        window
+            .query_by_label_contains("needs a graph to touch")
+            .is_some()
+    );
+
+    menu(&mut window, "More objects", "Graph of a function");
+    menu(&mut window, "More objects", "Tangent to a graph");
+    assert_eq!(
+        headlines(&window)[2..],
+        ["New tangent (Tangent)", "Create tangent"]
+    );
+    assert_eq!(
+        text_of_step(&window, 2),
+        "tangent = Tangent(graph, dot = true, at = 1.0)"
+    );
+    // Where it touches, and whether the point is marked, are settings like any other.
+    assert!(window.query_by_label("at x").is_some());
+    assert!(window.query_by_label("mark the point").is_some());
+
+    // Among the animations that suit it is the one that takes it along the graph.
+    press(&mut window, "Other animations");
+    press(&mut window, "Glide");
+    assert_eq!(headlines(&window)[4], "Glide tangent");
+    assert_eq!(text_of_step(&window, 4), "play(Glide(tangent, 3.0))");
+    assert!(window.query_by_label("to x").is_some());
+    assert_eq!(window.state().session.checked.diagnostics, []);
+}

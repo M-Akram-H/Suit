@@ -410,6 +410,10 @@ impl Session {
                     )
                 }
                 "plot" => return None,
+                "lost" => (
+                    format!("{name} has nothing to touch: its graph has no value there."),
+                    "Put it where the graph is drawn, by dragging it or by its “at x”.".to_owned(),
+                ),
                 other => (format!("Manim remarks on {name}: {other}."), String::new()),
             };
             Some(Diagnostic {

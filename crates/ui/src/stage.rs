@@ -44,7 +44,7 @@ const PALETTE: [(&str, &str); 12] = [
 ];
 
 /// The rest of the catalogue, in a menu.
-const MORE: [(&str, &str); 17] = [
+const MORE: [(&str, &str); 18] = [
     ("Ellipse", "Ellipse"),
     ("Rounded rectangle", "RoundedRectangle"),
     ("Regular polygon", "RegularPolygon"),
@@ -60,6 +60,7 @@ const MORE: [(&str, &str); 17] = [
     ("Styled text", "MarkupText"),
     ("Grid", "NumberPlane"),
     ("Graph of a function", "Plot"),
+    ("Tangent to a graph", "Tangent"),
     ("Curve", "ParametricFunction"),
     ("Number that can change", "ValueTracker"),
 ];
@@ -142,8 +143,12 @@ impl SuitApp {
                                 }
                                 None => {
                                     let what = label.trim_end_matches('…').to_lowercase();
-                                    self.notice =
-                                        Some(format!("A {what} needs an object: add one first."));
+                                    self.notice = Some(match ctor {
+                                        "Tangent" => "A tangent needs a graph to touch: add a \
+                                                      graph of a function first."
+                                            .to_owned(),
+                                        _ => format!("A {what} needs an object: add one first."),
+                                    });
                                 }
                             }
                             ui.close();

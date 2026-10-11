@@ -386,6 +386,19 @@ fn kinds_and_ctors(b: &mut Builder) {
         ],
     );
 
+    // Suit's own as well (`codegen/src/tangent.py`): the line that touches a graph at a
+    // point, with the animation that takes it along the graph.
+    b.ctor(
+        "Tangent",
+        "Line",
+        vec![
+            req("graph", mob("Plot")),
+            kw("at", REAL),
+            kw("length", REAL),
+            kw("dot", BOOL),
+        ],
+    );
+
     b.ctor(
         "ImageMobject",
         ROOT_KIND,
@@ -435,6 +448,7 @@ fn methods(b: &mut Builder) {
     b.method("set_y", m, vec![req("y", REAL)]);
     b.method("scale_to_fit_width", m, vec![req("width", REAL)]);
     b.method("scale_to_fit_height", m, vec![req("height", REAL)]);
+    b.method("touch", "Tangent", vec![req("x", REAL)]);
     b.method(
         "arrange",
         m,
@@ -478,6 +492,8 @@ fn queries(b: &mut Builder) {
         b.query(name, m, vec![], Base::Real);
         b.sig.queries.get_mut(name).unwrap()[0].property = true;
     }
+    b.query("slope", "Tangent", vec![], Base::Real);
+    b.sig.queries.get_mut("slope").unwrap()[0].property = true;
     b.query(
         "point_from_proportion",
         VMOBJECT,
@@ -673,6 +689,11 @@ fn animations(b: &mut Builder) {
         "MoveAlongPath",
         vec![obj("mobject", Mut, m), obj("path", Use, v)],
         vec![],
+    );
+    b.anim(
+        "Glide",
+        vec![obj("mobject", Mut, "Tangent")],
+        vec![req("to", REAL)],
     );
     b.anim(
         "ScaleInPlace",

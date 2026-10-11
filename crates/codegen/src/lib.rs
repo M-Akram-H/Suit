@@ -70,6 +70,9 @@ const PROBE: &str = include_str!("probe.py");
 /// What the catalogue has that Manim has not: `Plot`. Written into every file that uses it.
 const PLOT: &str = include_str!("plot.py");
 
+/// And `Tangent`, with `Glide`. A tangent is to a `Plot`, so that is there whenever this is.
+const TANGENT: &str = include_str!("tangent.py");
+
 /// What a generated script is for.
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
@@ -139,6 +142,8 @@ fn probe_script(deck: &Deck, sig: &Signature, checked: &Checked, last: usize, ru
     // that made it, so every script defines all of it, used or not.
     out.push_str("\n\n");
     out.push_str(PLOT);
+    out.push_str("\n\n");
+    out.push_str(TANGENT);
     out.push_str(RELAYER);
     // Each slide is a text of its own, so that it can be run by itself, starting from
     // what the slides before it left behind.
@@ -206,6 +211,11 @@ impl Exporter<'_> {
         if self.makes("Plot") {
             out.push('\n');
             out.push_str(PLOT);
+            out.push('\n');
+        }
+        if self.makes("Tangent") {
+            out.push('\n');
+            out.push_str(TANGENT);
             out.push('\n');
         }
         let _ = writeln!(out, "\nclass {}(Slide):", options.class_name);

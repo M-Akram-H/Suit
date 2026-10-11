@@ -152,6 +152,9 @@ pub fn label(name: &str) -> String {
         "filename_or_array" => "file",
         "mobjects" => "objects",
         "num_decimal_places" => "decimals",
+        "at" => "at x",
+        "to" => "to x",
+        "dot" => "mark the point",
         _ => "",
     };
     match known {
@@ -232,6 +235,8 @@ pub fn args(ui: &mut egui::Ui, scope: &Scope, slots: &[Slot], args: &mut Args) -
 pub(crate) fn starting_value(scope: &Scope, slot: &Slot) -> Option<Arg> {
     let directional = ["direction", "edge", "corner", "axis", "shift", "vectors"];
     match &slot.ty {
+        // Somewhere else than where a new tangent is, so that going there is seen.
+        Type::Base(Base::Real) if &*slot.name == "to" => Some(3.0_f64.into()),
         Type::Base(Base::Real) => Some(1.0_f64.into()),
         Type::Base(Base::Int) => Some(1_i64.into()),
         Type::Base(Base::Bool) => Some(true.into()),

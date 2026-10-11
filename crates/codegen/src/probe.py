@@ -347,9 +347,13 @@ class _Probe:
                 "on": any(id(member) in on_scene for member in family),
             }
         for var in self.named:
-            found = getattr(self.world.names.get(var), "found", None)
+            made = self.world.names.get(var)
+            found = getattr(made, "found", None)
             if isinstance(found, dict):
                 self.remarks.append({"slide": self.slide, "node": node, "var": var, "what": "plot", **found})
+            # A tangent put where its graph's rule has no value has nothing to touch.
+            if getattr(made, "lost", False):
+                self.remark(var, node, "lost")
         self.named = []
         self.steps.append({"slide": self.slide, "node": node, "drawn": drawn, "boxes": boxes})
 

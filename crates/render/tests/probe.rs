@@ -568,3 +568,139 @@ fn a_graph_is_drawn_where_its_rule_has_a_value() {
     assert!(!found.missing && found.chosen);
     assert_eq!(found.pieces, [[-1.0, -0.1], [0.1, 1.0]]);
 }
+
+#[test]
+#[ignore = "needs Manim"]
+fn a_tangent_touches_its_graph_all_the_way_along() {
+    use suit_core::{Arg, Call, Expr};
+    let sig = Signature::builtin();
+    let mut deck = Deck::new(DeckConfig::default());
+    let mut slide = deck.add_slide("Tangent");
+    let x = slide.var("x");
+    let rule = Arg::fun(x, Expr::call("sin", vec![Expr::Var(x)]));
+    let graph = slide.object("graph", Object::new("Plot").arg("function", rule));
+    let tangent = slide.object(
+        "tangent",
+        Object::new("Tangent")
+            .arg("graph", &graph)
+            .arg("at", 0.0)
+            .arg("length", 2.0),
+    );
+    slide.add(&[&graph, &tangent]);
+    slide.play(vec![
+        Anim::prim("Glide")
+            .arg("mobject", &tangent)
+            .arg("to", 3.0)
+            .run_time(1.0)
+            .rate("linear"),
+    ]);
+    slide.apply(&tangent, Call::new("touch").arg("x", 1.0));
+    // A tangent to nothing: 1/x at 0.
+    let y = slide.var("x");
+    let inverse = Arg::fun(y, Expr::call("/", vec![Expr::Real(1.0), Expr::Var(y)]));
+    let other = slide.object("other", Object::new("Plot").arg("function", inverse));
+    let stray = slide.object(
+        "stray",
+        Object::new("Tangent").arg("graph", &other).arg("at", 0.0),
+    );
+    let checked = check(&deck, &sig);
+    assert_eq!(checked.diagnostics, []);
+
+    // The line of a snapshot or a frame: where its middle is, and how steep it is.
+    let line_of = |drawn: &suit_render::Drawn| {
+        let points = &drawn.paths[0].points;
+        let (start, end) = (points[0], points[points.len() - 1]);
+        let middle = [(start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0];
+        (middle, (end[1] - start[1]) / (end[0] - start[0]))
+    };
+    let touches = |(middle, slope): ([f32; 2], f32), x: f32| {
+        (middle[0] - x).abs() < 2e-3
+            && (middle[1] - x.sin()).abs() < 2e-3
+            && (slope - x.cos()).abs() < 2e-3
+    };
+
+    let mut prober = prober();
+    let shown = prober
+        .probe(&deck, &sig, &checked, Watch::patient())
+        .expect("Manim runs");
+    assert_eq!(shown.error, None);
+    let of_tangent = |step: &suit_render::Snapshot| {
+        let own =
+            |drawn: &&suit_render::Drawn| drawn.owners.iter().any(|(var, _)| *var == tangent.root);
+        line_of(step.drawn.iter().find(own).expect("the tangent is drawn"))
+    };
+    // Shown at 0, after the glide at 3, after the touch at 1.
+    assert!(
+        touches(of_tangent(&shown.steps[3]), 0.0),
+        "{:?}",
+        of_tangent(&shown.steps[3])
+    );
+    assert!(
+        touches(of_tangent(&shown.steps[4]), 3.0),
+        "{:?}",
+        of_tangent(&shown.steps[4])
+    );
+    assert!(
+        touches(of_tangent(&shown.steps[5]), 1.0),
+        "{:?}",
+        of_tangent(&shown.steps[5])
+    );
+    // The one with nothing to touch is told of, by name.
+    let lost: Vec<_> = shown
+        .remarks
+        .iter()
+        .filter(|remark| remark.what == "lost")
+        .collect();
+    assert_eq!(lost.len(), 1);
+    assert_eq!(lost[0].var, stray.root);
+
+    // Played, it touches the graph in every frame of the glide: at a sixtieth of the way
+    // more each time, the graph's own point and the graph's own steepness.
+    let clip = prober
+        .probe_frames(&deck, &sig, &checked, 0, Watch::patient())
+        .expect("Manim runs");
+    assert_eq!(clip.error, None);
+    let report = &checked.slides[0];
+    assert_eq!(clip.frames.len() as u32, report.frames + report.gap_frames);
+    for frame in [0usize, 1, 17, 30, 59] {
+        // The graph is one outline of many curves; the tangent is the one of a single line.
+        let line = clip
+            .frame(frame)
+            .find(|drawn| drawn.paths.len() == 1 && drawn.paths[0].points.len() == 4);
+        let x = 3.0 * frame as f32 / 60.0;
+        assert!(touches(line_of(line.expect("a line")), x), "frame {frame}");
+    }
+
+    // A graph that is moved and stretched after it is drawn takes its tangent with it.
+    let mut deck = Deck::new(DeckConfig::default());
+    let mut slide = deck.add_slide("Moved");
+    let x = slide.var("x");
+    let rule = Arg::fun(x, Expr::call("sin", vec![Expr::Var(x)]));
+    let moved = Object::new("Plot")
+        .arg("function", rule)
+        .then(Call::new("shift").arg("vectors", Expr::vec3(1.0, 2.0, 0.0)))
+        .then(Call::new("stretch").arg("factor", 2.0).arg("dim", 1_i64));
+    let graph = slide.object("graph", moved);
+    let tangent = slide.object(
+        "tangent",
+        Object::new("Tangent").arg("graph", &graph).arg("at", 0.0),
+    );
+    slide.add(&[&graph, &tangent]);
+    slide.wait(0.5);
+    let checked = check(&deck, &sig);
+    assert_eq!(checked.diagnostics, []);
+    let shown = prober
+        .probe(&deck, &sig, &checked, Watch::patient())
+        .expect("Manim runs");
+    assert_eq!(shown.error, None);
+    let last = shown.steps.last().unwrap();
+    let own =
+        |drawn: &&suit_render::Drawn| drawn.owners.iter().any(|(var, _)| *var == tangent.root);
+    let (middle, slope) = line_of(last.drawn.iter().find(own).expect("the tangent is drawn"));
+    // The rule's point (0, 0) is now at (1, 2), and twice as steep as the sine is there.
+    assert!(
+        (middle[0] - 1.0).abs() < 2e-3 && (middle[1] - 2.0).abs() < 2e-3,
+        "{middle:?}"
+    );
+    assert!((slope - 2.0).abs() < 2e-3, "{slope}");
+}

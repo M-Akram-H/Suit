@@ -15,6 +15,7 @@ class Plot(VMobject):
 
     def __init__(self, function, on=None, step=0.02, asymptotes=False, **kwargs):
         super().__init__(**kwargs)
+        self.function = function
         # Further from the middle than this, a branch has left the picture for good.
         reach = 2 * config.frame_height
 
@@ -121,6 +122,8 @@ class Plot(VMobject):
                         vertical.append(float(pole))
         if self.has_points():
             self.make_smooth()
+        # Where the curve was drawn, for telling later where it has been taken to.
+        self.drawn_in = self.extent()
 
         # A level the rule settles on far out to either side.
         horizontal = []
@@ -151,3 +154,21 @@ class Plot(VMobject):
             for level in self.found["horizontal"]:
                 if abs(level) < high:
                     self.add(DashedLine([-wide, level, 0.0], [wide, level, 0.0], **look))
+
+    def extent(self):
+        """The curve's lowest x and y and its highest, leaving its asymptotes aside."""
+        if not self.has_points():
+            return None
+        return np.array([self.points[:, :2].min(axis=0), self.points[:, :2].max(axis=0)])
+
+    def where(self, x, y):
+        """Where in the picture the rule's point (x, y) is now. A graph is drawn where its
+        rule says, and can then be shifted and stretched like anything else."""
+        was, now = self.drawn_in, self.extent()
+        if was is None or now is None:
+            return np.array([float(x), float(y), 0.0])
+        size, sized = was[1] - was[0], now[1] - now[0]
+        flat = size < 1e-9
+        scale = np.where(flat, 1.0, sized / np.where(flat, 1.0, size))
+        moved = now[0] + (np.array([float(x), float(y)]) - was[0]) * scale
+        return np.array([moved[0], moved[1], 0.0])
