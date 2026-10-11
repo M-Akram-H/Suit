@@ -1,4 +1,4 @@
-//! The starting catalogue (spec Appendix A), written against manim 0.22.0.
+//! The starting catalogue (spec Appendix A), written against manim 0.21.0.
 //!
 //! Parameter names are Manim's own; `tools/check_catalog.py` verifies every entry against
 //! the installed library, so a typo here fails a test instead of a render.
@@ -8,8 +8,9 @@ use std::f64::consts::{PI, TAU};
 use suit_core::Rgba;
 
 use crate::{
-    AnimParam, AnimParamType, Animation, Base, Constant, Ctor, Function, GROUP_KIND, Kind, Method,
-    Param, Pass, PyForm, Query, ROOT_KIND, Role, Signature, Type, VGROUP_KIND, colors::COLORS,
+    AnimParam, AnimParamType, Animation, Base, Constant, Ctor, Function, GROUP_KIND, Inside, Kind,
+    Method, Param, Pass, PyForm, Query, ROOT_KIND, Role, Signature, Type, VGROUP_KIND,
+    colors::COLORS,
 };
 
 const REAL: Type = Type::Base(Base::Real);
@@ -98,8 +99,14 @@ impl Builder {
             parent: parent.map(Into::into),
             elem: elem.map(Into::into),
             params,
+            inside: None,
         };
         self.sig.kinds.insert(name.into(), kind);
+    }
+
+    /// What the objects of the kind `name`, and of those below it, have for an inside.
+    fn inside(&mut self, name: &str, inside: Inside) {
+        self.sig.kinds.get_mut(name).unwrap().inside = Some(inside);
     }
 
     /// A kind together with its constructor.
@@ -404,6 +411,22 @@ fn kinds_and_ctors(b: &mut Builder) {
         ROOT_KIND,
         vec![req("filename_or_array", STR)],
     );
+
+    // Manim fills nothing unless told to: a fill colour alone leaves a shape as it was.
+    b.inside(VMOBJECT, Inside::Clear);
+    for filled in [
+        "Dot",
+        "Brace",
+        "Text",
+        "MarkupText",
+        "MathTex",
+        "DecimalNumber",
+    ] {
+        b.inside(filled, Inside::Filled);
+    }
+    for open in ["Line", "ParametricFunction", "Plot", "Axes"] {
+        b.inside(open, Inside::Open);
+    }
 }
 
 fn methods(b: &mut Builder) {
@@ -891,5 +914,19 @@ mod tests {
         );
         assert!(sig.method("ImageMobject", "set_fill").is_none());
         assert!(sig.query("NumberPlane", "c2p").is_some());
+    }
+
+    #[test]
+    fn an_inside_is_inherited_until_a_kind_says_otherwise() {
+        let sig = Signature::builtin();
+        assert_eq!(sig.inside("Square"), Some(Inside::Clear));
+        assert_eq!(sig.inside("Circle"), Some(Inside::Clear));
+        assert_eq!(sig.inside("Dot"), Some(Inside::Filled));
+        assert_eq!(sig.inside("Tex"), Some(Inside::Filled));
+        assert_eq!(sig.inside("Tangent"), Some(Inside::Open));
+        assert_eq!(sig.inside("Arrow"), Some(Inside::Open));
+        assert_eq!(sig.inside("FunctionGraph"), Some(Inside::Open));
+        assert_eq!(sig.inside("NumberPlane"), Some(Inside::Open));
+        assert_eq!(sig.inside("ImageMobject"), None);
     }
 }

@@ -582,3 +582,91 @@ fn a_change_cannot_build_on_an_earlier_one_in_the_same_sequence() {
     ])]);
     assert_eq!(codes(&deck), ["animate-order", "animate-order"]);
 }
+
+#[test]
+fn a_fill_colour_that_nothing_shows_is_warned_of() {
+    let orange = || Expr::konst("ORANGE");
+    let filled = |ctor: &str| Object::new(ctor).arg("fill_color", orange());
+    let found = |deck: &Deck| -> Vec<(String, Option<String>)> {
+        let unseen = |d: &&suit_check::Diagnostic| d.code == "unseen";
+        let diagnostics = run(deck).diagnostics;
+        assert!(diagnostics.iter().all(|d| d.severity == Severity::Warning));
+        let said = diagnostics.iter().filter(unseen);
+        said.map(|d| (d.message.clone(), d.help.clone())).collect()
+    };
+
+    // A line has no inside: the colour meant is the line's own.
+    let mut deck = deck();
+    let mut slide = deck.add_slide("s");
+    let line = slide.object("line", filled("Line"));
+    slide.play(vec![fade_in(&line)]);
+    assert_eq!(
+        found(&deck),
+        [(
+            "“line” is given a fill colour, but has no inside to fill.".to_owned(),
+            Some("Use “color” instead: that colours the line itself.".to_owned())
+        )]
+    );
+
+    // A circle has one, which Manim leaves fully transparent unless told otherwise.
+    let mut deck = self::deck();
+    let mut slide = deck.add_slide("s");
+    let c = slide.object("circle", filled("Circle"));
+    slide.play(vec![fade_in(&c)]);
+    assert_eq!(
+        found(&deck),
+        [(
+            "“circle” is given a fill colour that cannot be seen: its inside starts fully \
+             transparent."
+                .to_owned(),
+            Some("Add the setting “fill opacity” as well.".to_owned())
+        )]
+    );
+
+    // Told how much to fill, there is nothing to say: at once, straight after, or later.
+    let opacity = |method: &str| Call::new(method).arg("opacity", 0.5);
+    let mut deck = self::deck();
+    let mut slide = deck.add_slide("s");
+    let at_once = slide.object("circle", filled("Circle").arg("fill_opacity", 0.5));
+    let after = slide.object("square", filled("Square").then(opacity("set_fill")));
+    let later = slide.object("star", filled("Star"));
+    let never = slide.object("triangle", filled("Triangle"));
+    slide.play(vec![
+        fade_in(&at_once),
+        fade_in(&after),
+        fade_in(&later),
+        fade_in(&never),
+    ]);
+    slide.play(vec![Anim::animate(&later, vec![opacity("set_opacity")])]);
+    // Recolouring the inside does not show it.
+    let recolour = Call::new("set_fill").arg("color", Expr::konst("RED"));
+    slide.play(vec![Anim::animate(&never, vec![recolour])]);
+    let said = found(&deck);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].0.starts_with("“triangle”"), "{said:?}");
+
+    // What starts filled shows its fill colour as it is.
+    let mut deck = self::deck();
+    let mut slide = deck.add_slide("s");
+    let dot = slide.object("dot", filled("Dot"));
+    let text = slide.object("text", filled("Text").arg("text", "a"));
+    slide.play(vec![fade_in(&dot), fade_in(&text)]);
+    assert_eq!(codes(&deck), [] as [&str; 0]);
+}
+
+#[test]
+fn a_warning_that_waited_keeps_its_place_among_the_others() {
+    let mut deck = deck();
+    let mut slide = deck.add_slide("s");
+    let s = slide.object("square", Object::new("Square"));
+    slide.add(&[&s]);
+    let turn = Call::new("rotate").arg("angle", 1.0);
+    slide.play(vec![Anim::animate(&s, vec![turn.clone()])]);
+    let c = slide.object("circle", circle().arg("fill_color", Expr::konst("ORANGE")));
+    slide.play(vec![fade_in(&c)]);
+    slide.play(vec![Anim::animate(&s, vec![turn])]);
+    let codes = codes(&deck);
+    let first = codes.iter().position(|code| *code == "unseen");
+    assert_eq!(first, Some(codes.len() / 2), "{codes:?}");
+    assert_eq!(codes.len(), 3, "{codes:?}");
+}

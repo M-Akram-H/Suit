@@ -10,6 +10,7 @@ use suit_core::{
     Anim, Args, Call, Command, Expr, Node, Object, Opts, Place, Presence, Sym, Time, UNBOUND,
     Updater, VarId,
 };
+use suit_sig::Inside;
 
 use crate::{
     SuitApp,
@@ -501,7 +502,7 @@ fn edit_object(
                 Some(sig) => {
                     // A graph's range is where its rule is worked out, in fine steps.
                     let sampled = matches!(&**ctor, "FunctionGraph" | "ParametricFunction");
-                    let slots: Vec<Slot> = scope
+                    let mut slots: Vec<Slot> = scope
                         .sig
                         .ctor_params(sig)
                         .into_iter()
@@ -510,6 +511,16 @@ fn edit_object(
                             ..Slot::from(param)
                         })
                         .collect();
+                    colour_first(&mut slots);
+                    let inside = scope.sig.inside(&sig.kind);
+                    // Nothing to fill: a fill is not offered, and one that was given stays
+                    // only to be taken away.
+                    if inside == Some(Inside::Open) {
+                        slots.retain(|slot| {
+                            !slot.name.starts_with("fill_") || given(args, &slot.name)
+                        });
+                    }
+                    let filled = given(args, "fill_color");
                     if &**ctor == "Plot" {
                         // Its rule first, then where and its asymptotes, which have
                         // editors of their own; then what it shares with every shape.
@@ -523,6 +534,15 @@ fn edit_object(
                         ui.push_id("made", |ui| editors::args(ui, scope, &rest, args));
                     } else {
                         ui.push_id("made", |ui| editors::args(ui, scope, &slots, args));
+                    }
+                    // Manim fills nothing unless told how much: a fill colour that has just
+                    // been chosen comes with the opacity that shows it.
+                    let unseen = given(args, "fill_color") && !given(args, "fill_opacity");
+                    if unseen && !filled && inside == Some(Inside::Clear) {
+                        args.push(("fill_opacity".into(), 1.0_f64.into()));
+                    } else if unseen {
+                        let lines = !scope.sig.is_subkind(&sig.kind, suit_sig::VGROUP_KIND);
+                        unseen_fill(ui, inside, lines, args);
                     }
                 }
                 None => {
@@ -576,6 +596,46 @@ fn edit_object(
     }
 }
 
+fn given(args: &Args, name: &str) -> bool {
+    args.iter().any(|(given, _)| &**given == name)
+}
+
+/// The colour of the whole object before the colours of its inside and of its outline: it
+/// is the one mostly meant, and the one that shows on everything.
+fn colour_first(slots: &mut Vec<Slot>) {
+    let position = |name: &str| slots.iter().position(|slot| &*slot.name == name);
+    if let (Some(from), Some(to)) = (position("color"), position("fill_color"))
+        && to < from
+    {
+        let slot = slots.remove(from);
+        slots.insert(to, slot);
+    }
+}
+
+/// Says that the fill colour among `args` shows nothing, and offers what was meant.
+/// `lines` is false for what is made of parts, which takes no colour of its own either.
+fn unseen_fill(ui: &mut egui::Ui, inside: Option<Inside>, lines: bool, args: &mut Args) {
+    let (why, offer) = match inside {
+        Some(Inside::Open) => ("There is no inside to fill here.", "Use color instead"),
+        Some(Inside::Clear) => ("The inside is fully transparent.", "Add fill opacity"),
+        _ => return,
+    };
+    let open = inside == Some(Inside::Open);
+    ui.horizontal_wrapped(|ui| {
+        ui.colored_label(style::WARNING, "⚠");
+        ui.weak(why);
+        // The line's own colour cannot be offered where there is one already.
+        let offered = !open || (lines && !given(args, "color"));
+        if !offered || !ui.button(offer).clicked() {
+            return;
+        }
+        match args.iter_mut().find(|(name, _)| &**name == "fill_color") {
+            Some(fill) if open => fill.0 = "color".into(),
+            _ => args.push(("fill_opacity".into(), 1.0_f64.into())),
+        }
+    });
+}
+
 fn chain_depth(object: &Object) -> usize {
     match object {
         Object::Chain { base, .. } => 1 + chain_depth(&base.item),
@@ -589,6 +649,11 @@ fn starting_call(scope: &Scope, kind: &Sym, method: &Sym) -> Call {
     if let Some(sig) = scope.sig.method(kind, method) {
         let slots: Vec<Slot> = sig.params.iter().map(Slot::from).collect();
         fill_required(scope, &slots, &mut call.args);
+    }
+    // To fill is to say with what and how much: an inside mostly starts fully transparent,
+    // and a colour alone would leave it so.
+    if &**method == "set_fill" {
+        call = call.arg("color", Expr::konst("WHITE")).arg("opacity", 1.0);
     }
     call
 }

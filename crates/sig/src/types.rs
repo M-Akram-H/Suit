@@ -57,6 +57,19 @@ pub struct Param {
     pub pass: Pass,
 }
 
+/// What an object has for an inside, which is where its fill colour would show.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Inside {
+    /// None: a line, a curve, or something made of them.
+    Open,
+    /// One that starts fully transparent. Its fill colour shows once it is given a fill
+    /// opacity as well.
+    Clear,
+    /// One that starts filled.
+    Filled,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Kind {
     pub parent: Option<Sym>,
@@ -64,6 +77,8 @@ pub struct Kind {
     pub elem: Option<Sym>,
     /// Constructor parameters every subkind accepts (Manim forwards `**kwargs` upward).
     pub params: Vec<Param>,
+    /// Where it differs from the parent kind's.
+    pub inside: Option<Inside>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -231,6 +246,11 @@ impl Signature {
         self.ancestors(kind)
             .find_map(|k| self.kinds[k].elem.clone())
             .unwrap_or_else(|| ROOT_KIND.into())
+    }
+
+    /// What an object of `kind` has for an inside. `None` for what takes no fill at all.
+    pub fn inside(&self, kind: &str) -> Option<Inside> {
+        self.ancestors(kind).find_map(|k| self.kinds[k].inside)
     }
 
     /// Own parameters followed by those inherited along `≤`.

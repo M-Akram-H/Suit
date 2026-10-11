@@ -15,7 +15,7 @@ use egui_kittest::{
     kittest::{By, Queryable},
 };
 use suit_codegen::pretty::Pretty;
-use suit_core::{Anim, Command, Expr, Object, Time, VarId};
+use suit_core::{Anim, Command, Deck, DeckConfig, Expr, Object, Time, VarId};
 use suit_engine::Session;
 use suit_render::{Bounds, Clip, Drawn, Outline, Snapshot, Snapshots};
 use suit_ui::SuitApp;
@@ -1333,4 +1333,117 @@ fn a_tangent_is_put_on_a_graph_and_sent_along_it() {
     assert_eq!(text_of_step(&window, 4), "play(Glide(tangent, 3.0))");
     assert!(window.query_by_label("to x").is_some());
     assert_eq!(window.state().session.checked.diagnostics, []);
+}
+
+/// A deck with one object, made with an orange fill and nothing else, and brought in.
+fn filled_orange(ctor: &str, name: &str) -> Window {
+    let mut deck = Deck::new(DeckConfig::default());
+    let mut slide = deck.add_slide("Slide 1");
+    let made = Object::new(ctor).arg("fill_color", Expr::konst("ORANGE"));
+    let object = slide.object(name, made);
+    slide.play(vec![Anim::prim("Create").arg("mobject", &object)]);
+    open(Session::new(deck, None))
+}
+
+#[test]
+fn a_colour_is_offered_where_it_shows() {
+    let mut window = open(Session::blank());
+    menu(&mut window, "More objects", "Graph of a function");
+    menu(&mut window, "More objects", "Tangent to a graph");
+    press(&mut window, "New tangent (Tangent)");
+    // A line has no inside to fill. The colour on offer is the line's own.
+    press(&mut window, "Add setting");
+    assert!(window.query_by_label("fill color").is_none());
+    assert!(window.query_by_label("fill opacity").is_none());
+    press(&mut window, "color");
+    assert_eq!(
+        text_of_step(&window, 2),
+        "tangent = Tangent(graph, dot = true, at = 1.0, color = WHITE)"
+    );
+
+    // A circle has one. The colour of the whole of it still comes first; and Manim fills
+    // nothing unless told how much, so a fill colour comes with the opacity that shows it.
+    // It goes in after the step that is selected.
+    press(&mut window, "Circle");
+    press(&mut window, "New circle (Circle)");
+    press(&mut window, "Add setting");
+    let top = |window: &Window, label: &str| {
+        let button = window.get_by_role_and_label(Role::Button, label);
+        button.rect().top()
+    };
+    assert!(top(&window, "color") < top(&window, "fill color"));
+    press(&mut window, "fill color");
+    assert_eq!(
+        text_of_step(&window, 3),
+        "circle = Circle(fill_color = WHITE, fill_opacity = 1.0)"
+    );
+    // To fill something later is likewise to say with what, and how much.
+    menu(&mut window, "Then also…", "set fill");
+    assert_eq!(
+        text_of_step(&window, 3),
+        "circle = Circle(fill_color = WHITE, fill_opacity = 1.0)\
+         .set_fill(color = WHITE, opacity = 1.0)"
+    );
+    assert_eq!(window.state().session.checked.diagnostics, []);
+}
+
+#[test]
+fn a_fill_colour_that_nothing_shows_is_put_right_with_a_click() {
+    // On a line it was the line's colour that was meant.
+    let mut window = filled_orange("Line", "line");
+    assert!(
+        window
+            .query_by_label_contains("is given a fill colour, but has no inside to fill")
+            .is_some()
+    );
+    press(&mut window, "New line (Line)");
+    assert!(
+        window
+            .query_by_label("There is no inside to fill here.")
+            .is_some()
+    );
+    press(&mut window, "Use color instead");
+    assert_eq!(text_of_step(&window, 0), "line = Line(color = ORANGE)");
+    assert!(
+        window
+            .query_by_label("There is no inside to fill here.")
+            .is_none()
+    );
+    assert_eq!(window.state().session.checked.diagnostics, []);
+
+    // On a shape it lacks the opacity that shows it.
+    let mut window = filled_orange("Square", "square");
+    assert!(
+        window
+            .query_by_label_contains("its inside starts fully transparent")
+            .is_some()
+    );
+    press(&mut window, "New square (Square)");
+    press(&mut window, "Add fill opacity");
+    assert_eq!(
+        text_of_step(&window, 0),
+        "square = Square(fill_color = ORANGE, fill_opacity = 1.0)"
+    );
+    assert_eq!(window.state().session.checked.diagnostics, []);
+}
+
+#[test]
+fn a_problem_takes_one_to_its_step() {
+    let mut deck = Deck::new(DeckConfig::default());
+    deck.add_slide("Slide 1").wait(1.0);
+    let mut slide = deck.add_slide("Slide 2");
+    slide.wait(1.0);
+    let made = Object::new("Line").arg("fill_color", Expr::konst("ORANGE"));
+    let line = slide.object("line", made);
+    slide.play(vec![Anim::prim("Create").arg("mobject", &line)]);
+    let mut window = open(Session::new(deck, None));
+    assert_eq!(window.state().session.slide, 0);
+
+    // On its words, which is where one clicks.
+    window
+        .get_by_label_contains("is given a fill colour")
+        .click();
+    window.run_ok();
+    let session = &window.state().session;
+    assert_eq!((session.slide, session.step), (1, Some(1)));
 }

@@ -11,7 +11,8 @@ use suit_core::{
     Slide, SlideContent, Sym, Updater, VarId,
 };
 use suit_sig::{
-    AnimParamType, Base, GROUP_KIND, Param, Pass, ROOT_KIND, Role, Signature, Type, VGROUP_KIND,
+    AnimParamType, Base, GROUP_KIND, Inside, Param, Pass, ROOT_KIND, Role, Signature, Type,
+    VGROUP_KIND,
 };
 
 use crate::{
@@ -90,6 +91,7 @@ pub fn check(deck: &Deck, sig: &Signature) -> Checked {
         slide: 0,
         node: None,
         layers: 0,
+        faint: Vec::new(),
     };
     if deck.slides.is_empty() {
         checker.error("empty-deck", "The deck has no slides.".into(), None);
@@ -101,6 +103,10 @@ pub fn check(deck: &Deck, sig: &Signature) -> Checked {
         .enumerate()
         .map(|(index, slide)| checker.slide(&mut env, slide, index))
         .collect();
+    // From the last, so that the places of the earlier ones are still right.
+    for (_, at, warning) in std::mem::take(&mut checker.faint).into_iter().rev() {
+        checker.diagnostics.insert(at, warning);
+    }
     Checked {
         diagnostics: checker.diagnostics,
         slides,
@@ -118,6 +124,9 @@ struct Checker<'a> {
     slide: usize,
     node: Option<NodeId>,
     layers: u32,
+    /// Objects made with a fill colour and a fully transparent inside. Each is warned of,
+    /// where it would have been in `diagnostics`, unless its inside is made visible later.
+    faint: Vec<(VarId, usize, Diagnostic)>,
 }
 
 /// A place that was looked up successfully.
@@ -156,6 +165,12 @@ struct Step {
 }
 
 type Effect = Vec<Step>;
+
+/// Makes the inside of what it is called on visible, whatever it was.
+fn shows_the_fill(call: &Call) -> bool {
+    let opacity = call.args.iter().any(|(name, _)| &**name == "opacity");
+    &*call.method == "set_opacity" || (&*call.method == "set_fill" && opacity)
+}
 
 impl Checker<'_> {
     // ── Reporting ────────────────────────────────────────────────────────────
@@ -384,6 +399,7 @@ impl Checker<'_> {
             let (kind, shape) = self
                 .object(env, value)
                 .unwrap_or((ROOT_KIND.into(), Shape::Opaque));
+            self.unseen_fill(var, &base.item, &calls);
             let tree = Tree::Uniform(Presence::Off);
             env.vars.insert(
                 var,
@@ -993,9 +1009,53 @@ impl Checker<'_> {
         }
     }
 
+    /// A fill colour that nothing shows (spec §5.8): Manim takes it, and draws the object
+    /// as if it had not been given.
+    fn unseen_fill(&mut self, var: VarId, made: &Object, then: &[&Call]) {
+        let Object::New { ctor, args } = made else {
+            return;
+        };
+        let Some(kind) = self.sig.ctors.get(ctor).map(|sig| &sig.kind) else {
+            return;
+        };
+        let given = |name: &str| args.iter().any(|(given, _)| &**given == name);
+        if !given("fill_color") || given("fill_opacity") {
+            return;
+        }
+        let name = self.name(&Place::var(var));
+        match self.sig.inside(kind) {
+            Some(Inside::Open) => {
+                // What is made of parts takes no colour of its own either.
+                let lines = !self.sig.is_subkind(kind, VGROUP_KIND);
+                self.warn(
+                    "unseen",
+                    format!("{name} is given a fill colour, but has no inside to fill."),
+                    lines.then_some("Use “color” instead: that colours the line itself."),
+                );
+            }
+            Some(Inside::Clear) if !then.iter().any(|call| shows_the_fill(call)) => {
+                let at = self.diagnostics.len();
+                self.warn(
+                    "unseen",
+                    format!(
+                        "{name} is given a fill colour that cannot be seen: \
+                         its inside starts fully transparent."
+                    ),
+                    Some("Add the setting “fill opacity” as well."),
+                );
+                let warning = self.diagnostics.pop().expect("just reported");
+                self.faint.push((var, at, warning));
+            }
+            _ => {}
+        }
+    }
+
     /// A method call on an object of `found.kind`. Returns the receiver's new kind when the
     /// method reshapes it.
     fn call(&mut self, env: &Env, found: &Found, call: &Call) -> Option<Sym> {
+        if shows_the_fill(call) {
+            self.faint.retain(|(var, ..)| *var != found.place.root);
+        }
         let Some(method) = self.sig.method(&found.kind, &call.method) else {
             let message = match self.sig.methods.contains_key(&call.method) {
                 true => format!("A {} cannot do “{}”.", found.kind, call.method),

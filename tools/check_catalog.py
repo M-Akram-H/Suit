@@ -9,10 +9,15 @@ constant must resolve. Exits non-zero on the first run that finds a problem.
 import inspect
 import json
 import sys
+import tempfile
 
 import manim
 import numpy as np
 from manim.utils import rate_functions
+
+# Making a text or a formula writes files, which are not to be left where this is run.
+manim.config.media_dir = tempfile.mkdtemp(prefix="suit-catalogue-")
+manim.logger.setLevel("ERROR")
 
 problems = []
 checked = 0
@@ -90,6 +95,82 @@ for name, kind in sig["kinds"].items():
 
 for name, ctor in sig["ctors"].items():
     check_params(f"{name}()", find(name), ctor["params"])
+
+
+def sample(ty):
+    """Something of the type `ty`, to make an object with."""
+    if "mob" in ty:
+        return made(ty["mob"]) if ty["mob"] in sig["ctors"] else manim.Square()
+    if "fun" in ty:
+        return (lambda t: np.array([t, t, 0.0])) if ty["fun"][1] == "vec" else (lambda x: x)
+    return {"str": "ab", "real": 1.0, "int": 1, "bool": True}[ty["base"]]
+
+
+def made(name, **settings):
+    """A new `name`, given what it cannot do without and `settings`."""
+    given = []
+    for param in sig["ctors"][name]["params"]:
+        if param["pass"] == "variadic" and param["ty"] == {"base": "vec"}:
+            given += [manim.UP, manim.LEFT, manim.RIGHT]
+        elif param["pass"] == "variadic" or param["required"]:
+            given.append(sample(param["ty"]))
+    return find(name)(*given, **settings)
+
+
+def look(mobject):
+    """What can be seen of the colours of an object: of each part, the fill if it is not
+    fully transparent, and the stroke if there is one."""
+    seen = []
+    for part in mobject.get_family():
+        if isinstance(part, manim.VMobject) and part.has_points():
+            filled = part.get_fill_opacity() > 0
+            stroked = part.get_stroke_width() > 0 and part.get_stroke_opacity() > 0
+            seen.append(
+                (
+                    part.get_fill_color().to_hex() if filled else None,
+                    round(float(part.get_fill_opacity()), 3),
+                    part.get_stroke_color().to_hex() if stroked else None,
+                )
+            )
+    return seen
+
+
+def inherited(name, what):
+    """What the kind `name` says of `what`, or else the nearest kind above it that does."""
+    while name is not None:
+        if sig["kinds"][name][what] is not None:
+            return sig["kinds"][name][what]
+        name = sig["kinds"][name]["parent"]
+    return None
+
+
+def below(name, other):
+    while name is not None and name != other:
+        name = sig["kinds"][name]["parent"]
+    return name is not None
+
+
+# What a fill colour does to a new object is what the catalogue says of its inside: the
+# editor offers settings by it, and the checker warns by it.
+for name, ctor in sig["ctors"].items():
+    inside = inherited(ctor["kind"], "inside")
+    if inside is None:
+        continue
+    plain = look(made(name))
+    checked += 1
+    if (look(made(name, fill_color=manim.ORANGE)) != plain) != (inside == "filled"):
+        shows = "nothing" if inside == "filled" else "something"
+        problem(f"{name}: its inside is {inside}, but a fill colour alone shows {shows}")
+    if inside == "clear":
+        checked += 1
+        if look(made(name, fill_color=manim.ORANGE, fill_opacity=1.0)) == plain:
+            problem(f"{name}: its inside is clear, but a fill colour with an opacity shows nothing")
+    # Where there is no inside the checker says to use `color`, except for what is made
+    # of parts.
+    if inside == "open" and not below(ctor["kind"], "VGroup"):
+        checked += 1
+        if look(made(name, color=manim.ORANGE)) == plain:
+            problem(f"{name}: `color` shows nothing")
 
 for name, overloads in sig["methods"].items():
     for method in overloads:

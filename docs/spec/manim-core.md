@@ -1,6 +1,6 @@
 # Manim Core — abstract syntax, AST, type system and semantics
 
-Draft 0.7 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
+Draft 0.8 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
 
 Manim has no syntax of its own: a scene is a Python method that calls a library. What this
 document formalises is the small language *embedded* in those calls — make objects, change
@@ -54,13 +54,14 @@ else `b`. Rules are written premises-over-conclusion.
 MC is parameterised by a signature, exactly as first-order logic is:
 
 ```
-Σ = ⟨ K, ≤, elem, Ctor, Meth, Query, Anim, Rate, Fn, Const ⟩
+Σ = ⟨ K, ≤, elem, inside, Ctor, Meth, Query, Anim, Rate, Fn, Const ⟩
 ```
 
 | Component | Content | Examples |
 |---|---|---|
 | `K`, `≤` | Kinds: Manim's mobject classes, ordered by subclassing. A tree with root `Mobject`. | `Circle ≤ Arc ≤ VMobject ≤ Mobject` |
 | `elem : K ⇀ K` | Kind of the children of a container kind | `elem(VGroup) = VMobject`, `elem(MathTex) = VMobject` |
+| `inside : K ⇀ {open, clear, filled}` | What a kind has for an inside, where a fill colour would show | `inside(Line) = open`, `inside(Circle) = clear`, `inside(Dot) = filled` |
 | `Ctor` | `C : (l̄ : τ̄ = defaults) → κ` | `Circle : (radius: Real = 1, color: Color = …) → Circle` |
 | `Meth` | `f : (κ ; l̄ : τ̄)` — mutators; the receiver keeps its kind | `shift : (Mobject; by: Vec)`, `set_color : (Mobject; color: Color)` |
 | `Query` | `q : (κ ; l̄ : β̄) → β` — pure reads | `get_center : (Mobject) → Vec`, `c2p : (Axes; x, y: Real) → Vec` |
@@ -70,6 +71,23 @@ MC is parameterised by a signature, exactly as first-order logic is:
 
 Parameters are inherited along `≤` (Manim forwards `**kwargs` to the superclass), so
 `VMobject`'s `fill_opacity`, `stroke_width`, … are available on every vector kind **[src]**.
+
+Available is not the same as seen. `inside` says what a fill colour given to a new object
+does, and is inherited along `≤` as well, down to the kind that says otherwise:
+
+- `open`: there is no inside. `Line` and the kinds below it, `ParametricFunction`, `Plot`,
+  `Axes`. A fill colour shows nothing; `color` colours the line itself (except on `Axes`,
+  whose parts are made apart from it).
+- `clear`: an inside that starts fully transparent, which is every other vector kind:
+  Manim's `fill_opacity` is 0 unless a class says otherwise **[src]**. A fill colour shows
+  once a fill opacity comes with it.
+- `filled`: `Dot`, `Brace`, `Text`, `MarkupText`, `MathTex`, `DecimalNumber` and the kinds
+  below them. A fill colour shows as it is.
+
+It changes no rule of §5: `fill_color` stays a parameter of every vector kind, as it is in
+Manim. It is what the warning of §5.8 goes by, and what an editor offers settings by.
+`tools/check_catalog.py` makes an object of every constructor with and without a fill
+colour and compares what can be seen of the two **[run]**.
 
 A parameter also says how its arguments reach Python: by position, by name, as *the rest*
 (`*args`: any number, by position), or as a *list* (any number, passed together by name).
@@ -716,6 +734,7 @@ Warnings are legal programs that are probably not meant:
 | `p.animate(rotate(…))` | morphs along straight lines instead of rotating; `Rotate` is meant **[run]** |
 | an updater that reads an object which an animation then consumes | it keeps following the leftover geometry |
 | an object with a point that is not a number | Manim draws none of that object, and says nothing **[run]**; found by running the deck, not by the checker |
+| `let x = C(…, fill_color = e)` with no `fill_opacity`, where `inside(C)` is `open`, or is `clear` and nothing in the deck calls `set_opacity` or `set_fill(opacity = …)` on `x` | Manim takes the colour and shows nothing of it (§2) **[run]** |
 | a `Plot` told to draw on stretches where its rule has no value | it draws where it has one; reported with the rule and the stretches |
 | `Transform` where the source is never used again | `ReplacementTransform` is simpler and keeps kinds exact |
 | an object left `on` at the end of the deck with no later use | harmless; often a forgotten `FadeOut` |
@@ -1076,7 +1095,8 @@ which are unique and cannot shadow anything Manim exports.
 ## Appendix A — starting catalogue
 
 Enough to make real slides. It lives in `crates/sig/src/builtin.rs`; `tools/check_catalog.py`
-checks every kind, parameter name, default and constant in it against the installed Manim.
+checks every kind, parameter name, default, constant and inside in it against the installed
+Manim.
 Roles for animations are from the `introducer` / `remover` flags and clean-up code **[src]**,
 and the ones that matter most are confirmed by `tools/verify_quirks.py` **[run]**.
 

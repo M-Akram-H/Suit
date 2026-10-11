@@ -34,7 +34,7 @@ impl SuitApp {
                         ui.label(format!("stopped before the end of the deck: {reason}"));
                     });
                 }
-                for problem in session.problems() {
+                for (index, problem) in session.problems().enumerate() {
                     let step = problem
                         .node
                         .and_then(|id| locations.get(&id))
@@ -43,18 +43,32 @@ impl SuitApp {
                         Some(step) => format!("Slide {}, step {}", problem.slide + 1, step + 1),
                         None => format!("Slide {}", problem.slide + 1),
                     };
-                    let row = ui.horizontal(|ui| {
-                        ui.colored_label(style::severity_color(problem.severity), "⚠");
-                        ui.weak(place);
-                        ui.label(&problem.message);
-                    });
-                    if let Some(help) = &problem.help {
+                    let row = ui.scope(|ui| {
+                        // A problem is clicked to go to it: its words are not there to be
+                        // selected, which would take the click.
+                        ui.style_mut().interaction.selectable_labels = false;
                         ui.horizontal(|ui| {
-                            ui.add_space(22.0);
-                            ui.weak(help);
+                            ui.colored_label(style::severity_color(problem.severity), "⚠");
+                            ui.weak(place);
+                            ui.label(&problem.message);
                         });
-                    }
-                    if row.response.interact(Sense::click()).clicked() {
+                        if let Some(help) = &problem.help {
+                            ui.horizontal(|ui| {
+                                ui.add_space(22.0);
+                                ui.weak(help);
+                            });
+                        }
+                    });
+                    let whole = ui.interact(
+                        row.response.rect,
+                        ui.id().with(("problem", index)),
+                        Sense::click(),
+                    );
+                    if whole
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text("Go there")
+                        .clicked()
+                    {
                         chosen = Some((problem.slide, step));
                     }
                 }
