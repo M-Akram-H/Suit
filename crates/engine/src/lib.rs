@@ -3,9 +3,11 @@
 //! every change to the deck goes through one, so that all of them can be undone.
 
 mod edit;
+mod present;
 mod preview;
 
 use std::{
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
     time::{Duration, Instant},
@@ -16,6 +18,7 @@ use suit_core::{Command, Deck, DeckConfig, Node, NodeId, SlideContent, SlideId, 
 use suit_render::{Sidecar, Snapshot, Snapshots};
 use suit_sig::Signature;
 
+pub use crate::present::Presenter;
 use crate::preview::Worker;
 pub use crate::preview::{Preview, Recording};
 
@@ -67,11 +70,12 @@ pub struct Session {
     requested: Option<u64>,
     /// The revision the snapshots were made from.
     shown: Option<u64>,
-    /// The slide last recorded for playing.
-    recording: Option<Recording>,
-    /// The revision and slide a recording has been asked for and not yet arrived.
-    recording_wanted: Option<(u64, usize)>,
-    recording_problem: Option<String>,
+    /// The slides recorded for playing.
+    recordings: BTreeMap<usize, Recording>,
+    /// The revisions and slides recordings have been asked for and have not arrived.
+    recordings_wanted: BTreeSet<(u64, usize)>,
+    /// Per slide, why its recording failed, and for which revision of the deck.
+    recording_problems: BTreeMap<usize, (u64, String)>,
 }
 
 impl Session {
@@ -97,9 +101,9 @@ impl Session {
             worker: None,
             requested: None,
             shown: None,
-            recording: None,
-            recording_wanted: None,
-            recording_problem: None,
+            recordings: BTreeMap::new(),
+            recordings_wanted: BTreeSet::new(),
+            recording_problems: BTreeMap::new(),
         }
     }
 
@@ -211,8 +215,8 @@ impl Session {
     }
 
     /// For every node of the deck: the slide and step it belongs to.
-    pub fn locations(&self) -> std::collections::BTreeMap<NodeId, (usize, usize)> {
-        let mut locations = std::collections::BTreeMap::new();
+    pub fn locations(&self) -> BTreeMap<NodeId, (usize, usize)> {
+        let mut locations = BTreeMap::new();
         for slide in 0..self.deck.slides.len() {
             for (step, node) in self.steps_of(slide).iter().enumerate() {
                 locations.extend(node.ids().into_iter().map(|id| (id, (slide, step))));

@@ -27,3 +27,8 @@ unsafe_code = "forbid"
 
 [profile.dev]
 opt-level = 1
+
+# Dependencies are compiled once and then left alone, so they can afford full optimisation.
+# The canvas needs it: rasterising a full-HD frame is about four times faster.
+[profile.dev.package."*"]
+opt-level = 3

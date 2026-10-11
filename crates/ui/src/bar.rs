@@ -89,6 +89,14 @@ impl SuitApp {
                 self.session.redo();
             }
             ui.separator();
+            if ui
+                .button("Present")
+                .on_hover_text("Show the slides full screen, starting with this one (F5)")
+                .clicked()
+            {
+                self.start_presenting(ui.ctx());
+            }
+            ui.separator();
 
             match &self.session.preview {
                 Preview::Running => {

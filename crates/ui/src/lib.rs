@@ -7,6 +7,7 @@
 mod bar;
 mod canvas;
 mod editors;
+mod present;
 mod problems;
 mod properties;
 mod slides;
@@ -21,7 +22,7 @@ use suit_core::VarId;
 use suit_engine::Session;
 use suit_render::Sidecar;
 
-use crate::{bar::Dialog, canvas::Cached, stage::Stage};
+use crate::{bar::Dialog, canvas::Cached, present::Presenting, stage::Stage};
 
 pub struct SuitApp {
     pub session: Session,
@@ -30,6 +31,8 @@ pub struct SuitApp {
     /// Whether `session` has had its preview attached yet.
     previewing: bool,
     stage: Stage,
+    /// Set while the deck is being presented full screen instead of edited.
+    presenting: Option<Presenting>,
     thumbnails: Vec<Cached<(u64, [u32; 2])>>,
     /// The object last clicked on the canvas.
     pub picked: Option<VarId>,
@@ -48,6 +51,7 @@ impl SuitApp {
             sidecar,
             previewing: false,
             stage: Stage::default(),
+            presenting: None,
             thumbnails: Vec::new(),
             picked: None,
             notice: None,
@@ -99,8 +103,15 @@ impl SuitApp {
         if let Some(wait) = self.session.tick() {
             ui.ctx().request_repaint_after(wait);
         }
-        self.keys(ui.ctx());
         self.take_screenshot(ui.ctx());
+        // Presenting takes the whole window, and every key means something else there.
+        if self.presenting.is_some() {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::NONE)
+                .show(ui, |ui| self.present(ui));
+            return;
+        }
+        self.keys(ui.ctx());
 
         egui::Panel::top("bar").show(ui, |ui| self.bar(ui));
         egui::Panel::bottom("problems")
@@ -163,6 +174,9 @@ impl SuitApp {
         }
         if pressed(Key::Escape) {
             self.stop_playing();
+        }
+        if pressed(Key::F5) {
+            self.start_presenting(ctx);
         }
     }
 

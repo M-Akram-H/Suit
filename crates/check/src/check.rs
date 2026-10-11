@@ -216,7 +216,7 @@ impl Checker<'_> {
             self.warn(
                 "loop-auto-next",
                 "This slide both loops and moves on by itself.".into(),
-                Some("Which of the two wins depends on the player. Choose one."),
+                Some("Presented, it loops and never moves on; exported to the web, it moves on after one pass. Choose one."),
             );
         }
         if config.looping && (index == 0 || index + 1 == self.deck.slides.len()) {

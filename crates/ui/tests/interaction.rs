@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use eframe::egui::{self, Key, accesskit::Role};
 use egui_kittest::{Harness, kittest::Queryable};
 use suit_codegen::pretty::Pretty;
-use suit_core::{Anim, Command, Expr, Object, VarId};
+use suit_core::{Anim, Command, Expr, Object, Time, VarId};
 use suit_engine::Session;
 use suit_render::{Bounds, Clip, Drawn, Outline, Snapshot, Snapshots};
 use suit_ui::SuitApp;
@@ -387,12 +387,8 @@ fn a_drag_can_be_called_off() {
 
 // ── Playing ──────────────────────────────────────────────────────────────────
 
-/// A window whose slide has been recorded as `frames` frames at 60 fps. The harness moves
-/// time on a quarter of a second, fifteen frames, with every frame it draws.
-fn with_a_recording(looping: bool, frames: usize) -> Window {
-    let (mut window, _) = with_a_circle([0.0, 0.0]);
-    let session = &mut window.state_mut().session;
-    session.edit_slide(|slide| slide.config.looping = looping);
+/// What Manim would report for a slide of `frames` frames in which nothing changes.
+fn recording(frames: usize) -> Clip {
     let dot = Outline {
         points: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
         closed: false,
@@ -404,12 +400,21 @@ fn with_a_recording(looping: bool, frames: usize) -> Window {
         stroke: [1.0; 4],
         stroke_width: 4.0,
     };
-    session.install_recording(Clip {
+    Clip {
         pool: vec![drawn],
         frames: vec![vec![0]; frames],
         marks: Vec::new(),
         error: None,
-    });
+    }
+}
+
+/// A window whose slide has been recorded as `frames` frames at 60 fps. The harness moves
+/// time on a quarter of a second, fifteen frames, with every frame it draws.
+fn with_a_recording(looping: bool, frames: usize) -> Window {
+    let (mut window, _) = with_a_circle([0.0, 0.0]);
+    let session = &mut window.state_mut().session;
+    session.edit_slide(|slide| slide.config.looping = looping);
+    session.install_recording(recording(frames));
     window.run_ok();
     window
 }
@@ -516,4 +521,144 @@ fn selecting_or_editing_goes_back_to_the_steps() {
     press(&mut window, "Pause");
     assert!(window.state().session.clip().is_none());
     assert_eq!(window.state().playing_frame(), None);
+}
+
+// ── Presenting ───────────────────────────────────────────────────────────────
+
+/// A deck of three slides, the first two recorded as thirty frames each, the third not
+/// recorded yet. Presenting starts with the first.
+fn presenting_three_slides() -> Window {
+    let mut session = Session::blank();
+    session.add_object("Circle");
+    for _ in 0..2 {
+        session.add_slide();
+        session.insert_step(Command::Wait {
+            duration: Time::from_secs(0.5),
+        });
+    }
+    session.install_recording_for(0, recording(30));
+    session.install_recording_for(1, recording(30));
+    session.select(0, None);
+    let mut window = open(session);
+    window
+        .get_by_role_and_label(Role::Button, "Present")
+        .click();
+    window.step();
+    assert!(window.state().is_presenting());
+    window
+}
+
+/// A key press is two frames to the harness, a quarter of a second apart: the key going
+/// down, which is acted on, and the key coming up.
+fn key(window: &mut Window, key: Key) -> Option<(usize, Option<usize>)> {
+    window.key_press(key);
+    window.step();
+    window.state().presenting()
+}
+
+fn wait(window: &mut Window) -> Option<(usize, Option<usize>)> {
+    window.step();
+    window.state().presenting()
+}
+
+#[test]
+fn presenting_plays_a_slide_and_waits_for_a_key() {
+    let mut window = presenting_three_slides();
+    assert_eq!(wait(&mut window), Some((0, Some(0))));
+    assert_eq!(wait(&mut window), Some((0, Some(15))));
+    assert_eq!(wait(&mut window), Some((0, Some(29))));
+    assert_eq!(
+        wait(&mut window),
+        Some((0, Some(29))),
+        "it rests on its last frame"
+    );
+    // None of the editor is there while presenting.
+    assert!(window.query_by_label("Slides").is_none());
+
+    assert_eq!(key(&mut window, Key::ArrowRight), Some((1, Some(15))));
+    assert_eq!(
+        key(&mut window, Key::ArrowLeft),
+        Some((0, Some(15))),
+        "previous starts that slide over"
+    );
+}
+
+#[test]
+fn reverse_rewinds_and_next_plays_it_forwards_again() {
+    let mut window = presenting_three_slides();
+    wait(&mut window);
+    assert_eq!(key(&mut window, Key::ArrowRight), Some((1, Some(15))));
+    // The slide before, backwards: thirty frames, of which fifteen are gone by key-up.
+    assert_eq!(key(&mut window, Key::V), Some((0, Some(14))));
+    assert_eq!(wait(&mut window), Some((0, Some(0))));
+    assert_eq!(
+        key(&mut window, Key::ArrowRight),
+        Some((0, Some(15))),
+        "the same slide, forwards"
+    );
+    assert_eq!(
+        key(&mut window, Key::R),
+        Some((0, Some(15))),
+        "replay starts it over"
+    );
+}
+
+#[test]
+fn space_holds_the_slide_and_next_lets_it_go() {
+    let mut window = presenting_three_slides();
+    wait(&mut window);
+    assert_eq!(
+        key(&mut window, Key::Space),
+        Some((0, Some(0))),
+        "held where it was"
+    );
+    assert_eq!(wait(&mut window), Some((0, Some(0))));
+    // While held, next means carry on, not the next slide.
+    assert_eq!(key(&mut window, Key::ArrowRight), Some((0, Some(15))));
+}
+
+#[test]
+fn a_click_is_next_and_an_unrecorded_slide_is_waited_for() {
+    let mut window = presenting_three_slides();
+    wait(&mut window);
+    window.get_by_label("Presentation").click();
+    window.step();
+    assert_eq!(window.state().presenting().map(|(slide, _)| slide), Some(1));
+    // The third slide has no recording yet: nothing to show, and the clock does not run.
+    assert_eq!(key(&mut window, Key::ArrowRight), Some((2, None)));
+    assert_eq!(wait(&mut window), Some((2, None)));
+    window
+        .state_mut()
+        .session
+        .install_recording_for(2, recording(30));
+    assert_eq!(
+        wait(&mut window),
+        Some((2, Some(0))),
+        "it starts when the recording arrives"
+    );
+    assert_eq!(
+        key(&mut window, Key::ArrowRight),
+        Some((2, Some(29))),
+        "there is no slide after the last"
+    );
+}
+
+#[test]
+fn leaving_returns_to_the_slide_that_was_showing() {
+    let mut window = presenting_three_slides();
+    wait(&mut window);
+    key(&mut window, Key::ArrowRight);
+    window.key_press(Key::Escape);
+    window.run_ok();
+    assert!(!window.state().is_presenting());
+    assert_eq!(window.state().session.slide, 1);
+    assert!(
+        window.query_by_label("Slides").is_some(),
+        "the editor is back"
+    );
+
+    // F5 starts from the selected slide.
+    window.key_press(Key::F5);
+    window.step();
+    assert_eq!(wait(&mut window).map(|(slide, _)| slide), Some(1));
 }

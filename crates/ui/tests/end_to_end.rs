@@ -141,3 +141,83 @@ fn playing_a_slide_of_the_sample() {
     picture.save(&path).unwrap();
     println!("saved {}", path.display());
 }
+
+#[test]
+#[ignore = "needs Manim and a graphics driver"]
+fn presenting_the_sample() {
+    let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let mut window: Window = Harness::builder()
+        .with_size(egui::vec2(1600.0, 900.0))
+        .with_max_steps(200)
+        .wgpu()
+        .build_ui_state(
+            |ui, app: &mut SuitApp| app.show(ui),
+            SuitApp::new(Session::sample(), Some(sidecar)),
+        );
+    SuitApp::install_fonts(&window.ctx);
+    settle(&mut window);
+    window
+        .get_by_role_and_label(Role::Button, "Present")
+        .click();
+    window.step();
+    assert!(window.state().is_presenting());
+
+    // Draws frames until Manim has recorded the slide that is showing.
+    let showing = |window: &mut Window, slide: usize| {
+        let started = Instant::now();
+        loop {
+            window.step();
+            if let Some((shown, Some(frame))) = window.state().presenting() {
+                assert_eq!(shown, slide);
+                return frame;
+            }
+            let session = &window.state().session;
+            assert_eq!(session.recording_problem_of(slide), None);
+            assert!(
+                started.elapsed() < Duration::from_secs(120),
+                "no recording of slide {} within two minutes; asked for: {}, shown: {:?}",
+                slide + 1,
+                session.is_recording_slide(slide),
+                window.state().presenting(),
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
+    };
+    assert_eq!(
+        showing(&mut window, 0),
+        0,
+        "the first slide starts when its recording arrives"
+    );
+
+    // On to the fifth slide, the graph, and three seconds into it.
+    for slide in 1..=4 {
+        window.key_press(egui::Key::ArrowRight);
+        showing(&mut window, slide);
+    }
+    window.key_press(egui::Key::R);
+    // The key going down starts the slide over; the key coming up is a quarter second later.
+    assert_eq!(showing(&mut window, 4), 15);
+    // Eleven more quarter seconds make three seconds.
+    for _ in 0..11 {
+        window.step();
+    }
+    assert_eq!(window.state().presenting(), Some((4, Some(180))));
+
+    // Every slide the presentation asked for is recorded as long as the checker says.
+    let session = &window.state().session;
+    for slide in 0..=4 {
+        let report = &session.checked.slides[slide];
+        let frames = session.clip_of(slide).expect("recorded").frames.len() as u32;
+        assert_eq!(
+            frames,
+            report.frames + report.gap_frames,
+            "slide {}",
+            slide + 1
+        );
+    }
+
+    let picture = window.render().expect("the window can be drawn");
+    let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("presenting.png");
+    picture.save(&path).unwrap();
+    println!("saved {}", path.display());
+}

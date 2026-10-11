@@ -1,7 +1,7 @@
 //! Runs real Manim, so these are ignored unless asked for:
 //! `cargo test -p suit-render -- --ignored`
 
-use std::{path::Path, time::Instant};
+use std::{path::Path, thread, time::Instant};
 
 use suit_check::check;
 use suit_core::{Anim, Deck, DeckConfig, Object};
@@ -28,12 +28,14 @@ fn a_kept_process_answers_repeated_probes() {
     let sig = Signature::builtin();
     let mut prober = prober();
     let mut times = Vec::new();
+    let mut processes = Vec::new();
     for text in ["one", "two", "three"] {
         let deck = deck(text);
         let checked = check(&deck, &sig);
         let started = Instant::now();
         let snapshots = prober.probe(&deck, &sig, &checked).expect("Manim runs");
         times.push(started.elapsed());
+        processes.push(prober.process().expect("it is kept"));
         assert_eq!(snapshots.error, None);
         // The slide's start, then one snapshot per step.
         assert_eq!(snapshots.steps.len(), 5);
@@ -42,8 +44,13 @@ fn a_kept_process_answers_repeated_probes() {
         // The circle, and one outline per letter.
         assert_eq!(last.drawn.len(), 1 + text.len());
     }
+    // Alone, the first takes a second or more and the others a tenth of that; next to
+    // other tests they also wait their turn, so the times are only printed.
     println!("probe times: {times:?}");
-    assert!(times[2] < times[0], "later probes reuse the imported Manim");
+    assert!(
+        processes.iter().all(|process| *process == processes[0]),
+        "later probes reuse the imported Manim"
+    );
 }
 
 #[test]
@@ -117,4 +124,37 @@ fn a_slide_is_recorded_frame_for_frame() {
     );
     // While it is indicated the dot is drawn differently from when it rests.
     assert_ne!(clip.frames[12], clip.frames[24]);
+}
+
+#[test]
+#[ignore = "needs Manim"]
+fn two_manims_take_turns_in_the_shared_directory() {
+    // Manim rewrites a cached text file every time it uses it, so two of them making the
+    // same text at the same moment would read each other's half-written files.
+    let sig = Signature::builtin();
+    let mut deck = Deck::new(DeckConfig::default());
+    let mut slide = deck.add_slide("One");
+    for line in 0..8 {
+        let text = format!("line {line}, the same in both");
+        let label = slide.object(
+            &format!("label{line}"),
+            Object::new("Text").arg("text", text.as_str()),
+        );
+        slide.add(&[&label]);
+    }
+    slide.wait(1.0);
+    let checked = check(&deck, &sig);
+    assert_eq!(checked.diagnostics, []);
+
+    let problems = || {
+        let mut prober = prober();
+        let runs = (0..20).map(|_| prober.probe(&deck, &sig, &checked));
+        runs.filter_map(|result| result.map_or_else(Some, |snapshots| snapshots.error))
+            .collect::<Vec<String>>()
+    };
+    let (here, there) = thread::scope(|scope| {
+        let there = scope.spawn(problems);
+        (problems(), there.join().unwrap())
+    });
+    assert_eq!((here, there), (Vec::new(), Vec::new()));
 }

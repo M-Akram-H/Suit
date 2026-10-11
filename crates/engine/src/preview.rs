@@ -1,6 +1,7 @@
 //! Keeping the preview in step with the deck, off the thread that draws.
 
 use std::{
+    collections::{BTreeSet, VecDeque},
     sync::mpsc::{self, Receiver, Sender},
     thread,
     time::Duration,
@@ -28,7 +29,6 @@ pub enum Preview {
 
 /// A slide as Manim plays it, and which state of the deck it is a recording of.
 pub struct Recording {
-    pub slide: usize,
     pub clip: Clip,
     revision: u64,
 }
@@ -53,7 +53,8 @@ enum Reply {
     },
 }
 
-/// A thread that owns the Python process and answers the newest request of each kind.
+/// A thread that owns the Python process. It answers the newest request for the steps, and
+/// every request for a recording, one after another, as long as the deck has not changed.
 pub(crate) struct Worker {
     requests: Sender<Request>,
     replies: Receiver<Reply>,
@@ -65,43 +66,64 @@ impl Worker {
         let (outbox, replies) = mpsc::channel();
         thread::spawn(move || {
             let mut prober = Prober::new(sidecar);
-            // Ends when the session, and with it the sending side, is dropped.
-            while let Ok(first) = inbox.recv() {
-                // Of everything that has piled up, only the newest of each kind is worth
-                // answering; the steps first, because the canvas is waiting for them.
-                let (mut steps, mut clip) = (None, None);
-                for request in std::iter::once(first).chain(inbox.try_iter()) {
+            // Recordings still to be made.
+            let mut backlog: VecDeque<Request> = VecDeque::new();
+            loop {
+                // With nothing to do, wait; otherwise only look at what has come in. The
+                // wait ends for good when the session, and with it the sender, is dropped.
+                let arrived: Vec<Request> = match backlog.is_empty() {
+                    true => match inbox.recv() {
+                        Ok(first) => std::iter::once(first).chain(inbox.try_iter()).collect(),
+                        Err(_) => return,
+                    },
+                    false => inbox.try_iter().collect(),
+                };
+                let newest = arrived
+                    .iter()
+                    .chain(&backlog)
+                    .map(|request| request.revision)
+                    .max();
+                let mut steps = None;
+                for request in arrived {
                     match request.record {
                         None => steps = Some(request),
-                        Some(_) => clip = Some(request),
+                        Some(_) => backlog.push_back(request),
                     }
                 }
-                for request in [steps, clip].into_iter().flatten() {
-                    let Request {
+                // A recording of the deck as it used to be is of no use to anyone, and
+                // neither is the same recording twice.
+                backlog.retain(|request| Some(request.revision) == newest);
+                let mut slides = BTreeSet::new();
+                backlog.retain(|request| slides.insert(request.record));
+                // The steps first: the canvas is waiting for them. Then one recording, and
+                // back to see whether anything more urgent has arrived.
+                let Some(request) = steps.or_else(|| backlog.pop_front()) else {
+                    continue;
+                };
+                let Request {
+                    revision,
+                    deck,
+                    checked,
+                    record,
+                } = request;
+                let reply = match record {
+                    None => Reply::Steps {
                         revision,
-                        deck,
-                        checked,
-                        record,
-                    } = request;
-                    let reply = match record {
-                        None => Reply::Steps {
+                        result: prober.probe(&deck, &sig, &checked),
+                    },
+                    Some(slide) => {
+                        let result = prober.probe_frames(&deck, &sig, &checked, slide);
+                        Reply::Clip {
                             revision,
-                            result: prober.probe(&deck, &sig, &checked),
-                        },
-                        Some(slide) => {
-                            let result = prober.probe_frames(&deck, &sig, &checked, slide);
-                            Reply::Clip {
-                                revision,
-                                slide,
-                                result,
-                            }
+                            slide,
+                            result,
                         }
-                    };
-                    if outbox.send(reply).is_err() {
-                        return;
                     }
-                    wake();
+                };
+                if outbox.send(reply).is_err() {
+                    return;
                 }
+                wake();
             }
         });
         Worker { requests, replies }
@@ -123,21 +145,18 @@ impl Session {
                     slide,
                     result,
                 } => {
-                    if self.recording_wanted == Some((revision, slide)) {
-                        self.recording_wanted = None;
-                    }
-                    match result.and_then(|clip| match clip.error.clone() {
+                    self.recordings_wanted.remove(&(revision, slide));
+                    let whole = result.and_then(|clip| match clip.error.clone() {
                         Some(error) => Err(error),
                         None => Ok(clip),
-                    }) {
+                    });
+                    match whole {
                         Ok(clip) => {
-                            self.recording = Some(Recording {
-                                slide,
-                                clip,
-                                revision,
-                            })
+                            self.recordings.insert(slide, Recording { clip, revision });
                         }
-                        Err(problem) => self.recording_problem = Some(problem),
+                        Err(problem) => {
+                            self.recording_problems.insert(slide, (revision, problem));
+                        }
                     }
                 }
             }
@@ -193,48 +212,79 @@ impl Session {
         self.requested = None;
     }
 
-    // ── Playing a slide ──────────────────────────────────────────────────────
+    // ── Playing slides ───────────────────────────────────────────────────────
 
-    /// The selected slide as Manim plays it, if it has been recorded since the deck last
-    /// changed.
-    pub fn clip(&self) -> Option<&Clip> {
-        let recording = self.recording.as_ref()?;
-        let current = recording.revision == self.revision && recording.slide == self.slide;
-        current.then_some(&recording.clip)
+    /// Slide `slide` as Manim plays it, if it has been recorded since the deck last changed.
+    pub fn clip_of(&self, slide: usize) -> Option<&Clip> {
+        let recording = self.recordings.get(&slide)?;
+        (recording.revision == self.revision).then_some(&recording.clip)
     }
 
-    /// Has Manim record the selected slide, unless that is done or under way. The result
-    /// turns up in [`Session::clip`]; a failure in [`Session::recording_problem`].
-    pub fn record_slide(&mut self) {
-        let wanted = (self.revision, self.slide);
-        if self.clip().is_some() || self.recording_wanted == Some(wanted) {
+    /// The selected slide as Manim plays it.
+    pub fn clip(&self) -> Option<&Clip> {
+        self.clip_of(self.slide)
+    }
+
+    /// Has Manim record slide `slide`, unless that is done or under way. Recordings are made
+    /// one after another, in the order they were asked for. The result turns up in
+    /// [`Session::clip_of`]; a failure in [`Session::recording_problem_of`].
+    pub fn record(&mut self, slide: usize) {
+        let wanted = (self.revision, slide);
+        if self.clip_of(slide).is_some() || self.recordings_wanted.contains(&wanted) {
             return;
         }
-        self.recording_problem = None;
-        if self.send(Some(self.slide)) {
-            self.recording_wanted = Some(wanted);
+        // Whatever was asked for or went wrong before the deck changed is history.
+        let revision = self.revision;
+        self.recordings_wanted
+            .retain(|(asked, _)| *asked == revision);
+        self.recordings
+            .retain(|_, recording| recording.revision == revision);
+        self.recording_problems.remove(&slide);
+        if self.send(Some(slide)) {
+            self.recordings_wanted.insert(wanted);
         } else {
-            self.recording_problem = Some("There is no Manim to play the slide with.".to_owned());
+            let problem = "There is no Manim to play the slide with.".to_owned();
+            self.recording_problems.insert(slide, (revision, problem));
         }
     }
 
-    /// Whether a recording of the selected slide has been asked for and not yet arrived.
+    /// Has Manim record the selected slide.
+    pub fn record_slide(&mut self) {
+        self.record(self.slide);
+    }
+
+    /// Whether a recording of `slide` has been asked for and has not arrived yet.
+    pub fn is_recording_slide(&self, slide: usize) -> bool {
+        self.recordings_wanted.contains(&(self.revision, slide))
+    }
+
     pub fn is_recording(&self) -> bool {
-        self.recording_wanted == Some((self.revision, self.slide))
+        self.is_recording_slide(self.slide)
     }
 
-    /// Why the last recording asked for could not be made.
+    /// Why the last recording of `slide` asked for could not be made.
+    pub fn recording_problem_of(&self, slide: usize) -> Option<&str> {
+        let (revision, problem) = self.recording_problems.get(&slide)?;
+        (*revision == self.revision).then_some(problem.as_str())
+    }
+
     pub fn recording_problem(&self) -> Option<&str> {
-        self.recording_problem.as_deref()
+        self.recording_problem_of(self.slide)
     }
 
-    /// Uses `clip` as the recording of the selected slide as it is now. For front ends that
-    /// obtain recordings some other way, and for tests.
+    /// Uses `clip` as the recording of `slide` as it is now. For front ends that obtain
+    /// recordings some other way, and for tests.
+    pub fn install_recording_for(&mut self, slide: usize, clip: Clip) {
+        self.recordings.insert(
+            slide,
+            Recording {
+                clip,
+                revision: self.revision,
+            },
+        );
+    }
+
     pub fn install_recording(&mut self, clip: Clip) {
-        self.recording = Some(Recording {
-            slide: self.slide,
-            clip,
-            revision: self.revision,
-        });
+        self.install_recording_for(self.slide, clip);
     }
 }

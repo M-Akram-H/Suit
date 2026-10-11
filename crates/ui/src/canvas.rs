@@ -55,9 +55,52 @@ impl Frame {
     }
 }
 
-/// Paints `drawn`, back to front, on `background` into an image of `size` pixels. `moved`
-/// shifts the outlines of one object, in scene units: an object being dragged, before Manim
-/// has been asked where everything ends up.
+/// A surface to paint frames on, kept between frames so that playing a slide does not
+/// allocate a full-screen buffer sixty times a second.
+#[derive(Default)]
+pub struct Raster {
+    pixmap: Option<Pixmap>,
+}
+
+impl Raster {
+    /// Paints `drawn`, back to front, on `background` into an image of `size` pixels.
+    /// `moved` shifts the outlines of one object, in scene units: an object being dragged,
+    /// before Manim has been asked where everything ends up.
+    pub fn draw<'d>(
+        &mut self,
+        drawn: impl IntoIterator<Item = &'d Drawn>,
+        frame: Frame,
+        background: Rgba,
+        size: [u32; 2],
+        moved: Option<(VarId, [f32; 2])>,
+    ) -> egui::ColorImage {
+        let [width, height] = size.map(|side| side.max(1));
+        let fits = |pixmap: &Pixmap| pixmap.width() == width && pixmap.height() == height;
+        let pixmap = match self.pixmap.take().filter(fits) {
+            Some(pixmap) => self.pixmap.insert(pixmap),
+            None => self
+                .pixmap
+                .insert(Pixmap::new(width, height).expect("the size is not zero")),
+        };
+        let [r, g, b, _] = background.0;
+        pixmap.fill(Color::from_rgba8(r, g, b, 255));
+
+        let scale = height as f32 / frame.height;
+        let to_pixels = Transform::from_scale(scale, -scale)
+            .post_translate(width as f32 / 2.0, height as f32 / 2.0);
+        for drawn in drawn {
+            let shift = moved.filter(|(var, _)| drawn.owners.iter().any(|(owner, _)| owner == var));
+            let transform = match shift {
+                Some((_, [dx, dy])) => to_pixels.pre_translate(dx, dy),
+                None => to_pixels,
+            };
+            draw(pixmap, drawn, transform);
+        }
+        egui::ColorImage::from_rgba_premultiplied([width as usize, height as usize], pixmap.data())
+    }
+}
+
+/// Paints one picture on a surface of its own; see [`Raster::draw`].
 pub fn rasterize<'d>(
     drawn: impl IntoIterator<Item = &'d Drawn>,
     frame: Frame,
@@ -65,23 +108,7 @@ pub fn rasterize<'d>(
     size: [u32; 2],
     moved: Option<(VarId, [f32; 2])>,
 ) -> egui::ColorImage {
-    let [width, height] = size.map(|side| side.max(1));
-    let mut pixmap = Pixmap::new(width, height).expect("the size is not zero");
-    let [r, g, b, _] = background.0;
-    pixmap.fill(Color::from_rgba8(r, g, b, 255));
-
-    let scale = height as f32 / frame.height;
-    let to_pixels = Transform::from_scale(scale, -scale)
-        .post_translate(width as f32 / 2.0, height as f32 / 2.0);
-    for drawn in drawn {
-        let shift = moved.filter(|(var, _)| drawn.owners.iter().any(|(owner, _)| owner == var));
-        let transform = match shift {
-            Some((_, [dx, dy])) => to_pixels.pre_translate(dx, dy),
-            None => to_pixels,
-        };
-        draw(&mut pixmap, drawn, transform);
-    }
-    egui::ColorImage::from_rgba_premultiplied([width as usize, height as usize], pixmap.data())
+    Raster::default().draw(drawn, frame, background, size, moved)
 }
 
 fn draw(pixmap: &mut Pixmap, drawn: &Drawn, to_pixels: Transform) {
@@ -155,5 +182,115 @@ impl<K: PartialEq> Cached<K> {
             self.key = Some(key);
         }
         self.texture.as_ref().expect("just set").id()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Instant;
+
+    use suit_render::{Drawn, Outline};
+
+    use super::*;
+
+    /// Not a check, a measurement: `cargo test -p suit-ui full_hd -- --ignored --nocapture`
+    #[test]
+    #[ignore = "a timing, not a test"]
+    fn full_hd_frame_time() {
+        // Forty letter-sized closed shapes of thirty curves each: a slide with two lines of text.
+        let shape = |index: usize| {
+            let (cx, cy) = (
+                -6.0 + (index % 20) as f32 * 0.6,
+                1.0 - (index / 20) as f32 * 1.2,
+            );
+            let mut points = vec![[cx + 0.25, cy]];
+            for curve in 1..=30 {
+                let angle = |part: f32| (curve as f32 - 1.0 + part) / 30.0 * std::f32::consts::TAU;
+                let at = |a: f32, r: f32| [cx + r * a.cos(), cy + r * a.sin()];
+                points.extend([
+                    at(angle(0.33), 0.27),
+                    at(angle(0.66), 0.23),
+                    at(angle(1.0), 0.25),
+                ]);
+            }
+            let outline = Outline {
+                points,
+                closed: true,
+            };
+            Drawn {
+                owners: Vec::new(),
+                paths: vec![outline],
+                fill: [1.0; 4],
+                stroke: [0.3, 0.8, 0.9, 1.0],
+                stroke_width: 4.0,
+            }
+        };
+        let drawn: Vec<Drawn> = (0..40).map(shape).collect();
+        let frame = Frame {
+            width: 8.0 * 16.0 / 9.0,
+            height: 8.0,
+        };
+        // Where the time goes, at full HD.
+        let (width, height) = (1920u32, 1080u32);
+        let scale = height as f32 / frame.height;
+        let to_pixels = Transform::from_scale(scale, -scale)
+            .post_translate(width as f32 / 2.0, height as f32 / 2.0);
+        let timed = |what: &str, work: &mut dyn FnMut()| {
+            let started = Instant::now();
+            for _ in 0..10 {
+                work();
+            }
+            println!(
+                "  {what}: {:.2} ms",
+                started.elapsed().as_secs_f64() * 100.0
+            );
+        };
+        let mut pixmap = Pixmap::new(width, height).unwrap();
+        timed("new pixmap + clear", &mut || {
+            let mut fresh = Pixmap::new(width, height).unwrap();
+            fresh.fill(Color::from_rgba8(0, 0, 0, 255));
+        });
+        timed("build paths", &mut || {
+            for drawn in &drawn {
+                std::hint::black_box(path(&drawn.paths));
+            }
+        });
+        let paths: Vec<tiny_skia::Path> = drawn.iter().filter_map(|d| path(&d.paths)).collect();
+        let white = paint([1.0; 4]).unwrap();
+        timed("fill 40 shapes", &mut || {
+            for path in &paths {
+                pixmap.fill_path(path, &white, FillRule::Winding, to_pixels, None);
+            }
+        });
+        let stroke = Stroke {
+            width: 0.04,
+            miter_limit: 10.0,
+            line_cap: LineCap::Butt,
+            line_join: LineJoin::Miter,
+            dash: None,
+        };
+        timed("stroke 40 shapes", &mut || {
+            for path in &paths {
+                pixmap.stroke_path(path, &white, &stroke, to_pixels, None);
+            }
+        });
+        timed("to egui image", &mut || {
+            std::hint::black_box(egui::ColorImage::from_rgba_premultiplied(
+                [width as usize, height as usize],
+                pixmap.data(),
+            ));
+        });
+        for size in [[960, 540], [1920, 1080], [2560, 1440]] {
+            let started = Instant::now();
+            for _ in 0..10 {
+                rasterize(&drawn, frame, Rgba::BLACK, size, None);
+            }
+            println!(
+                "{}x{}: {:.1} ms per frame",
+                size[0],
+                size[1],
+                started.elapsed().as_secs_f64() * 100.0
+            );
+        }
     }
 }

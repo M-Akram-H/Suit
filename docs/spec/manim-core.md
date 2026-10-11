@@ -1,6 +1,6 @@
 # Manim Core — abstract syntax, AST, type system and semantics
 
-Draft 0.2 · 2026-10-10 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
+Draft 0.3 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
 
 Manim has no syntax of its own: a scene is a Python method that calls a library. What this
 document formalises is the small language *embedded* in those calls — make objects, change
@@ -591,7 +591,7 @@ Warnings are legal programs that are probably not meant:
 | Warned | Why |
 |---|---|
 | `loop` slide whose exit presence differs from its entry | the loop will visibly jump |
-| `loop` together with `auto_next` | meaning is player-specific **[open]** |
+| `loop` together with `auto_next` | the presenter loops for ever, the web export moves on after one pass (§6.6) **[src]** |
 | `loop` on the first or last slide | not supported by the RevealJS export **[src]** |
 | `p.animate(rotate(…))` | morphs along straight lines instead of rotating; `Rotate` is meant **[run]** |
 | an updater that reads an object which an animation then consumes | it keeps following the leftover geometry |
@@ -799,24 +799,45 @@ animation finished. manim-slides has the same device (`wait_time_between_slides`
 but applies it with a bare `self.wait` and not to the last slide, so the translation emits
 the gap itself (§7).
 
-**Presenting** is a small transition system over `⟨i, mode⟩`, `i` the current clip and
-`mode ∈ {▶ forward, ■ resting on the last frame, ◀ reversed}`:
+**Presenting** is a small transition system over `⟨i, d, m⟩`: `i` is the current clip,
+`d ∈ {→, ←}` says whether its frames run forwards or as `reverse(Fᵢ)`, and
+`m ∈ {▶ running, ‖ held, ■ resting on the last frame of that run}`. A newly loaded clip
+starts at its first frame; `→` runs at `scᵢ.playback_rate`, `←` at
+`scᵢ.reversed_playback_rate`.
 
 ```
-start                        ⟨1, ▶⟩
-clip i ends,  scᵢ.loop       ⟨i, ▶⟩ ⟶ ⟨i, ▶⟩
-clip i ends,  scᵢ.auto_next  ⟨i, ▶⟩ ⟶ ⟨i+1, ▶⟩        i < n
-clip i ends,  otherwise      ⟨i, ▶⟩ ⟶ ⟨i, ■⟩
-NEXT                         ⟨i, ·⟩ ⟶ ⟨i+1, ▶⟩        i < n
-REPLAY                       ⟨i, ·⟩ ⟶ ⟨i, ▶⟩
-REVERSE                      ⟨i, ·⟩ ⟶ ⟨i, ◀⟩          plays reverse(Fᵢ) at reversed_playback_rate
-PREVIOUS                     ⟨i, ·⟩ ⟶ ⟨i−1, ·⟩        i > 1
+start                            ⟨1, →, ▶⟩
+run ends,  scᵢ.loop              ⟨i, d, ▶⟩ ⟶ ⟨i, d, ▶⟩        from its first frame, for ever
+run ends,  scᵢ.auto_next         ⟨i, →, ▶⟩ ⟶ ⟨i+1, →, ▶⟩      i < n
+                                 ⟨i, ←, ▶⟩ ⟶ ⟨i, →, ▶⟩
+run ends,  otherwise             ⟨i, d, ▶⟩ ⟶ ⟨i, d, ■⟩
+NEXT                             ⟨i, d, ‖⟩ ⟶ ⟨i, d, ▶⟩        carries on where it was held
+                                 ⟨i, →, m⟩ ⟶ ⟨i+1, →, ▶⟩      m ≠ ‖,  i < n
+                                 ⟨i, ←, m⟩ ⟶ ⟨i, →, ▶⟩        m ≠ ‖
+PREVIOUS                         ⟨i, d, m⟩ ⟶ ⟨i−1, →, ▶⟩      i > 1
+REVERSE                          ⟨i, d, m⟩ ⟶ ⟨i−1, ←, ▶⟩      i > 1
+REPLAY                           ⟨i, d, m⟩ ⟶ ⟨i, d, ▶⟩        from its first frame
+PLAY/PAUSE                       ⟨i, d, ▶⟩ ⟶ ⟨i, d, ‖⟩        ⟨i, d, ‖⟩ ⟶ ⟨i, d, ▶⟩
 ```
 
-The key names and the per-slide options are from manim-slides' `config.py` **[src]**. The
-transitions themselves are **[open]** — they are the natural reading of those names, but the
-player has not been read yet. In particular the exact targets of `PREVIOUS` and of a finished
-`◀`, and whether `loop` beats `auto_next`, must be settled before we build our own presenter.
+Where no rule applies, nothing happens. These are manim-slides' transitions, read from
+`present/player.py` and `config.py` **[src]**; four of them are not what the names suggest:
+
+- `loop` beats `auto_next`: a looping clip never ends, so it never moves on by itself.
+  (The RevealJS export decides the other way: `data-autoslide` moves on after one pass.)
+- `NEXT` does not wait for the clip to finish — it loads the next one at once — and while
+  the clip is held it only lets it go.
+- `REVERSE` rewinds the clip *before* the current one: from the picture the current clip
+  starts with, back to the one that clip started with. `NEXT` then plays that same clip
+  forwards, so `REVERSE`, `NEXT` is "show me that step again".
+- `PLAY/PAUSE` cannot restart a clip that has come to rest; that is `REPLAY`.
+
+Suit's own presenter follows this table, with these differences. It starts at the selected
+slide (`⟨k, →, ▶⟩`). At the first clip `PREVIOUS` and `REVERSE` do nothing at all, where
+manim-slides turns its reversed flag on or off before it finds there is nothing to load.
+A clip that is not recorded yet is waited for, and its clock starts when it arrives. Of the
+player's options, `--next-terminates-loop`, `--start-paused`, `--exit-after-last-slide` and
+`--skip-all` have no counterpart yet.
 
 ### 6.7 Properties
 

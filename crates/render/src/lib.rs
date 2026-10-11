@@ -10,6 +10,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
 };
 
 use serde::{Deserialize, de::DeserializeOwned};
@@ -114,6 +115,21 @@ pub struct Sidecar {
 
 static RUNS: AtomicU64 = AtomicU64::new(0);
 
+/// A name no other run or server has, in this process or another.
+fn unique() -> String {
+    format!(
+        "{}-{}",
+        std::process::id(),
+        RUNS.fetch_add(1, Ordering::Relaxed)
+    )
+}
+
+/// What `server.py` should say.
+const SERVER: &str = include_str!("server.py");
+
+/// Files of ours this old were left behind by a Suit that was closed while Manim ran.
+const STALE: Duration = Duration::from_secs(24 * 60 * 60);
+
 /// The files of one probe run; removed again when this is dropped.
 struct Run {
     script: PathBuf,
@@ -172,11 +188,7 @@ impl Sidecar {
     fn prepare(&self, script: String) -> Result<Run, String> {
         fs::create_dir_all(&self.work)
             .map_err(|e| format!("cannot create {}: {e}", self.work.display()))?;
-        let id = format!(
-            "{}-{}",
-            std::process::id(),
-            RUNS.fetch_add(1, Ordering::Relaxed)
-        );
+        let id = unique();
         let run = Run {
             script: self.work.join(format!("probe-{id}.py")),
             result: self.work.join(format!("probe-{id}.json")),
@@ -186,36 +198,39 @@ impl Sidecar {
         Ok(run)
     }
 
-    /// Runs the deck in a fresh Python and returns the scene after every step. Takes a few
-    /// seconds, most of them Manim being imported; [`Prober`] avoids paying that every time.
-    pub fn probe(
-        &self,
-        deck: &Deck,
-        sig: &Signature,
-        checked: &Checked,
-    ) -> Result<Snapshots, String> {
-        let run = self.prepare(suit_codegen::probe(deck, sig, checked))?;
-        let output = Command::new(&self.python)
-            .arg(&run.script)
-            .arg(&run.result)
-            .current_dir(&self.work)
-            .output()
-            .map_err(|e| format!("cannot run {}: {e}", self.python.display()))?;
-        run.read().unwrap_or_else(|| {
-            // No result at all: Python failed before the scene ran (Manim missing, say).
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("Manim did not run: {}", last_line(&stderr)))
-        })
+    /// Removes what earlier runs left behind in the working directory.
+    fn sweep(&self) {
+        let Ok(entries) = fs::read_dir(&self.work) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            let ours = name.starts_with("probe-") || name.starts_with("server-");
+            let age = entry.metadata().and_then(|meta| meta.modified());
+            let old = age.is_ok_and(|at| at.elapsed().is_ok_and(|age| age > STALE));
+            if ours && old {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
     }
 
     /// Starts a Python that imports Manim once and then waits for probe scripts.
     fn serve(&self) -> Result<Server, String> {
         fs::create_dir_all(&self.work)
             .map_err(|e| format!("cannot create {}: {e}", self.work.display()))?;
+        self.sweep();
+        let id = unique();
         let script = self.work.join("server.py");
-        let log = self.work.join(format!("server-{}.log", std::process::id()));
-        fs::write(&script, include_str!("server.py"))
-            .map_err(|e| format!("cannot write {}: {e}", script.display()))?;
+        let log = self.work.join(format!("server-{id}.log"));
+        // Another Suit may be starting its Python on this very file: replace it whole or
+        // not at all.
+        if fs::read_to_string(&script).ok().as_deref() != Some(SERVER) {
+            let fresh = self.work.join(format!("server-{id}.py"));
+            fs::write(&fresh, SERVER)
+                .and_then(|()| fs::rename(&fresh, &script))
+                .map_err(|e| format!("cannot write {}: {e}", script.display()))?;
+        }
         let errors =
             fs::File::create(&log).map_err(|e| format!("cannot write {}: {e}", log.display()))?;
         let mut child = Command::new(&self.python)
@@ -308,6 +323,11 @@ impl Prober {
             sidecar,
             server: None,
         }
+    }
+
+    /// The Python process in use, if one has been started and is still there.
+    pub fn process(&self) -> Option<u32> {
+        self.server.as_ref().map(|server| server.child.id())
     }
 
     /// The scene after every step of the deck.
