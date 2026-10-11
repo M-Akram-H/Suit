@@ -1,0 +1,547 @@
+{
+  "config": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "background": "#000000",
+    "gap": 0.1,
+    "gap_on_loops": false
+  },
+  "slides": [
+    {
+      "id": 1,
+      "title": "Slide 1",
+      "config": {
+        "looping": false,
+        "auto_next": false,
+        "skip": false,
+        "playback_rate": 1.0,
+        "reversed_playback_rate": 1.0,
+        "notes": "",
+        "direction": "horizontal"
+      },
+      "content": {
+        "blueprint": {
+          "body": [
+            {
+              "id": 3,
+              "item": {
+                "let_object": {
+                  "var": 2,
+                  "value": {
+                    "id": 4,
+                    "item": {
+                      "new": {
+                        "ctor": "Axes",
+                        "args": []
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 5,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 6,
+                      "item": {
+                        "prim": {
+                          "ctor": "Create",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 2
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {
+                            "run_time": 2.0
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 14,
+              "item": {
+                "let_object": {
+                  "var": 13,
+                  "value": {
+                    "id": 18,
+                    "item": {
+                      "chain": {
+                        "base": {
+                          "id": 15,
+                          "item": {
+                            "new": {
+                              "ctor": "MathTex",
+                              "args": [
+                                [
+                                  "tex_strings",
+                                  {
+                                    "expr": {
+                                      "str": "f(x) = sin(x)"
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          }
+                        },
+                        "call": {
+                          "method": "move_to",
+                          "args": [
+                            [
+                              "point_or_mobject",
+                              {
+                                "expr": {
+                                  "vec3": [
+                                    {
+                                      "real": -5.09
+                                    },
+                                    {
+                                      "real": 3.26
+                                    },
+                                    {
+                                      "real": 0.0
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 16,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 17,
+                      "item": {
+                        "prim": {
+                          "ctor": "Write",
+                          "args": [
+                            [
+                              "vmobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 13
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {
+                            "run_time": 2.0
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 29,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 30,
+                      "item": {
+                        "prim": {
+                          "ctor": "Indicate",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 13
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 20,
+              "item": {
+                "let_object": {
+                  "var": 19,
+                  "value": {
+                    "id": 21,
+                    "item": {
+                      "new": {
+                        "ctor": "Plot",
+                        "args": [
+                          [
+                            "function",
+                            {
+                              "fun": {
+                                "param": 22,
+                                "body": {
+                                  "call": {
+                                    "fun": "sin",
+                                    "args": [
+                                      {
+                                        "var": 22
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 23,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 24,
+                      "item": {
+                        "prim": {
+                          "ctor": "Create",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 19
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {
+                            "run_time": 2.0
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 42,
+              "item": {
+                "let_object": {
+                  "var": 41,
+                  "value": {
+                    "id": 43,
+                    "item": {
+                      "new": {
+                        "ctor": "Plot",
+                        "args": [
+                          [
+                            "function",
+                            {
+                              "fun": {
+                                "param": 44,
+                                "body": {
+                                  "call": {
+                                    "fun": "/",
+                                    "args": [
+                                      {
+                                        "int": 1
+                                      },
+                                      {
+                                        "var": 44
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 27,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 28,
+                      "item": {
+                        "prim": {
+                          "ctor": "Indicate",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 19
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {
+                            "run_time": 2.0
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 60,
+              "item": {
+                "let_object": {
+                  "var": 59,
+                  "value": {
+                    "id": 65,
+                    "item": {
+                      "chain": {
+                        "base": {
+                          "id": 61,
+                          "item": {
+                            "new": {
+                              "ctor": "MathTex",
+                              "args": [
+                                [
+                                  "tex_strings",
+                                  {
+                                    "expr": {
+                                      "str": "f(x)=1/x"
+                                    }
+                                  }
+                                ]
+                              ]
+                            }
+                          }
+                        },
+                        "call": {
+                          "method": "move_to",
+                          "args": [
+                            [
+                              "point_or_mobject",
+                              {
+                                "expr": {
+                                  "vec3": [
+                                    {
+                                      "real": -5.38
+                                    },
+                                    {
+                                      "real": 3.27
+                                    },
+                                    {
+                                      "real": 0.0
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": 62,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 63,
+                      "item": {
+                        "prim": {
+                          "ctor": "ReplacementTransform",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 13
+                                  }
+                                }
+                              }
+                            ],
+                            [
+                              "target_mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 59
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 47,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 48,
+                      "item": {
+                        "prim": {
+                          "ctor": "ReplacementTransform",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 19
+                                  }
+                                }
+                              }
+                            ],
+                            [
+                              "target_mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 41
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 51,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 52,
+                      "item": {
+                        "prim": {
+                          "ctor": "Indicate",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 59
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 49,
+              "item": {
+                "play": {
+                  "anims": [
+                    {
+                      "id": 50,
+                      "item": {
+                        "prim": {
+                          "ctor": "Indicate",
+                          "args": [
+                            [
+                              "mobject",
+                              {
+                                "expr": {
+                                  "place": {
+                                    "root": 41
+                                  }
+                                }
+                              }
+                            ]
+                          ],
+                          "opts": {}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "names": {
+    "2": "axes",
+    "7": "text",
+    "13": "formula",
+    "19": "graph",
+    "22": "x",
+    "33": "gr",
+    "36": "x",
+    "41": "graph 2",
+    "44": "x",
+    "53": "formula 2",
+    "59": "formula 3"
+  },
+  "next_id": 65
+}
