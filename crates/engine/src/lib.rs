@@ -201,16 +201,17 @@ impl Session {
 
     /// The objects that exist just before the selected step: what that step can refer to.
     pub fn objects_before(&self) -> &[ObjectState] {
-        let previous = self
-            .step
+        self.objects_before_step(self.slide, self.step)
+    }
+
+    /// The objects that exist just before step `step` of slide `slide`; with no step,
+    /// when the slide starts.
+    pub fn objects_before_step(&self, slide: usize, step: Option<usize>) -> &[ObjectState] {
+        let previous = step
             .and_then(|step| step.checked_sub(1))
-            .and_then(|step| self.steps().get(step));
+            .and_then(|step| self.steps_of(slide).get(step));
         let after_previous = previous.and_then(|node| self.checked.after.get(&node.id));
-        let at_start = self
-            .checked
-            .slides
-            .get(self.slide)
-            .map(|report| &report.entry);
+        let at_start = self.checked.slides.get(slide).map(|report| &report.entry);
         after_previous.or(at_start).map_or(&[], Vec::as_slice)
     }
 

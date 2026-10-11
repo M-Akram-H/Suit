@@ -10,6 +10,7 @@ use crate::{
     SuitApp,
     bar::Dialog,
     canvas::{Cached, Frame, rasterize},
+    editors,
     files::{Browser, Purpose},
     style::{ACCENT, UV, WARNING},
 };
@@ -63,6 +64,11 @@ const MORE: [(&str, &str); 17] = [
     ("Number that can change", "ValueTracker"),
 ];
 
+/// Whether what `ctor` makes is something written, whose words are its point.
+fn written(ctor: &str) -> bool {
+    matches!(ctor, "Text" | "MarkupText" | "MathTex" | "Tex")
+}
+
 #[derive(Default)]
 pub struct Stage {
     picture: Cached<StageKey>,
@@ -107,6 +113,10 @@ impl SuitApp {
                     .clicked()
                 {
                     self.picked = self.session.add_object(ctor);
+                    // What a text says is the first thing anyone wants to change.
+                    if written(ctor) {
+                        editors::type_into_the_text(ui.ctx());
+                    }
                 }
             }
             if ui
@@ -123,7 +133,12 @@ impl SuitApp {
                         if ui.button(label).clicked() {
                             // Some go around another object: the picked one, or the newest.
                             match self.session.add_object_about(ctor, self.picked) {
-                                Some(var) => self.picked = Some(var),
+                                Some(var) => {
+                                    self.picked = Some(var);
+                                    if written(ctor) {
+                                        editors::type_into_the_text(ui.ctx());
+                                    }
+                                }
                                 None => {
                                     let what = label.trim_end_matches('…').to_lowercase();
                                     self.notice =
@@ -366,6 +381,14 @@ impl SuitApp {
                 (true, None, _) | (true, _, Some(_)) => {}
                 _ => self.picked = hit,
             }
+        }
+
+        // A double click on a text is a wish to change what it says.
+        if response.double_clicked()
+            && let Some(var) = response.interact_pointer_pos().and_then(under_pointer)
+        {
+            self.picked = Some(var);
+            editors::type_into_the_text(ui.ctx());
         }
 
         if let Some(mut dropped) = finished {

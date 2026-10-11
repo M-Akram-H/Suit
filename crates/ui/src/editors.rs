@@ -393,11 +393,40 @@ fn boolean(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
     }
 }
 
+/// Under this name in the window's memory: when a text setting was asked to take the
+/// keyboard.
+const TYPE_HERE: &str = "type here";
+
+/// Has the first text setting drawn next take the keyboard with all of it selected, so
+/// that what is typed replaces it: for a text that has just been put on the slide, or
+/// that was double-clicked.
+pub fn type_into_the_text(ctx: &egui::Context) {
+    let now = ctx.input(|input| input.time);
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new(TYPE_HERE), now));
+}
+
 fn text(ui: &mut egui::Ui, scope: &Scope, expr: &mut Expr) -> bool {
     match expr {
-        Expr::Str(text) => ui
-            .add(egui::TextEdit::singleline(text).desired_width(190.0))
-            .changed(),
+        Expr::Str(text) => {
+            let mut output = egui::TextEdit::singleline(text)
+                .desired_width(190.0)
+                .show(ui);
+            let now = ui.input(|input| input.time);
+            let asked = ui.data_mut(|data| data.remove_temp::<f64>(egui::Id::new(TYPE_HERE)));
+            // Asked a moment ago; a wish that found no text at the time has lapsed.
+            if asked.is_some_and(|at| now - at < 1.0) {
+                let response = &output.response.response;
+                response.request_focus();
+                let (start, end) = (0, text.chars().count());
+                let all = egui::text::CCursorRange::two(
+                    egui::text::CCursor::new(start),
+                    egui::text::CCursor::new(end),
+                );
+                output.state.cursor.set_char_range(Some(all));
+                output.state.store(ui.ctx(), response.id);
+            }
+            output.response.response.changed()
+        }
         other => formula(ui, scope, other),
     }
 }

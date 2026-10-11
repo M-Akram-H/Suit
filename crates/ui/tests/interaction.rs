@@ -1214,3 +1214,27 @@ fn pictures_are_named_from_where_the_deck_is() {
     session.save_as(&folder.join("art/deck.suit.json")).unwrap();
     assert_eq!(file_of(session, 0), "inside.png");
 }
+
+#[test]
+fn a_new_text_is_typed_into_straight_away() {
+    let mut window = open(Session::blank());
+    press(&mut window, "Text");
+    assert_eq!(
+        window.state().session.step,
+        Some(1),
+        "its entrance is the selected step"
+    );
+    // The words are there to be replaced: no step to find, nothing to click.
+    window.event(egui::Event::Text("Hello there".to_owned()));
+    window.run_ok();
+    assert_eq!(text_of_step(&window, 0), "text = Text(\"Hello there\")");
+    assert_eq!(window.state().session.step, Some(1));
+
+    // Whatever step is selected, a picked object's own settings are at hand.
+    press(&mut window, "Circle");
+    assert_eq!(window.state().session.step, Some(3));
+    menu(&mut window, "Add setting", "radius");
+    assert_eq!(text_of_step(&window, 2), "circle = Circle(radius = 1.0)");
+    press(&mut window, "Go to that step");
+    assert_eq!(window.state().session.step, Some(2));
+}

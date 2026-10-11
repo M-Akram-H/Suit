@@ -33,7 +33,7 @@ impl SuitApp {
                 if let Some(var) = self.picked {
                     ui.add_space(8.0);
                     ui.separator();
-                    self.object_summary(ui, var);
+                    self.picked_object(ui, var);
                 }
             });
     }
@@ -204,15 +204,53 @@ impl SuitApp {
         }
     }
 
-    fn object_summary(&self, ui: &mut egui::Ui, var: VarId) {
+    /// The object picked on the canvas: what it is and how it is made, to be changed
+    /// right here whichever step is selected. A text's words are found this way.
+    fn picked_object(&mut self, ui: &mut egui::Ui, var: VarId) {
         let session = &self.session;
         ui.label(RichText::new(session.name(var)).size(15.0).strong());
-        match session.creation(var) {
-            Some((slide, step)) => {
-                ui.weak(format!("Made on slide {}, step {}", slide + 1, step + 1))
-            }
-            None => ui.weak("Made by Python code."),
+        let Some((slide, step)) = session.creation(var) else {
+            ui.weak("Made by Python code.");
+            return;
         };
+        let here = slide == session.slide && session.step == Some(step);
+        let mut go = false;
+        ui.horizontal(|ui| {
+            ui.weak(format!("Made on slide {}, step {}", slide + 1, step + 1));
+            go = !here
+                && ui
+                    .small_button("Go to that step")
+                    .on_hover_text("Select the step that makes this object")
+                    .clicked();
+        });
+        if go {
+            self.session.select(slide, Some(step));
+            return;
+        }
+        // With that step selected, its settings are what is shown above.
+        if here {
+            return;
+        }
+        ui.add_space(4.0);
+        let node = &session.steps_of(slide)[step];
+        let scope = Scope::new(
+            &session.sig,
+            &session.deck,
+            session.objects_before_step(slide, Some(step)),
+            session.values_before_step(slide, Some(step)),
+        );
+        let mut command = node.item.clone();
+        let mut renamed = None;
+        ui.push_id(("picked", node.id), |ui| {
+            edit_command(ui, &scope, &mut command, None, &|_| None, &mut renamed);
+        });
+        let (id, changed) = (node.id, command != node.item);
+        if changed {
+            self.session.replace_step(id, command);
+        }
+        if let Some((var, name)) = renamed {
+            self.session.rename(var, &name);
+        }
     }
 }
 

@@ -330,22 +330,34 @@ impl Session {
 
     /// The named values that can be read by the selected step: those made before it.
     pub fn values_before(&self) -> Vec<VarId> {
+        self.values_before_step(self.slide, self.step)
+    }
+
+    /// The named values made before step `step` of slide `slide`.
+    pub fn values_before_step(&self, slide: usize, step: Option<usize>) -> Vec<VarId> {
         let made = |node: &Node<Command>| match &node.item {
             Command::LetValue { var, .. } => Some(*var),
             _ => None,
         };
-        self.steps_until_selection(false).filter_map(made).collect()
+        self.steps_until(slide, step.unwrap_or(0))
+            .filter_map(made)
+            .collect()
     }
 
     /// The steps of the deck from its start up to the selected one, with or without it.
     fn steps_until_selection(&self, inclusive: bool) -> impl Iterator<Item = &Node<Command>> {
-        let earlier = (0..self.slide).flat_map(|slide| self.steps_of(slide));
         let count = match (self.step, inclusive) {
             (Some(step), true) => step + 1,
             (Some(step), false) => step,
             (None, _) => 0,
         };
-        earlier.chain(self.steps().iter().take(count))
+        self.steps_until(self.slide, count)
+    }
+
+    /// The steps of the deck from its start up to the first `count` of slide `slide`.
+    fn steps_until(&self, slide: usize, count: usize) -> impl Iterator<Item = &Node<Command>> {
+        let earlier = (0..slide).flat_map(|slide| self.steps_of(slide));
+        earlier.chain(self.steps_of(slide).iter().take(count))
     }
 
     /// Names what `make` builds, which is of `kind`, and brings it onto the slide.
