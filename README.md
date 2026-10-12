@@ -155,25 +155,3 @@ Suit is at version 0.1. It works, and these are its edges:
 - The file format may still change.
 
 Written against **Manim 0.21.0** and **manim-slides 5.7.0**.
-
-## Licence
-
-Suit is offered under the **[PolyForm Noncommercial License 1.0.0](LICENSE)**.
-
-In plain words, and without replacing the licence text:
-
-- **You may** use Suit, read its code, change it, and share it with others, changed or
-  not, **for any noncommercial purpose**: personal projects, study, teaching, research.
-  Schools, universities, charities and public institutions may use it in their work.
-- **You may not** sell it, or use it or anything built from it for commercial purposes.
-- **You must** keep the copyright notice in [NOTICE](NOTICE) and the licence with every
-  copy you pass on. The work stays the author's; a copy does not make it yours.
-
-The decks you make with Suit are your own work. One thing to know: an exported Python
-file that uses a graph or a tangent contains Suit's own code for them (the classes `Plot`,
-`Tangent` and `Glide`), and that part stays under this licence.
-
-Copyright © 2026 M.Akram.Hlali. For a use the licence does not cover, ask by opening an
-issue.
-
-Suit runs Manim and manim-slides, which are separate projects under the MIT licence.
