@@ -23,9 +23,10 @@ python3 -m venv .venv
 `docker/constraints.txt` lists every package of an environment in which all tests pass,
 for an exact copy: `pip install -r requirements.txt -c docker/constraints.txt`.
 
-Suit looks for its Python in this order: the `SUIT_PYTHON` environment variable, a
-`.venv` next to the deck or in a folder above it, a `.venv` above the working directory,
-and finally `python3`.
+Suit looks for its Python in this order: the `SUIT_PYTHON` environment variable; a
+`.venv` next to the deck or in a folder above it; a `.venv` above the working directory;
+the environment an installed Suit sets up for its user (`~/.local/share/suit/venv`, on
+Windows `%LOCALAPPDATA%\Suit\venv`); and finally `python3` (on Windows `python`).
 
 ## Running
 
@@ -145,6 +146,45 @@ the code second. A claim in it about Manim is marked **[src]** if it was read in
 source and **[run]** if a tool confirms it by running Manim.
 
 Changes that are only about the window need no change to the specification.
+
+## Building the installers
+
+Both are built on Linux and land in `out/dist/`. Neither holds Manim: each brings a
+set-up step that installs it for one user (`packaging/linux/suit-setup`,
+`packaging/windows/setup-manim.ps1`).
+
+**The Fedora package** is built in a Fedora container, so that it is linked against
+Fedora's own libraries. It needs Docker and nothing else:
+
+```bash
+packaging/linux/build-rpm.sh              # for Fedora 44
+FEDORA=43 packaging/linux/build-rpm.sh    # for another version
+```
+
+`packaging/linux/suit.spec` says what the package contains and requires. Its LaTeX
+requirements are the smallest set with which Manim's usual formulas typeset; the test
+for a change to them is to install the package in a clean `fedora` container and run
+`suit-setup` there.
+
+**The Windows setup program** is cross-compiled and then packed with
+[NSIS](https://nsis.sourceforge.io):
+
+```bash
+rustup target add x86_64-pc-windows-gnu
+sudo apt install mingw-w64 nsis           # Fedora: mingw64-gcc mingw32-nsis
+packaging/windows/build-windows.sh
+```
+
+`packaging/windows/suit.nsi` is the setup program's script. `apps/suit/build.rs` puts
+the icon into `suit.exe`. The program can be tried under Wine; give Wine a prefix of its
+own and switch off `winemenubuilder`, or it writes shortcuts into your real desktop:
+
+```bash
+export WINEPREFIX=/tmp/suit-wine WINEDLLOVERRIDES=winemenubuilder.exe=d
+WGPU_BACKEND=vulkan wine target/windows/stage/suit.exe
+```
+
+Neither installer is signed. Windows therefore warns before running the setup program.
 
 ## The Docker image
 

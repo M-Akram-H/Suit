@@ -6,3 +6,4 @@
 Dockerfile text eol=lf
 docker/* text eol=lf
 *.png binary
+*.ico binary

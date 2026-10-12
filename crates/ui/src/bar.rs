@@ -185,7 +185,14 @@ impl SuitApp {
                     }
                 }
                 Preview::Failed(reason) => {
-                    ui.colored_label(style::WARNING, format!("Preview stopped: {reason}"));
+                    // The bar has room for a sentence. All of it is under Problems, and
+                    // comes up here when the pointer rests on it.
+                    let first = reason.split_inclusive(". ").next().unwrap_or(reason);
+                    ui.colored_label(
+                        style::WARNING,
+                        format!("Preview stopped: {}", first.trim_end()),
+                    )
+                    .on_hover_text(reason);
                     if ui.small_button("Try again").clicked() {
                         self.session.refresh_preview();
                     }

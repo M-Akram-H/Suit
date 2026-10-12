@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A deck is a JSON file whose name ends in .suit.json. Saying so lets a double click on
+     one open it in Suit. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-suit-deck">
+    <comment>Suit deck</comment>
+    <sub-class-of type="application/json"/>
+    <glob pattern="*.suit.json" weight="80"/>
+    <icon name="suit"/>
+  </mime-type>
+</mime-info>

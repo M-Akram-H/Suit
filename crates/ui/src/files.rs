@@ -111,7 +111,7 @@ impl Browser {
     }
 
     fn enter(&mut self, folder: PathBuf) {
-        let folder = folder.canonicalize().unwrap_or(folder);
+        let folder = suit_render::plain(folder.canonicalize().unwrap_or(folder));
         let listing = match fs::read_dir(&folder) {
             Ok(listing) => listing,
             Err(reason) => {
@@ -292,8 +292,11 @@ impl Browser {
     }
 }
 
+/// Where a person's own files are. Windows names it differently.
 fn home() -> Option<PathBuf> {
-    std::env::var_os("HOME")
+    ["HOME", "USERPROFILE"]
+        .into_iter()
+        .filter_map(std::env::var_os)
         .map(PathBuf::from)
-        .filter(|home| home.is_dir())
+        .find(|home| home.is_dir())
 }

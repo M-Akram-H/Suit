@@ -38,10 +38,45 @@ approximation.
 
 ## Get it running
 
+There are three ways:
+
+| Way | For |
+|---|---|
+| [An installer](#with-an-installer) | Windows, and Fedora Linux |
+| [Docker](#with-docker) | Any system. Suit runs in your web browser. |
+| [From the source](#without-docker-linux) | Linux, and people who want to change Suit |
+
+### With an installer
+
+The installers are on the [Releases page](https://github.com/M-Akram-H/Suit/releases).
+They install Suit itself. Manim, which Suit draws with, is then set up for your user
+account in one more step, which downloads about 300 MB.
+
+**Windows 10 or 11**: `Suit-0.1.0-Setup.exe`
+
+1. Run it. If Windows says *Windows protected your PC*, choose **More info** and then
+   **Run anyway**: the installer is not signed.
+2. On its last page, leave **Set up Manim now** ticked. A window installs Manim, and
+   offers to install Python and LaTeX if they are missing.
+3. Start **Suit** from the Start menu.
+
+**Fedora**: `suit-0.1.0-1.fc44.x86_64.rpm`
+
+```bash
+sudo dnf install ./suit-0.1.0-1.fc44.x86_64.rpm
+suit-setup
+```
+
+Then start **Suit** from the applications overview.
+
+[Installing](docs/02-installing.md) says what each step does and where things go.
+
+### With Docker
+
 This is the way that works on **Linux, macOS and Windows** alike. Suit, Manim and LaTeX
 run in a Docker container, and you use Suit in your web browser.
 
-### 1. Install two things
+#### 1. Install two things
 
 - **Git**: <https://git-scm.com/downloads>
 - **Docker**: [Docker Desktop](https://www.docker.com/products/docker-desktop/) on Windows
@@ -50,7 +85,7 @@ run in a Docker container, and you use Suit in your web browser.
 
 You need about 4 GB of free disk space.
 
-### 2. Get Suit and start it
+#### 2. Get Suit and start it
 
 Open a terminal (PowerShell on Windows) and run:
 
@@ -64,7 +99,7 @@ The **first** start builds everything: it downloads Manim and LaTeX and compiles
 That takes between fifteen and forty-five minutes, mostly depending on your internet
 connection, and happens only once. Later starts take a few seconds.
 
-### 3. Open it
+#### 3. Open it
 
 When the terminal prints
 
@@ -84,7 +119,7 @@ Click once inside the picture so that your keyboard goes to Suit. Then try it:
 3. Click **Text** in the bar above the canvas, and type. That is your first object.
 4. Click **Present** to show the deck full screen; **→** is next, **Q** leaves.
 
-### 4. Your own decks
+#### 4. Your own decks
 
 Save your decks into the folder the file browser opens in. On your computer that is the
 **`decks`** folder inside the Suit folder, so your work stays when the container stops.
@@ -144,9 +179,10 @@ the whole story.
 
 Suit is at version 0.1. It works, and these are its edges:
 
-- It has been built and tested on **Linux (x86-64)**, directly and in Docker. The Docker
-  image is made of parts that exist for macOS, Windows and ARM as well, but it has not
-  been run there yet. Reports are welcome.
+- It has been built and tested on **Linux (x86-64)**: directly, in Docker, and from the
+  Fedora package. The **Windows** installer is built on Linux and has been tried under
+  Wine, where it installs and Suit starts; it has not been run on a real Windows PC yet.
+  Docker on macOS, Windows and ARM is untried as well. Reports are welcome.
 - It knows a catalogue of 32 kinds of object and 31 animations, not all of Manim. A
   *Python code* step covers the rest.
 - Every edit takes about half a second to show, because Manim is asked each time.

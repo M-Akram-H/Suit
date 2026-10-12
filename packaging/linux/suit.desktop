@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Suit
+GenericName=Manim Slides Editor
+Comment=Make animated mathematical slides with Manim, without writing code
+Exec=suit %f
+Icon=suit
+Terminal=false
+Categories=Education;Math;Office;Presentation;
+Keywords=manim;slides;presentation;animation;mathematics;latex;
+MimeType=application/x-suit-deck;
+StartupWMClass=suit
+StartupNotify=true

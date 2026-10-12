@@ -5,7 +5,9 @@
 
 use std::{
     collections::BTreeMap,
-    env, fmt, fs,
+    env,
+    ffi::OsString,
+    fmt, fs,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
@@ -292,32 +294,95 @@ impl Run {
     }
 }
 
+/// Where a Python environment keeps its interpreter, and what Python is called where
+/// nothing better is known. Windows has its own answer to both.
+const IN_ENVIRONMENT: &str = if cfg!(windows) {
+    "Scripts/python.exe"
+} else {
+    "bin/python"
+};
+const ANY_PYTHON: &str = if cfg!(windows) { "python" } else { "python3" };
+
+/// The folder an installed Suit keeps what is its own in, for whoever is using it:
+/// `~/.local/share/suit` (or under `$XDG_DATA_HOME`), and on Windows `%LOCALAPPDATA%\Suit`.
+/// The Manim that Suit's set-up installs lives there, in `venv`.
+pub fn own_folder() -> Option<PathBuf> {
+    own_folder_in(cfg!(windows), |variable| env::var_os(variable))
+}
+
+/// The same, worked out from the environment variables `set` gives.
+fn own_folder_in(windows: bool, set: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
+    let under = |variable: &str| set(variable).map(PathBuf::from);
+    if windows {
+        return under("LOCALAPPDATA").map(|local| local.join("Suit"));
+    }
+    under("XDG_DATA_HOME")
+        .filter(|shared| shared.is_absolute())
+        .or_else(|| under("HOME").map(|home| home.join(".local/share")))
+        .map(|shared| shared.join("suit"))
+}
+
+/// A path the way people write it. On Windows a path that has been made whole starts
+/// with `\\?\`, which reads badly and which not every program takes.
+pub fn plain(path: PathBuf) -> PathBuf {
+    match cfg!(windows) {
+        true => without_the_long_form(path),
+        false => path,
+    }
+}
+
+fn without_the_long_form(path: PathBuf) -> PathBuf {
+    match path.to_str().and_then(|text| text.strip_prefix(r"\\?\")) {
+        // A path on another computer is written differently, and is left as it is.
+        Some(usual) if !usual.starts_with("UNC") => PathBuf::from(usual),
+        _ => path,
+    }
+}
+
 impl Sidecar {
-    /// Looks for a Python that has Manim: `$SUIT_PYTHON`, then a `.venv` in `near` or any
-    /// directory above it (or above the working directory), then `python3`.
+    /// Looks for a Python that has Manim: `$SUIT_PYTHON`; then a `.venv` in `near` or any
+    /// directory above it (or above the working directory), which is how Suit is run from
+    /// its source; then the one Suit's own set-up made for this person; then any Python.
     pub fn locate(near: &Path) -> Sidecar {
         let from_env = env::var_os("SUIT_PYTHON").map(PathBuf::from);
         let starts = [Some(near.to_path_buf()), env::current_dir().ok()];
         let from_venv = starts.into_iter().flatten().find_map(|start| {
-            let start = start.canonicalize().unwrap_or(start);
+            let start = plain(start.canonicalize().unwrap_or(start));
             start
                 .ancestors()
-                .map(|dir| dir.join(".venv/bin/python"))
+                .map(|dir| dir.join(".venv").join(IN_ENVIRONMENT))
                 .find(|python| python.is_file())
         });
+        let set_up = own_folder()
+            .map(|own| own.join("venv").join(IN_ENVIRONMENT))
+            .filter(|python| python.is_file());
         let python = from_env
             .or(from_venv)
-            .unwrap_or_else(|| PathBuf::from("python3"));
+            .or(set_up)
+            .unwrap_or_else(|| PathBuf::from(ANY_PYTHON));
 
         // Manim caches typeset formulas under the working directory, so a stable one makes
         // every run after the first much faster.
         let cache = env::var_os("XDG_CACHE_HOME")
             .map(PathBuf::from)
             .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
-            .unwrap_or_else(env::temp_dir);
+            .map(|cache| cache.join("suit"))
+            .or_else(|| own_folder().map(|own| own.join("cache")))
+            .unwrap_or_else(|| env::temp_dir().join("suit"));
         Sidecar {
             python,
-            work: cache.join("suit"),
+            work: cache,
+        }
+    }
+
+    /// What to do where there is no Manim to run, said for the system this is.
+    fn how_to_get_manim() -> &'static str {
+        if cfg!(windows) {
+            "Choose “Set up Manim for Suit” in the Start menu, or name a Python that has \
+             it in SUIT_PYTHON."
+        } else {
+            "Run suit-setup in a terminal (or, from Suit's source, start it with run.sh), \
+             or name a Python that has it in SUIT_PYTHON."
         }
     }
 
@@ -339,9 +404,9 @@ impl Sidecar {
             // than where Manim was installed, and found a Python that knows nothing of it.
             Failure::Broken(reason) if reason.contains("No module named 'manim'") => {
                 Failure::Broken(format!(
-                    "{} has no Manim. Start Suit with run.sh, which looks for the Python \
-                     that has it, or name that Python in SUIT_PYTHON.",
-                    self.python.display()
+                    "{} has no Manim. {}",
+                    self.python.display(),
+                    Sidecar::how_to_get_manim()
                 ))
             }
             other => other,
@@ -404,16 +469,34 @@ impl Sidecar {
         }
         let errors =
             fs::File::create(&log).map_err(|e| format!("cannot write {}: {e}", log.display()))?;
-        let mut child = Command::new(&self.python)
-            .arg("-u")
+        let mut python = Command::new(&self.python);
+        // Unbuffered, so that answers arrive when they are given; and reading and writing
+        // UTF-8 whatever the system's own habit is, or a name with an accent in a path
+        // would arrive as something else on Windows.
+        python
+            .args(["-u", "-X", "utf8"])
             .arg(&script)
             .arg(&own)
             .current_dir(&self.work)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(errors)
-            .spawn()
-            .map_err(|e| format!("cannot run {}: {e}", self.python.display()))?;
+            .stderr(errors);
+        // A program with a window of its own would otherwise have Windows open a black
+        // one next to it for every Python it starts.
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const NO_WINDOW: u32 = 0x0800_0000;
+            python.creation_flags(NO_WINDOW);
+        }
+        let mut child = python.spawn().map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => format!(
+                "There is no Python here to run Manim with ({} was not found). {}",
+                self.python.display(),
+                Sidecar::how_to_get_manim()
+            ),
+            _ => format!("cannot run {}: {e}", self.python.display()),
+        })?;
         let requests = child.stdin.take();
         let output = BufReader::new(child.stdout.take().expect("stdout was piped"));
         // Reading happens on a thread of its own, so that waiting for a reply can be given
@@ -613,5 +696,51 @@ impl Prober {
         // While the Manim that wrote them is certainly still there.
         result.load();
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod places {
+    use super::*;
+
+    #[test]
+    fn an_installed_suit_keeps_its_own_things_where_the_system_says() {
+        let with = |pairs: &'static [(&'static str, &'static str)]| {
+            move |variable: &str| {
+                let found = pairs.iter().find(|(name, _)| *name == variable);
+                found.map(|(_, value)| OsString::from(value))
+            }
+        };
+        let home = with(&[("HOME", "/home/ada")]);
+        assert_eq!(
+            own_folder_in(false, home),
+            Some(PathBuf::from("/home/ada/.local/share/suit"))
+        );
+        let moved = with(&[("HOME", "/home/ada"), ("XDG_DATA_HOME", "/data")]);
+        assert_eq!(
+            own_folder_in(false, moved),
+            Some(PathBuf::from("/data/suit"))
+        );
+        // A relative one is to be ignored, the standard says.
+        let wrong = with(&[("HOME", "/home/ada"), ("XDG_DATA_HOME", "data")]);
+        assert_eq!(
+            own_folder_in(false, wrong),
+            Some(PathBuf::from("/home/ada/.local/share/suit"))
+        );
+        let windows = with(&[("LOCALAPPDATA", r"C:\Users\ada\AppData\Local")]);
+        assert_eq!(
+            own_folder_in(true, windows),
+            Some(PathBuf::from(r"C:\Users\ada\AppData\Local").join("Suit"))
+        );
+        assert_eq!(own_folder_in(false, with(&[])), None);
+    }
+
+    #[test]
+    fn a_whole_windows_path_is_written_the_usual_way() {
+        let usual = |text: &str| without_the_long_form(PathBuf::from(text));
+        assert_eq!(usual(r"\\?\C:\Users\ada"), PathBuf::from(r"C:\Users\ada"));
+        assert_eq!(usual(r"C:\Users\ada"), PathBuf::from(r"C:\Users\ada"));
+        let elsewhere = r"\\?\UNC\server\share";
+        assert_eq!(usual(elsewhere), PathBuf::from(elsewhere));
     }
 }

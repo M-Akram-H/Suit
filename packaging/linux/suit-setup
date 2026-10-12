@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Installs Manim for Suit, for the person who runs this: into a Python environment of its
+# own under ~/.local/share/suit, which Suit looks into by itself. Nothing is installed for
+# the whole system, and nothing needs the administrator's password.
+#
+#   suit-setup            install Manim, or bring it up to what this Suit expects
+#   suit-setup --remove   take it away again
+#   suit-setup --wait     wait for Enter at the end (for when a click started this)
+set -uo pipefail
+
+own="${XDG_DATA_HOME:-$HOME/.local/share}/suit"
+venv="$own/venv"
+shared="${SUIT_SHARED:-/usr/share/suit}"
+
+wait_at_the_end=""
+remove=""
+for word in "$@"; do
+    case "$word" in
+        --wait) wait_at_the_end=yes ;;
+        --remove) remove=yes ;;
+        -h | --help)
+            sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+            exit 0
+            ;;
+        *)
+            echo "suit-setup: there is no option $word" >&2
+            exit 2
+            ;;
+    esac
+done
+
+finish() {
+    if [ -n "$wait_at_the_end" ]; then
+        echo
+        read -r -p "Press Enter to close this window. " _ || true
+    fi
+    exit "$1"
+}
+
+if [ -n "$remove" ]; then
+    rm -rf "$venv"
+    echo "Manim for Suit is removed from $venv."
+    finish 0
+fi
+
+# The versions Suit is written against are known to install on Python 3.12, so that one is
+# taken where it is there.
+python=""
+for candidate in ${SUIT_SETUP_PYTHON:-} python3.12 python3.13 python3.11 python3; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        python="$candidate"
+        break
+    fi
+done
+if [ -z "$python" ]; then
+    echo "suit-setup: there is no Python on this computer. Install it first:" >&2
+    echo "    sudo dnf install python3.12" >&2
+    finish 1
+fi
+version="$("$python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+echo "Setting up Manim for Suit with Python $version, in $venv"
+echo "This downloads about 300 MB and takes a few minutes."
+echo
+
+mkdir -p "$own"
+"$python" -m venv --clear "$venv" || {
+    echo "suit-setup: $python could not make a Python environment." >&2
+    finish 1
+}
+"$venv/bin/python" -m pip install --quiet --upgrade pip
+
+# Exactly the packages all of Suit's tests pass with, where the Python is the one they
+# were written down for; otherwise the two that matter, and whatever goes with them now.
+wanted=(-r "$shared/requirements.txt")
+if [ "$version" = "3.12" ] && [ -f "$shared/constraints.txt" ]; then
+    wanted+=(-c "$shared/constraints.txt")
+fi
+if ! "$venv/bin/python" -m pip install "${wanted[@]}"; then
+    echo >&2
+    echo "suit-setup: Manim could not be installed. What pip said is above." >&2
+    echo "If it could not build pycairo or manimpango, these are missing:" >&2
+    echo "    sudo dnf install gcc python3.12-devel cairo-devel pango-devel" >&2
+    finish 1
+fi
+
+echo
+if ! "$venv/bin/python" -c 'import manim, manim_slides; print("Manim", manim.__version__, "and manim-slides", manim_slides.__version__, "are installed.")'; then
+    echo "suit-setup: Manim was installed but does not start." >&2
+    finish 1
+fi
+missing=""
+for program in latex dvisvgm; do
+    command -v "$program" >/dev/null 2>&1 || missing="$missing $program"
+done
+if [ -n "$missing" ]; then
+    echo "LaTeX is not complete (missing:$missing), so formulas will not be drawn."
+    echo "Texts, shapes and graphs work without it."
+fi
+echo "Suit is ready. Start it from the applications menu, or with: suit"
+finish 0

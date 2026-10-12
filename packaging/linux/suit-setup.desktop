@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Set up Manim for Suit
+Comment=Download and install Manim, which Suit draws with, for your user account
+Exec=suit-setup --wait
+Icon=suit
+Terminal=true
+Categories=Education;Math;
+Keywords=manim;suit;install;

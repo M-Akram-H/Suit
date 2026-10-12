@@ -60,14 +60,34 @@ it stays yours:
 sudo chown -R "$USER" decks
 ```
 
+## The installers
+
+**Windows says *Windows protected your PC*.**
+The setup program is not signed. Choose **More info**, then **Run anyway**.
+
+**The set-up window says Manim could not be installed.**
+What `pip` said is above that line. Mostly it is the internet connection: run
+**Set up Manim for Suit** again. On Fedora, if it could not build `pycairo` or
+`manimpango`, the packages it needs were removed: `sudo dnf reinstall suit` brings them
+back.
+
+**Suit does not open on Windows, and a note opens instead.**
+Suit tried three ways of drawing its window and none started, which is mostly a graphics
+driver that is missing or too old. The note says what the system reported.
+
+**The first formula takes minutes on Windows.**
+MiKTeX is downloading the LaTeX packages it needs. Later formulas are quick.
+
 ## The canvas stays empty
 
-**The top bar says *Preview stopped: … has no Manim*.**
-Suit found a Python that does not have Manim. Without Docker, start Suit with
-`./run.sh`, which looks for the right one and says what is missing, or name the Python in
-`SUIT_PYTHON`. If `run.sh` reports that the `.venv` was made for another Python version,
-the `.venv` was created on another system or before an upgrade: delete it and make it
-again ([chapter 2](02-installing.md#3-suit-and-manim)).
+**The top bar says *Preview stopped: … has no Manim*, or *There is no Python here*.**
+Suit has not found a Python with Manim. With an installed Suit, run the set-up step:
+`suit-setup` on Fedora, **Set up Manim for Suit** in the Start menu on Windows. From the
+source, start Suit with `./run.sh`, which looks for the right Python and says what is
+missing. In any case a Python that has Manim can be named in `SUIT_PYTHON`. If `run.sh`
+reports that the `.venv` was made for another Python version, the `.venv` was created on
+another system or before an upgrade: delete it and make it again
+([chapter 2](02-installing.md#3-suit-and-manim)).
 
 **It says *Asking Manim…* for a long time.**
 The very first time, LaTeX typesets every formula and builds its font caches, which

@@ -1,11 +1,124 @@
 # 2. Installing
 
-There are two ways to run Suit.
+There are four ways to run Suit.
 
 | Way | For whom | What you install |
 |---|---|---|
+| [**The Windows installer**](#with-the-installer-on-windows) | Windows 10 and 11 | One setup program. Manim is set up for your account afterwards. |
+| [**The Fedora package**](#with-the-package-on-fedora) | Fedora Linux | One RPM, which brings Python and LaTeX with it. Manim is set up for your account afterwards. |
 | [**Docker**](#with-docker-on-any-machine) | Everyone, on Linux, macOS or Windows | Git and Docker. Manim, LaTeX and Suit itself come in the image. Suit is shown in a web browser. |
-| [**Directly**](#without-docker-on-linux) | Linux users who want a real window, and developers | Rust, Python, Manim, LaTeX |
+| [**From the source**](#without-docker-on-linux) | Linux users on other distributions, and developers | Rust, Python, Manim, LaTeX |
+
+The installers are on the [Releases page](https://github.com/M-Akram-H/Suit/releases).
+
+## With the installer, on Windows
+
+### What you need
+
+Windows 10 or 11 (64-bit), an internet connection, and about 1.5 GB of free space once
+Manim and LaTeX are there. You do not need to be an administrator: everything goes into
+your own account.
+
+### Installing
+
+1. Download `Suit-0.1.0-Setup.exe` and run it.
+2. Windows may say ***Windows protected your PC***. That is what it says about any
+   program whose maker has not bought a signing certificate. Choose **More info**, then
+   **Run anyway**.
+3. Go through the pages. On the last one, leave **Set up Manim now** ticked.
+
+### Setting up Manim
+
+A window opens and does the rest, asking before it installs anything for the whole
+computer:
+
+- It looks for **Python 3.12**. If there is none, it offers to install it with `winget`,
+  which comes with Windows.
+- It makes a Python environment for Suit alone and installs **Manim** into it
+  (about 300 MB, a few minutes).
+- It looks for **LaTeX**, which formulas need. If there is none, it offers to install
+  [MiKTeX](https://miktex.org/). Texts, shapes and graphs work without it.
+- It tells MiKTeX to fetch the LaTeX packages a formula needs by itself. The first
+  formula you make therefore takes a while.
+
+Then start **Suit** from the Start menu. If you skipped this step, or it failed, run it
+again at any time: **Start menu → Suit → Set up Manim for Suit**.
+
+### What goes where
+
+| What | Where |
+|---|---|
+| Suit, its examples, the uninstaller | `%LOCALAPPDATA%\Programs\Suit` |
+| Manim, and what it has typeset | `%LOCALAPPDATA%\Suit` |
+| Shortcuts | The Start menu, under *Suit*, and the desktop |
+
+**Uninstalling**: Settings → Apps → Suit, or **Start menu → Suit → Uninstall Suit**. It
+asks whether Manim should go as well.
+
+### What it was tested on
+
+The Windows build is made on Linux, and there has been no Windows PC to try it on. Under
+[Wine](https://www.winehq.org/), which runs Windows programs on Linux, the setup program
+installs and uninstalls cleanly, Suit starts, finds the Python that was set up for it and
+starts it, and the command line tool checks and exports decks. Drawing with Manim could
+not be tried there, and the set-up window (a PowerShell script) not at all. If something
+fails on your PC, please [report it](15-troubleshooting.md#reporting-a-problem).
+
+## With the package, on Fedora
+
+### Installing
+
+Download `suit-0.1.0-1.fc44.x86_64.rpm` and install it:
+
+```bash
+sudo dnf install ./suit-0.1.0-1.fc44.x86_64.rpm
+```
+
+`dnf` brings what Suit needs from Fedora's own packages: Python 3.12, the compiler and
+libraries two of Manim's parts are built with, and the LaTeX packages Manim's formulas
+use. On a system that has none of it yet, that is a few hundred megabytes.
+
+### Setting up Manim
+
+Manim is not a Fedora package, so it is installed for your user account, without `sudo`:
+
+```bash
+suit-setup
+```
+
+or choose **Set up Manim for Suit** in the applications overview. It makes a Python
+environment for Suit alone in `~/.local/share/suit` and installs Manim into it (about
+300 MB, a few minutes).
+
+Then start **Suit** from the applications overview, or type `suit`. A deck
+(`something.suit.json`) can also be opened by double-clicking it.
+
+### What goes where
+
+| What | Where |
+|---|---|
+| `suit`, `suit-cli`, `suit-setup` | `/usr/bin` |
+| Example decks | `/usr/share/suit/examples` |
+| Manim | `~/.local/share/suit/venv` |
+| What Manim has typeset | `~/.cache/suit` |
+
+**More LaTeX.** The package brings what Manim's ordinary formulas need. If a formula uses
+a LaTeX package that is missing, the top bar names the file LaTeX could not find; install
+it with `sudo dnf install 'tex(name.sty)'`, or everything at once with
+`sudo dnf install texlive-scheme-medium`.
+
+**Removing**: `suit-setup --remove`, then `sudo dnf remove suit`.
+
+**Another Fedora version.** The package is built for Fedora 44. For another one, build
+it yourself: [chapter 14](14-developing.md#building-the-installers).
+
+### What it was tested on
+
+The package was installed on a clean Fedora 44 (in a container): `dnf` found everything
+it requires, `suit-setup` installed Manim as an ordinary user, formulas typeset with the
+LaTeX packages it brings, and the installed Suit opened and drew the example decks. It
+has not yet been tried on a Fedora desktop with a real screen, where the launcher entry,
+the icon and opening a deck by double click come into play.
 
 ## With Docker, on any machine
 
@@ -201,10 +314,10 @@ SUIT_PYTHON=/path/to/python ./run.sh
 If the `.venv` was made inside a [distrobox](https://distrobox.it/) container and
 `run.sh` is called from outside it, the script notices and starts Suit in that container.
 
-### macOS and Windows without Docker
+### macOS
 
-Suit is plain Rust and needs nothing from Linux in particular, so it may well build
-there, given a Python with Manim. This has not been tried. Docker is the way that is
-known to work.
+Suit is plain Rust and needs nothing from Linux in particular, so it may well build on
+macOS, given a Python with Manim. This has not been tried. Docker is the way that is
+known to work there.
 
 Next: [3. Your first deck](03-first-deck.md)

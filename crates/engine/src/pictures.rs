@@ -54,10 +54,16 @@ fn for_each_picture(deck: &mut Deck, visit: &mut impl FnMut(&mut String)) {
 /// The parameter of a picture that says which file it is.
 const FILE: &str = "filename_or_array";
 
-/// `file` as a deck in `folder` names it.
+/// `file` as a deck in `folder` names it. A name inside the deck's folder is written with
+/// plain slashes on every system, so that a deck made on Windows opens elsewhere; Windows
+/// reads them too.
 fn named(folder: Option<&Path>, file: &Path) -> String {
     let inside = folder.and_then(|folder| file.strip_prefix(folder).ok());
-    inside.unwrap_or(file).display().to_string()
+    let name = inside.unwrap_or(file).display().to_string();
+    match inside.is_some() && cfg!(windows) {
+        true => name.replace('\\', "/"),
+        false => name,
+    }
 }
 
 /// The file a deck in `folder` means by `name`.

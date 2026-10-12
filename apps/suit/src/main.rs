@@ -1,6 +1,15 @@
 //! Suit: a visual editor for Manim slides.
 
-use std::path::{Path, PathBuf};
+// On Windows a program is either one with windows or one with a console, and says which.
+// Without this every start would open a black console behind the editor.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
+use std::{
+    env,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use eframe::egui;
 use suit_engine::{PresentOptions, Session};
@@ -97,11 +106,32 @@ fn app(launch: Launch) -> Result<SuitApp, String> {
     })
 }
 
-fn main() -> eframe::Result {
+/// The ways of drawing a window that are tried, in turn, when the one the system offers
+/// first does not start. Each is tried in a fresh run of the program, because a program
+/// gets to open its window system once.
+const OTHER_WAYS: [&str; 2] = ["vulkan", "gl"];
+/// How many of them the run that started this one has been through.
+const TRIES: &str = "SUIT_DRAWING_TRIES";
+
+/// Says what went wrong where someone will see it. On Windows a program with a window has
+/// nowhere to print to, so the message is written down and opened.
+fn say(message: &str) {
+    eprintln!("suit: {message}");
+    if cfg!(windows)
+        && let Some(own) = suit_render::own_folder()
+    {
+        let note = own.join("suit-did-not-start.txt");
+        if std::fs::create_dir_all(&own).is_ok() && std::fs::write(&note, message).is_ok() {
+            let _ = Command::new("notepad").arg(note).spawn();
+        }
+    }
+}
+
+fn main() {
     let app = match launch().and_then(app) {
         Ok(app) => app,
         Err(message) => {
-            eprintln!("suit: {message}");
+            say(&message);
             std::process::exit(2);
         }
     };
@@ -118,12 +148,39 @@ fn main() -> eframe::Result {
         viewport,
         ..Default::default()
     };
-    eframe::run_native(
+    static OPENED: AtomicBool = AtomicBool::new(false);
+    let run = eframe::run_native(
         "Suit",
         options,
         Box::new(move |creation| {
+            OPENED.store(true, Ordering::Relaxed);
             SuitApp::install_fonts(&creation.egui_ctx);
             Ok(Box::new(app))
         }),
-    )
+    );
+    let Err(problem) = run else { return };
+    // The window never opened: the graphics the system offered first would not start.
+    // Another way of drawing may, and is tried before giving up.
+    let tried: usize = env::var(TRIES)
+        .ok()
+        .and_then(|count| count.parse().ok())
+        .unwrap_or(0);
+    if !OPENED.load(Ordering::Relaxed)
+        && let Some(way) = OTHER_WAYS.get(tried)
+        && let Ok(this) = env::current_exe()
+    {
+        let again = Command::new(this)
+            .args(env::args_os().skip(1))
+            .env("WGPU_BACKEND", way)
+            .env(TRIES, (tried + 1).to_string())
+            .status();
+        if let Ok(ended) = again {
+            std::process::exit(ended.code().unwrap_or(1));
+        }
+    }
+    say(&format!(
+        "Suit could not open its window: {problem}\n\nThis is mostly a graphics driver \
+         that is missing or too old. Updating it is the thing to try."
+    ));
+    std::process::exit(1);
 }
