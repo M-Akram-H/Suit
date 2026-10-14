@@ -4,15 +4,15 @@
 //! intended outcome (an object that should have been introduced is treated as on scene) so
 //! that one mistake does not bury the rest of the slide in follow-up errors.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use suit_core::{
     Anim, Arg, Args, Call, Command, Deck, Expr, Node, NodeId, Object, Opts, Place, Presence, Raw,
     Slide, SlideContent, Sym, Updater, VarId,
 };
 use suit_sig::{
-    AnimParamType, Base, GROUP_KIND, Inside, Param, Pass, ROOT_KIND, Role, Signature, Type,
-    VGROUP_KIND,
+    AnimParamType, Base, GROUP_KIND, Inside, Outline, Param, Pass, ROOT_KIND, Role, Signature,
+    Type, VGROUP_KIND,
 };
 
 use crate::{
@@ -92,6 +92,7 @@ pub fn check(deck: &Deck, sig: &Signature) -> Checked {
         node: None,
         layers: 0,
         faint: Vec::new(),
+        bare: BTreeSet::new(),
     };
     if deck.slides.is_empty() {
         checker.error("empty-deck", "The deck has no slides.".into(), None);
@@ -104,8 +105,8 @@ pub fn check(deck: &Deck, sig: &Signature) -> Checked {
         .map(|(index, slide)| checker.slide(&mut env, slide, index))
         .collect();
     // From the last, so that the places of the earlier ones are still right.
-    for (_, at, warning) in std::mem::take(&mut checker.faint).into_iter().rev() {
-        checker.diagnostics.insert(at, warning);
+    for faint in std::mem::take(&mut checker.faint).into_iter().rev() {
+        checker.diagnostics.insert(faint.at, faint.warning);
     }
     Checked {
         diagnostics: checker.diagnostics,
@@ -124,9 +125,23 @@ struct Checker<'a> {
     slide: usize,
     node: Option<NodeId>,
     layers: u32,
-    /// Objects made with a fill colour and a fully transparent inside. Each is warned of,
-    /// where it would have been in `diagnostics`, unless its inside is made visible later.
-    faint: Vec<(VarId, usize, Diagnostic)>,
+    /// Warnings of a look that cannot be seen yet: a fill colour on an inside that starts
+    /// fully transparent, a stroke colour or opacity on what starts without an outline.
+    /// Each is said, where it would have been in `diagnostics`, unless something later in
+    /// the deck makes it seen.
+    faint: Vec<Faint>,
+    /// Objects made without an outline, which nothing has given one so far.
+    bare: BTreeSet<VarId>,
+}
+
+struct Faint {
+    /// The object whose look it is.
+    var: VarId,
+    /// Where in `diagnostics` it goes.
+    at: usize,
+    /// What a call does that makes it seen.
+    seen_after: fn(&Call) -> bool,
+    warning: Diagnostic,
 }
 
 /// A place that was looked up successfully.
@@ -166,6 +181,9 @@ struct Step {
 
 type Effect = Vec<Step>;
 
+/// Why a stroke colour or opacity on what starts without an outline shows nothing.
+const BARE: &str = "Manim draws it with a stroke width of 0.";
+
 /// `“a”`, `“a” and “b”`, `“a”, “b” and “c”`: names of the catalogue as a person says them.
 fn listed(names: &[&str]) -> String {
     let said: Vec<String> = names
@@ -179,10 +197,29 @@ fn listed(names: &[&str]) -> String {
     }
 }
 
+fn has_arg(call: &Call, name: &str) -> bool {
+    call.args.iter().any(|(given, _)| &**given == name)
+}
+
 /// Makes the inside of what it is called on visible, whatever it was.
 fn shows_the_fill(call: &Call) -> bool {
-    let opacity = call.args.iter().any(|(name, _)| &**name == "opacity");
-    &*call.method == "set_opacity" || (&*call.method == "set_fill" && opacity)
+    &*call.method == "set_opacity" || (&*call.method == "set_fill" && has_arg(call, "opacity"))
+}
+
+/// Gives what it is called on an outline, whatever it had.
+fn draws_the_outline(call: &Call) -> bool {
+    &*call.method == "set_stroke" && has_arg(call, "width")
+}
+
+/// How a person says that an outline is given a colour, an opacity, or both; `None` for
+/// neither.
+fn said_of_outline(colour: bool, opacity: bool) -> Option<&'static str> {
+    match (colour, opacity) {
+        (true, true) => Some("a stroke colour and a stroke opacity"),
+        (true, false) => Some("a stroke colour"),
+        (false, true) => Some("a stroke opacity"),
+        (false, false) => None,
+    }
 }
 
 impl Checker<'_> {
@@ -412,8 +449,9 @@ impl Checker<'_> {
             let (kind, shape) = self
                 .object(env, value)
                 .unwrap_or((ROOT_KIND.into(), Shape::Opaque));
-            if !self.unseen_by_parts(var, &base.item) {
+            if !self.unseen_settings(var, &base.item) {
                 self.unseen_fill(var, &base.item, &calls);
+                self.unseen_outline(var, &base.item, &calls);
             }
             let tree = Tree::Uniform(Presence::Off);
             env.vars.insert(
@@ -1024,10 +1062,11 @@ impl Checker<'_> {
         }
     }
 
-    /// Settings that reach no part of what is made of parts (spec §5.8): Manim takes them,
+    /// Settings that show nothing whatever they are given (spec §5.8): on what is made of
+    /// parts, which they do not reach, and on what is not a vector object. Manim takes them,
     /// and draws the object as if they had not been given. True if `made` is such an
-    /// object, of whose fill there is then nothing more to say.
-    fn unseen_by_parts(&mut self, var: VarId, made: &Object) -> bool {
+    /// object, of whose fill and outline there is then nothing more to say.
+    fn unseen_settings(&mut self, var: VarId, made: &Object) -> bool {
         let Object::New { ctor, args } = made else {
             return false;
         };
@@ -1060,11 +1099,14 @@ impl Checker<'_> {
             _ => Some("those reach"),
         }
         .map(|reach| format!("Use {} instead: {reach} every part.", listed(&calls)));
+        let why = match self.sig.made_of_parts(&sig.kind) {
+            true => format!("Manim makes its parts separately, and they get none of {it}"),
+            false => format!("Manim applies {it} to vector objects only"),
+        };
         self.warn(
             "unseen",
             format!(
-                "{name} is given {}, which {shows} nothing: Manim makes its parts \
-                 separately, and they get none of {it}.",
+                "{name} is given {}, which {shows} nothing: {why}.",
                 listed(&given)
             ),
             help.as_deref(),
@@ -1092,28 +1134,101 @@ impl Checker<'_> {
                 format!("{name} is given a fill colour, but has no inside to fill."),
                 Some("Use “color” instead: that colours the line itself."),
             ),
-            Some(Inside::Clear) if !then.iter().any(|call| shows_the_fill(call)) => {
-                let at = self.diagnostics.len();
-                self.warn(
-                    "unseen",
-                    format!(
-                        "{name} is given a fill colour that cannot be seen: \
-                         its inside starts fully transparent."
-                    ),
-                    Some("Add the setting “fill opacity” as well."),
-                );
-                let warning = self.diagnostics.pop().expect("just reported");
-                self.faint.push((var, at, warning));
-            }
+            Some(Inside::Clear) if !then.iter().any(|call| shows_the_fill(call)) => self.faint(
+                var,
+                shows_the_fill,
+                format!(
+                    "{name} is given a fill colour that cannot be seen: \
+                     its inside starts fully transparent."
+                ),
+                "Add the setting “fill opacity” as well.",
+            ),
             _ => {}
         }
+    }
+
+    /// A stroke colour or opacity on what starts without an outline (spec §5.8): Manim
+    /// takes it, and draws no outline for it to show on. Said of the settings `made` is
+    /// given and of the calls straight after, unless one of them gives it a stroke width.
+    fn unseen_outline(&mut self, var: VarId, made: &Object, then: &[&Call]) {
+        let Object::New { ctor, args } = made else {
+            return;
+        };
+        let Some(kind) = self.sig.ctors.get(ctor).map(|sig| &sig.kind) else {
+            return;
+        };
+        let given = |name: &str| args.iter().any(|(given, _)| &**given == name);
+        let drawn = given("stroke_width") || then.iter().any(|call| draws_the_outline(call));
+        if self.sig.outline(kind) != Some(Outline::Bare) || drawn {
+            return;
+        }
+        self.bare.insert(var);
+        if let Some(what) = said_of_outline(given("stroke_color"), given("stroke_opacity")) {
+            let name = self.name(&Place::var(var));
+            self.faint(
+                var,
+                draws_the_outline,
+                format!("{name} is given {what}, but has no outline: {BARE}"),
+                "Add the setting “stroke width” as well.",
+            );
+        }
+        for call in then {
+            self.unseen_stroke(var, call);
+        }
+    }
+
+    /// `set_stroke` with a colour or an opacity and no width, called on `var`, which was
+    /// made without an outline and has not been given one so far.
+    fn unseen_stroke(&mut self, var: VarId, call: &Call) {
+        let colour = has_arg(call, "color");
+        let opacity = has_arg(call, "opacity");
+        let what = said_of_outline(colour, opacity);
+        let Some(what) = what.filter(|_| &*call.method == "set_stroke") else {
+            return;
+        };
+        if draws_the_outline(call) || !self.bare.contains(&var) {
+            return;
+        }
+        let name = self.name(&Place::var(var));
+        self.faint(
+            var,
+            draws_the_outline,
+            format!("{name} is given {what} by “set stroke”, but has no outline: {BARE}"),
+            "Give “set stroke” a width as well.",
+        );
+    }
+
+    /// A warning about the look of `var` that is said unless a call that is `seen_after`
+    /// is made on it later in the deck.
+    fn faint(&mut self, var: VarId, seen_after: fn(&Call) -> bool, message: String, help: &str) {
+        let at = self.diagnostics.len();
+        self.warn("unseen", message, Some(help));
+        let warning = self.diagnostics.pop().expect("just reported");
+        self.faint.push(Faint {
+            var,
+            at,
+            seen_after,
+            warning,
+        });
     }
 
     /// A method call on an object of `found.kind`. Returns the receiver's new kind when the
     /// method reshapes it.
     fn call(&mut self, env: &Env, found: &Found, call: &Call) -> Option<Sym> {
-        if shows_the_fill(call) {
-            self.faint.retain(|(var, ..)| *var != found.place.root);
+        // What is called on a group reaches the objects in it.
+        let reaches = |var: VarId| {
+            env.resolve(&Place::var(var))
+                .is_some_and(|place| !place.disjoint(&found.place))
+        };
+        self.faint
+            .retain(|faint| !((faint.seen_after)(call) && reaches(faint.var)));
+        if draws_the_outline(call) {
+            self.bare.retain(|var| !reaches(*var));
+        }
+        // On a part, the kind is that of the parts, which have their outline.
+        let whole = found.place.path.is_empty();
+        if whole && self.sig.outline(&found.kind) == Some(Outline::Bare) {
+            self.unseen_stroke(found.place.root, call);
         }
         let Some(method) = self.sig.method(&found.kind, &call.method) else {
             let message = match self.sig.methods.contains_key(&call.method) {

@@ -139,7 +139,7 @@ predicts, what the canvas shows, and what manim-slides renders.
 
 - **The catalogue is checked against Manim.** `tools/check_catalog.py` loads the
   installed Manim and verifies every kind, setting, default length and constant in the
-  catalogue: about 500 facts. A typing mistake in the catalogue fails this check, not a
+  catalogue: about 700 facts. A typing mistake in the catalogue fails this check, not a
   render months later.
 - **The timing is checked against renders.** The checker says how many frames each slide
   has. The tests render decks with manim-slides and count the frames in the videos.

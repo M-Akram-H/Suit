@@ -1,6 +1,6 @@
 # Manim Core — abstract syntax, AST, type system and semantics
 
-Draft 0.10 · 2026-10-11 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
+Draft 0.11 · 2026-10-14 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
 
 Manim has no syntax of its own: a scene is a Python method that calls a library. What this
 document formalises is the small language *embedded* in those calls — make objects, change
@@ -54,7 +54,7 @@ else `b`. Rules are written premises-over-conclusion.
 MC is parameterised by a signature, exactly as first-order logic is:
 
 ```
-Σ = ⟨ K, ≤, elem, inside, Ctor, Meth, Query, Anim, Rate, Fn, Const ⟩
+Σ = ⟨ K, ≤, elem, inside, outline, Ctor, Meth, Query, Anim, Rate, Fn, Const ⟩
 ```
 
 | Component | Content | Examples |
@@ -62,6 +62,7 @@ MC is parameterised by a signature, exactly as first-order logic is:
 | `K`, `≤` | Kinds: Manim's mobject classes, ordered by subclassing. A tree with root `Mobject`. | `Circle ≤ Arc ≤ VMobject ≤ Mobject` |
 | `elem : K ⇀ K` | Kind of the children of a container kind | `elem(VGroup) = VMobject`, `elem(MathTex) = VMobject` |
 | `inside : K ⇀ {open, clear, filled}` | What a kind has for an inside, where a fill colour would show | `inside(Line) = open`, `inside(Circle) = clear`, `inside(Dot) = filled` |
+| `outline : K ⇀ {drawn, bare}` | Whether a kind starts with an outline, where a stroke colour and a stroke opacity would show | `outline(Circle) = drawn`, `outline(Text) = bare` |
 | `Ctor` | `C : (l̄ : τ̄ = defaults) → κ` | `Circle : (radius: Real = 1, color: Color = …) → Circle` |
 | `Meth` | `f : (κ ; l̄ : τ̄)` — mutators; the receiver keeps its kind | `shift : (Mobject; by: Vec)`, `set_color : (Mobject; color: Color)` |
 | `Query` | `q : (κ ; l̄ : β̄) → β` — pure reads | `get_center : (Mobject) → Vec`, `c2p : (Axes; x, y: Real) → Vec` |
@@ -89,16 +90,42 @@ Manim. It is what the warning of §5.8 goes by, and what an editor offers settin
 `tools/check_catalog.py` makes an object of every constructor with and without a fill
 colour and compares what can be seen of the two **[run]**.
 
+`outline` says the same of a stroke colour and a stroke opacity, and is inherited along `≤`
+in the same way:
+
+- `drawn`: some part starts with a stroke width above 0, which is every vector kind but
+  those below. A stroke colour shows as it is (except on `Axes`: see below).
+- `bare`: every part starts with a stroke width of 0 **[src]**: `Dot`, `Brace`, `Text`,
+  `MarkupText`, `MathTex`, `DecimalNumber` and the kinds below them, the same as those
+  whose inside is `filled`. A stroke colour or a stroke opacity draws no outline, whether
+  it is given to the new object or by `set_stroke(color = …)` or `set_stroke(opacity = …)`
+  later. Both show once there is a stroke width: given with them, or by
+  `set_stroke(width = …)` at any time. On `MathTex` and `Tex` Manim also colours the letters
+  with a stroke colour given to the new object, unless a fill colour is given too; that
+  shows, but it is still no outline **[run]**.
+
+It changes no rule of §5 either. It is what the warning of §5.8 about an outline goes by,
+and an editor gives a stroke colour or opacity that is chosen for a `bare` object the
+stroke width that shows it. `tools/check_catalog.py` checks that a `bare` object starts
+without an outline and a `drawn` one with one; that on a `bare` one a stroke colour or
+opacity alone, given to the new object or by `set_stroke`, shows nothing (but for the
+letters above), and that with a stroke width, given then or later, each shows; and that on
+a `drawn` one a stroke colour shows **[run]**.
+
 Nor does every setting reach what is drawn. A kind `κ ≤ VGroup` is *made of parts*: Manim
 makes the parts from the constructor's own parameters, and hands the ones it inherits along
-`≤` to the group, which draws nothing itself **[src]**. Write `unseen(C)` for these: the
-inherited parameters of `C` if its kind is `≤ VGroup`, and none otherwise. The catalogue has
-two such constructors, `Axes` and `NumberPlane`, and for both `unseen` is `color` with the
-fill and the stroke settings. None of the six shows anything there, alone or with the
-others **[run]**.
+`≤` to the group, which draws nothing itself **[src]**. A kind `κ ≰ VMobject` is not a
+vector object, and Manim draws it without the parameters it inherits: `Mobject` keeps
+`color` and applies it nowhere, which only `VMobject` does **[src]**. Write `unseen(C)` for
+these: the inherited parameters of `C` if its kind is `≤ VGroup` or `≰ VMobject`, and none
+otherwise. The catalogue has two constructors made of parts, `Axes` and `NumberPlane`, and
+for both `unseen` is `color` with the fill and the stroke settings. None of the six shows
+anything there, alone or with the others **[run]**. It has two that are not vector objects,
+`ImageMobject` and `ValueTracker`, and for both `unseen` is `color`: an image keeps the
+colours of its pixels, and a tracker is never drawn **[run]**.
 
-What a setting says of a new object, a method says of a finished one, and a method goes to
-every part of its receiver:
+What a setting says of a new vector object, a method says of a finished one, and a method
+goes to every part of its receiver:
 
 | Setting | The call that reaches the parts |
 |---|---|
@@ -107,16 +134,19 @@ every part of its receiver:
 | `stroke_width = e` | `set_stroke(width = e)` |
 | `stroke_opacity = e` | `set_stroke(opacity = e)` |
 
-The fill settings have none that would show: the parts are lines. Where both calls are
-made, `set_color` comes first. Among settings `stroke_color` counts over `color` wherever
-the two are written, and of two calls the later one counts **[run]**.
+The fill settings have none that would show: the parts are lines. Nor has `color` on what
+is not a vector object: `set_color` paints every pixel of an image in the colour, and shows
+nothing on a tracker. Where both calls are made, `set_color` comes first. Among settings
+`stroke_color` counts over `color` wherever the two are written, and of two calls the later
+one counts **[run]**.
 
-As with `inside`, no rule of §5 changes: the six stay parameters of `Axes`, as they are in
-Manim. `unseen` is what the second such warning of §5.8 goes by, and an editor does not
-offer what is in it. `tools/check_catalog.py` makes every object that is made of parts with
-each of these settings and with all of them, and with each call of the table, and compares
-what can be seen with the plain object; and it makes every other vector object with and
-without `color`, which shows on all of them **[run]**.
+As with `inside`, no rule of §5 changes: the six stay parameters of `Axes`, and `color` one
+of `ImageMobject`, as they are in Manim. `unseen` is what the second warning of §5.8 about
+a look goes by, and an editor does not offer what is in it. `tools/check_catalog.py` makes
+every object whose `unseen` is not empty with each of these settings and with all of them,
+and those made of parts with each call of the table, and compares what can be seen with
+the plain object, the pixels of an image included; and it makes every other object with
+and without `color`, which shows on all of them **[run]**.
 
 A parameter also says how its arguments reach Python: by position, by name, as *the rest*
 (`*args`: any number, by position), or as a *list* (any number, passed together by name).
@@ -763,8 +793,9 @@ Warnings are legal programs that are probably not meant:
 | `p.animate(rotate(…))` | morphs along straight lines instead of rotating; `Rotate` is meant **[run]** |
 | an updater that reads an object which an animation then consumes | it keeps following the leftover geometry |
 | an object with a point that is not a number | Manim draws none of that object, and says nothing **[run]**; found by running the deck, not by the checker |
-| `let x = C(…, fill_color = e)` with no `fill_opacity`, where `unseen(C)` is empty and `inside(C)` is `open`, or is `clear` and nothing in the deck calls `set_opacity` or `set_fill(opacity = …)` on `x` | Manim takes the colour and shows nothing of it (§2) **[run]** |
-| `let x = C(…, l = e)` with `l ∈ unseen(C)` | Manim takes the setting and no part of `x` gets it (§2) **[run]**; reported once for `x`, with the calls that do reach the parts |
+| `let x = C(…, fill_color = e)` with no `fill_opacity`, where `unseen(C)` is empty and `inside(C)` is `open`, or is `clear` and nothing in the deck calls `set_opacity` or `set_fill(opacity = …)` on `x`, a part of it, or a group that holds it | Manim takes the colour and shows nothing of it (§2) **[run]** |
+| `let x = C(…, l = e)` with `l ∈ unseen(C)` | Manim takes the setting and draws `x` without it: no part gets it, or `x` is not a vector object (§2) **[run]**; reported once for `x`, with the calls that do reach the parts where there are any |
+| `let x = C(…)` with `outline(C) = bare` and no `stroke_width`, where `x` is given `stroke_color` or `stroke_opacity` by `C`, or by a `set_stroke` without `width` called on the whole of `x` (straight after `C`, or later with the kind of `x` still `bare`), and nothing in the deck calls `set_stroke(width = …)` on `x`, a part of it, or a group that holds it | Manim takes them and draws no outline for them to show on (§2) **[run]**; reported where each is given |
 | a `Plot` told to draw on stretches where its rule has no value | it draws where it has one; reported with the rule and the stretches |
 | `Transform` where the source is never used again | `ReplacementTransform` is simpler and keeps kinds exact |
 | an object left `on` at the end of the deck with no later use | harmless; often a forgotten `FadeOut` |
@@ -1128,9 +1159,9 @@ Enough to make real slides. It lives in `crates/sig/src/builtin.rs`, and `suit-c
 prints all of it: 37 kinds, 32 of them with a constructor, 22 methods and 17 queries (a name
 counted once), 31 animations, 45 rate functions, 28 functions and 103 constants.
 `tools/check_catalog.py` checks every kind and its parent, every parameter name, every
-method and query, the defaults of the animations, and every rate function, constant and
-inside in it against the installed Manim, and what is `unseen` on the kinds that are made
-of parts.
+method and query, the defaults of the animations, and every rate function, constant,
+inside and outline in it against the installed Manim, and what is `unseen` on the kinds
+that are made of parts or are not vector objects.
 Roles for animations are from the `introducer` / `remover` flags and clean-up code **[src]**,
 and the ones that matter most are confirmed by `tools/verify_quirks.py` **[run]**.
 
@@ -1180,6 +1211,7 @@ The other 32 kinds each have a constructor of their own name. Every one of them 
 `color`, which is `Mobject`'s, and those below `VMobject` take its `fill_color`,
 `fill_opacity`, `stroke_color`, `stroke_opacity` and `stroke_width` as well (§2). The two
 below `VGroup` take all six and show none of them: they are `unseen` there (§2).
+`ImageMobject` and `ValueTracker` take `color` and show nothing of it either (§2).
 `elem(Mobject) = Mobject` and `elem(VMobject) = VMobject`, inherited the same way. With
 `Plot` and `Tangent` come the method `touch`, the query `slope` and the animation `Glide`
 (`mut`, on a `Tangent`); the catalogue check holds these to their own definitions instead of

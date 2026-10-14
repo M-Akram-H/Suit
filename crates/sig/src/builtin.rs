@@ -9,8 +9,8 @@ use suit_core::Rgba;
 
 use crate::{
     AnimParam, AnimParamType, Animation, Base, Constant, Ctor, Function, GROUP_KIND, Inside, Kind,
-    Method, Param, Pass, PyForm, Query, ROOT_KIND, Role, Signature, Type, VGROUP_KIND,
-    colors::COLORS,
+    Method, Outline, Param, Pass, PyForm, Query, ROOT_KIND, Role, Signature, Type, VGROUP_KIND,
+    VMOBJECT_KIND, colors::COLORS,
 };
 
 const REAL: Type = Type::Base(Base::Real);
@@ -20,7 +20,7 @@ const STR: Type = Type::Base(Base::Str);
 const VEC: Type = Type::Base(Base::Vec);
 const COLOR: Type = Type::Base(Base::Color);
 
-const VMOBJECT: &str = "VMobject";
+const VMOBJECT: &str = VMOBJECT_KIND;
 
 fn mob(kind: &str) -> Type {
     Type::Mob(kind.into())
@@ -100,6 +100,7 @@ impl Builder {
             elem: elem.map(Into::into),
             params,
             inside: None,
+            outline: None,
         };
         self.sig.kinds.insert(name.into(), kind);
     }
@@ -107,6 +108,11 @@ impl Builder {
     /// What the objects of the kind `name`, and of those below it, have for an inside.
     fn inside(&mut self, name: &str, inside: Inside) {
         self.sig.kinds.get_mut(name).unwrap().inside = Some(inside);
+    }
+
+    /// Whether the objects of the kind `name`, and of those below it, start with an outline.
+    fn outline(&mut self, name: &str, outline: Outline) {
+        self.sig.kinds.get_mut(name).unwrap().outline = Some(outline);
     }
 
     /// A kind together with its constructor.
@@ -426,6 +432,19 @@ fn kinds_and_ctors(b: &mut Builder) {
     }
     for open in ["Line", "ParametricFunction", "Plot", "Axes"] {
         b.inside(open, Inside::Open);
+    }
+
+    // What starts filled starts without an outline: a stroke colour alone leaves it as it was.
+    b.outline(VMOBJECT, Outline::Drawn);
+    for bare in [
+        "Dot",
+        "Brace",
+        "Text",
+        "MarkupText",
+        "MathTex",
+        "DecimalNumber",
+    ] {
+        b.outline(bare, Outline::Bare);
     }
 }
 
@@ -931,6 +950,18 @@ mod tests {
     }
 
     #[test]
+    fn an_outline_is_inherited_until_a_kind_says_otherwise() {
+        let sig = Signature::builtin();
+        assert_eq!(sig.outline("Square"), Some(Outline::Drawn));
+        assert_eq!(sig.outline("Circle"), Some(Outline::Drawn));
+        assert_eq!(sig.outline("DoubleArrow"), Some(Outline::Drawn));
+        assert_eq!(sig.outline("Dot"), Some(Outline::Bare));
+        assert_eq!(sig.outline("Tex"), Some(Outline::Bare));
+        assert_eq!(sig.outline("Integer"), Some(Outline::Bare));
+        assert_eq!(sig.outline("ImageMobject"), None);
+    }
+
+    #[test]
     fn what_is_made_of_parts_shows_nothing_of_what_it_inherits() {
         let sig = Signature::builtin();
         let unseen = |ctor: &str| -> Vec<&str> {
@@ -949,6 +980,10 @@ mod tests {
         assert_eq!(unseen("NumberPlane"), look);
         assert_eq!(unseen("Square"), [] as [&str; 0]);
         assert_eq!(unseen("NumberLine"), [] as [&str; 0]);
+        // Nor does what is not a vector object show the colour it is made with.
+        assert_eq!(unseen("ImageMobject"), ["color"]);
+        assert_eq!(unseen("ValueTracker"), ["color"]);
+        assert!(!sig.made_of_parts("ImageMobject"));
 
         // A colour and an outline have a call that reaches the parts. A fill has none that
         // would show: the parts are lines.
@@ -959,6 +994,9 @@ mod tests {
         );
         assert_eq!(sig.call_for("Axes", "fill_color"), None);
         assert_eq!(sig.call_for("ImageMobject", "stroke_color"), None);
+        // An image painted over is not an image in a colour, and a tracker shows nothing.
+        assert_eq!(sig.call_for("ImageMobject", "color"), None);
+        assert_eq!(sig.call_for("ValueTracker", "color"), None);
         assert_eq!(
             sig.calls_for(
                 "Axes",

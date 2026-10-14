@@ -91,7 +91,7 @@ All of them need the Python with Manim.
 
 | Tool | What it does |
 |---|---|
-| `tools/check_catalog.py` | Checks the catalogue against the installed Manim: every kind and its parent, every setting's name, default lengths and easings, constants, what a fill colour does to each object, and that what is made of parts (Axes, a Grid) shows nothing of the look it is made with while `set color` and `set stroke` do. |
+| `tools/check_catalog.py` | Checks the catalogue against the installed Manim: every kind and its parent, every setting's name, default lengths and easings, constants, what a fill colour and a stroke colour do to each object, and that what is made of parts (Axes, a Grid) shows nothing of the look it is made with while `set color` and `set stroke` do, nor a picture of a colour. |
 | `tools/verify_quirks.py` | Confirms the Manim behaviours the specification's section 6 relies on, one verdict per claim. |
 | `tools/verify_render.py` | Compares the frames of a manim-slides render with the numbers the checker predicted. |
 | `tools/contact_sheet.py` | Tiles sampled frames of every slide of a render into one picture, for a look at a whole deck. |
@@ -106,7 +106,7 @@ cargo run -q -p suit-cli -- signature | .venv/bin/python tools/check_catalog.py
 ```
 
 ```
-manim 0.21.0: 507 catalogue facts checked, 0 problem(s)
+manim 0.21.0: 690 catalogue facts checked, 0 problem(s)
 ```
 
 A picture of the window, for documentation or for a bug report:

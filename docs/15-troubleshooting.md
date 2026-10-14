@@ -113,6 +113,11 @@ and Problems say why.
 Manim fills nothing unless given a fill opacity, and a line has no inside at all. Suit
 warns and offers the correction ([chapter 5](05-objects.md#colours)).
 
+**A stroke colour does not show.**
+Texts, formulas, numbers, dots and braces have no outline until they are given a stroke
+width. Suit adds one when you add the stroke colour, and warns of one that has none
+([chapter 5](05-objects.md#colours)).
+
 **A colour given to Axes or a Grid does not show.**
 Manim builds their lines separately, and a setting of the whole reaches none of them. Suit
 does not offer such a setting, and warns of one that is there. Use **Then also… → set

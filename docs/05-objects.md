@@ -79,16 +79,23 @@ small menu next to it:
 
 ### Colours
 
-Every object can be given a **color** (Axes and a Grid in a way of their own, below).
-Shapes have more:
+Every object can be given a **color** (Axes and a Grid in a way of their own, below),
+except a picture, which keeps its own colours, and a number that can change, which is never
+drawn. Shapes have more:
 
 | Setting | What it colours |
 |---|---|
 | **color** | The whole object. For a shape that is its outline, and its inside once that is filled. This is the one you usually want. |
 | **fill color**, **fill opacity** | The inside. Manim leaves the inside of a shape fully transparent unless a fill opacity is given, so Suit adds the opacity when you add the colour. |
-| **stroke color**, **stroke opacity**, **stroke width** | The outline |
+| **stroke color**, **stroke opacity**, **stroke width** | The outline. Texts, formulas, numbers, dots and braces have none until they are given a stroke width, so Suit adds a width of 2 when you add a stroke colour or opacity to them. |
 
 Lines, arrows, graphs and tangents have no inside, so a fill is not offered for them.
+**Then also… → set fill** likewise starts with an opacity, and on a text, a formula, a
+number, a dot or a brace **Then also… → set stroke** starts with a width.
+
+If a deck has a fill colour that does not show, or a stroke colour or opacity on something
+without an outline, Suit warns, and Properties offers the correction: **Use color
+instead**, **Add fill opacity** or **Add stroke width**.
 
 A colour is picked from Manim's named colours (`BLUE`, `YELLOW`, `GRAY`, and their shades
 such as `BLUE_A` to `BLUE_E`), or written as a formula like `#58c4dd`.

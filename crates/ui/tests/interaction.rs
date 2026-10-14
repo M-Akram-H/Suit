@@ -1494,6 +1494,114 @@ fn a_look_given_to_axes_is_moved_to_where_it_shows() {
 }
 
 #[test]
+fn an_outline_comes_with_the_stroke_colour_that_needs_one() {
+    // A dot starts without an outline. A stroke colour chosen for it comes with the width
+    // that draws one, and so does an outline drawn later.
+    let mut window = open(Session::blank());
+    press(&mut window, "Dot");
+    press(&mut window, "New dot (Dot)");
+    menu(&mut window, "Add setting", "stroke color");
+    assert_eq!(
+        text_of_step(&window, 0),
+        "dot = Dot(stroke_color = WHITE, stroke_width = 2.0)"
+    );
+    menu(&mut window, "Then also…", "set stroke");
+    assert_eq!(
+        text_of_step(&window, 0),
+        "dot = Dot(stroke_color = WHITE, stroke_width = 2.0)\
+         .set_stroke(color = WHITE, width = 2.0)"
+    );
+    assert_eq!(window.state().session.checked.diagnostics, []);
+
+    // An opacity is the same. A shape has an outline already, and gets no width with it.
+    // Each goes in after the step that is selected.
+    press(&mut window, "Text");
+    press(&mut window, "New text (Text)");
+    menu(&mut window, "Add setting", "stroke opacity");
+    assert_eq!(
+        text_of_step(&window, 1),
+        "text = Text(\"Text\", stroke_opacity = 1.0, stroke_width = 2.0)"
+    );
+    press(&mut window, "Circle");
+    press(&mut window, "New circle (Circle)");
+    menu(&mut window, "Add setting", "stroke color");
+    assert_eq!(
+        text_of_step(&window, 2),
+        "circle = Circle(stroke_color = WHITE)"
+    );
+    assert_eq!(window.state().session.checked.diagnostics, []);
+}
+
+#[test]
+fn a_stroke_colour_that_nothing_shows_is_put_right_with_a_click() {
+    let bare = "There is no outline here: the stroke width is 0.";
+    let made = Object::new("Text")
+        .arg("text", "a")
+        .arg("stroke_color", Expr::konst("ORANGE"));
+    let mut window = with_one("label", made);
+    assert!(
+        window
+            .query_by_label_contains("is given a stroke colour, but has no outline")
+            .is_some()
+    );
+    press(&mut window, "New label (Text)");
+    assert!(window.query_by_label(bare).is_some());
+    press(&mut window, "Add stroke width");
+    assert_eq!(
+        text_of_step(&window, 0),
+        "label = Text(\"a\", stroke_color = ORANGE, stroke_width = 2.0)"
+    );
+    assert!(window.query_by_label(bare).is_none());
+    assert_eq!(window.state().session.checked.diagnostics, []);
+
+    // Taken away again, the width is not put back by itself: it is said, and offered.
+    window
+        .get_all_by_role_and_label(Role::Button, "×")
+        .last()
+        .expect("the width can be taken away")
+        .click();
+    window.run_ok();
+    assert_eq!(
+        text_of_step(&window, 0),
+        "label = Text(\"a\", stroke_color = ORANGE)"
+    );
+    assert!(window.query_by_label(bare).is_some());
+}
+
+#[test]
+fn a_colour_is_not_offered_where_nothing_shows_it() {
+    let unseen = "“color” shows nothing here: Manim applies it to vector objects only.";
+
+    // A number that can change is never drawn. Its colour is not on offer, which leaves
+    // nothing to add once it has its value.
+    let mut window = open(Session::blank());
+    menu(&mut window, "More objects", "Number that can change");
+    press(&mut window, "New tracker (ValueTracker)");
+    assert_eq!(
+        text_of_step(&window, 0),
+        "tracker = ValueTracker(value = 0.0)"
+    );
+    let add = window.query_by_role_and_label(Role::Button, "Add setting");
+    assert!(add.is_none());
+
+    // One given all the same is said to show nothing, and can only be taken away.
+    let mut deck = Deck::new(DeckConfig::default());
+    let mut slide = deck.add_slide("Slide 1");
+    let made = Object::new("ValueTracker").arg("color", Expr::konst("ORANGE"));
+    slide.object("tracker", made);
+    slide.wait(1.0);
+    let mut window = open(Session::new(deck, None));
+    assert!(
+        window
+            .query_by_label_contains("which shows nothing: Manim applies it to vector objects")
+            .is_some()
+    );
+    press(&mut window, "New tracker (ValueTracker)");
+    assert!(window.query_by_label(unseen).is_some());
+    assert!(window.query_by_label_contains("instead").is_none());
+}
+
+#[test]
 fn a_problem_takes_one_to_its_step() {
     let mut deck = Deck::new(DeckConfig::default());
     deck.add_slide("Slide 1").wait(1.0);

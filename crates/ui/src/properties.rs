@@ -10,7 +10,7 @@ use suit_core::{
     Anim, Args, Call, Command, Expr, Node, Object, Opts, Place, Presence, Sym, Time, UNBOUND,
     Updater, VarId,
 };
-use suit_sig::Inside;
+use suit_sig::{Inside, Outline};
 
 use crate::{
     SuitApp,
@@ -525,6 +525,7 @@ fn edit_object(
                         shows || given(args, &slot.name)
                     });
                     let filled = given(args, "fill_color");
+                    let stroked = given(args, "stroke_color") || given(args, "stroke_opacity");
                     if &**ctor == "Plot" {
                         // Its rule first, then where and its asymptotes, which have
                         // editors of their own; then what it shares with every shape.
@@ -540,14 +541,26 @@ fn edit_object(
                         ui.push_id("made", |ui| editors::args(ui, scope, &slots, args));
                     }
                     // Manim fills nothing unless told how much: a fill colour that has just
-                    // been chosen comes with the opacity that shows it.
+                    // been chosen comes with the opacity that shows it. Nor does it draw an
+                    // outline where there is none: a stroke colour or opacity that has just
+                    // been chosen there comes with the width that shows it.
                     let unseen = given(args, "fill_color") && !given(args, "fill_opacity");
+                    let bare = scope.sig.outline(&sig.kind) == Some(Outline::Bare)
+                        && !given(args, "stroke_width")
+                        && (given(args, "stroke_color") || given(args, "stroke_opacity"));
                     if !apart.is_empty() {
-                        moved = unseen_by_parts(ui, scope, &sig.kind, &apart, args);
-                    } else if unseen && !filled && inside == Some(Inside::Clear) {
-                        args.push(("fill_opacity".into(), 1.0_f64.into()));
-                    } else if unseen {
-                        unseen_fill(ui, inside, args);
+                        moved = unseen_settings(ui, scope, &sig.kind, &apart, args);
+                    } else {
+                        if unseen && !filled && inside == Some(Inside::Clear) {
+                            args.push(("fill_opacity".into(), 1.0_f64.into()));
+                        } else if unseen {
+                            unseen_fill(ui, inside, args);
+                        }
+                        if bare && !stroked {
+                            args.push(("stroke_width".into(), OUTLINE_WIDTH.into()));
+                        } else if bare {
+                            unseen_outline(ui, args);
+                        }
                     }
                 }
                 None => {
@@ -606,6 +619,10 @@ fn edit_object(
     }
 }
 
+/// The stroke width an outline is given where there was none: one that is seen round a
+/// letter. Manim's usual 4 covers the letters of a text over.
+const OUTLINE_WIDTH: f64 = 2.0;
+
 fn given(args: &Args, name: &str) -> bool {
     args.iter().any(|(given, _)| &**given == name)
 }
@@ -645,10 +662,23 @@ fn unseen_fill(ui: &mut egui::Ui, inside: Option<Inside>, args: &mut Args) {
     });
 }
 
-/// Says which of the settings among `args` reach no part of an object of `kind`, which is
-/// made of parts, and offers the calls that do. `unseen` are the settings that reach none.
-/// Returns the calls if they are asked for, which have then taken their settings with them.
-fn unseen_by_parts(
+/// Says that the stroke colour or opacity among `args` shows nothing, there being no
+/// outline, and offers the width that draws one.
+fn unseen_outline(ui: &mut egui::Ui, args: &mut Args) {
+    ui.horizontal_wrapped(|ui| {
+        ui.colored_label(style::WARNING, "⚠");
+        ui.weak("There is no outline here: the stroke width is 0.");
+        if ui.button("Add stroke width").clicked() {
+            args.push(("stroke_width".into(), OUTLINE_WIDTH.into()));
+        }
+    });
+}
+
+/// Says which of the settings among `args` show nothing on an object of `kind`, which is
+/// made of parts or is not a vector object, and offers the calls that do show. `unseen` are
+/// the settings that show nothing. Returns the calls if they are asked for, which have then
+/// taken their settings with them.
+fn unseen_settings(
     ui: &mut egui::Ui,
     scope: &Scope,
     kind: &Sym,
@@ -680,18 +710,24 @@ fn unseen_by_parts(
             None => String::new(),
         }
     };
-    let shows = if given.len() == 1 { "shows" } else { "show" };
-    let why = format!(
-        "{} {shows} nothing here: the parts are made separately.",
-        said(&given, true)
-    );
+    let (shows, it) = if given.len() == 1 {
+        ("shows", "it")
+    } else {
+        ("show", "them")
+    };
+    let why = match scope.sig.made_of_parts(kind) {
+        true => "the parts are made separately".to_owned(),
+        false => format!("Manim applies {it} to vector objects only"),
+    };
+    let why = format!("{} {shows} nothing here: {why}.", said(&given, true));
     let offer = format!("Use {} instead", said(&methods, false));
 
     let mut asked = Vec::new();
     ui.horizontal_wrapped(|ui| {
         ui.colored_label(style::WARNING, "⚠");
         ui.weak(why);
-        // A fill has no call that would show: the parts are lines.
+        // A fill has no call that would show: the parts are lines. Nor has a colour where
+        // there are no vectors to colour.
         if methods.is_empty() || !ui.button(offer).clicked() {
             return;
         }
@@ -725,9 +761,14 @@ fn starting_call(scope: &Scope, kind: &Sym, method: &Sym) -> Call {
         fill_required(scope, &slots, &mut call.args);
     }
     // To fill is to say with what and how much: an inside mostly starts fully transparent,
-    // and a colour alone would leave it so.
+    // and a colour alone would leave it so. Likewise to outline what has no outline.
+    let bare = scope.sig.outline(kind) == Some(Outline::Bare);
     if &**method == "set_fill" {
         call = call.arg("color", Expr::konst("WHITE")).arg("opacity", 1.0);
+    } else if &**method == "set_stroke" && bare {
+        call = call
+            .arg("color", Expr::konst("WHITE"))
+            .arg("width", OUTLINE_WIDTH);
     }
     call
 }

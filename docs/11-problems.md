@@ -48,6 +48,9 @@ Problems come in two strengths:
 | *“label” keeps following “circle”, which ReplacementTransform uses up.* | The follower would go on following what is left of an object that is gone. | Add **Stop keeping on** before, and **Keep doing…** for the new object after. |
 | *“line” is given a fill colour, but has no inside to fill.* | Manim takes the colour and shows nothing. | **Use color instead**, offered in Properties. |
 | *“circle” is given a fill colour that cannot be seen: its inside starts fully transparent.* | The same, for a shape with no fill opacity. | **Add fill opacity**, offered in Properties. |
+| *“label” is given a stroke colour, but has no outline: Manim draws it with a stroke width of 0.* | Texts, formulas, numbers, dots and braces have no outline until they are given a stroke width, so a stroke colour or opacity shows nothing. (On a formula Manim colours the letters with a stroke colour, but draws no outline either.) | **Add stroke width**, offered in Properties. |
+| *“label” is given a stroke colour by “set stroke”, but has no outline: …* | The same, for a **set stroke** without a width. | Give **set stroke** a width. |
+| *“picture” is given “color”, which shows nothing: Manim applies it to vector objects only.* | A picture keeps its own colours, and a number that can change is never drawn. | Take it away with **×**. |
 | *“axes” is given “color”, which shows nothing: Manim makes its parts separately, and they get none of it.* | Axes and a Grid are built from lines of their own. A colour or an outline given to the whole reaches none of them. | **Use set color instead** (or **set stroke**), offered in Properties. A fill can only be taken away. |
 
 ## 2. Manim's remarks: found by running the deck

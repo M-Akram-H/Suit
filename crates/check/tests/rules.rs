@@ -726,6 +726,188 @@ fn a_look_given_to_what_is_made_of_parts_is_warned_of() {
 }
 
 #[test]
+fn a_colour_given_to_what_is_not_a_vector_object_is_warned_of() {
+    // Manim keeps the colour of an image or a tracker, and draws them without it. No call
+    // is offered: painting an image over is not giving it a colour.
+    let mut deck = deck();
+    let mut slide = deck.add_slide("s");
+    let picture = Object::new("ImageMobject")
+        .arg("filename_or_array", "a.png")
+        .arg("color", Expr::konst("ORANGE"));
+    let picture = slide.object("picture", picture);
+    let tracker = Object::new("ValueTracker").arg("color", Expr::konst("ORANGE"));
+    slide.object("tracker", tracker);
+    slide.play(vec![fade_in(&picture)]);
+    let shows_nothing = |name: &str| {
+        let said = format!(
+            "“{name}” is given “color”, which shows nothing: Manim applies it to vector \
+             objects only."
+        );
+        (said, None)
+    };
+    assert_eq!(
+        unseen(&deck),
+        [shows_nothing("picture"), shows_nothing("tracker")]
+    );
+}
+
+#[test]
+fn a_stroke_colour_on_what_has_no_outline_is_warned_of() {
+    let orange = || Expr::konst("ORANGE");
+    let text = || Object::new("Text").arg("text", "a");
+    let alone = |made: Object| {
+        let mut deck = deck();
+        let mut slide = deck.add_slide("s");
+        let object = slide.object("label", made);
+        slide.play(vec![fade_in(&object)]);
+        deck
+    };
+    let bare = |what: &str| {
+        let said = format!(
+            "“label” is given {what}, but has no outline: Manim draws it with a stroke width \
+             of 0."
+        );
+        (
+            said,
+            Some("Add the setting “stroke width” as well.".to_owned()),
+        )
+    };
+
+    // Text, a dot and a number start with a stroke width of 0, so there is no outline for
+    // a stroke colour or opacity to show on.
+    let coloured = text().arg("stroke_color", orange());
+    assert_eq!(unseen(&alone(coloured)), [bare("a stroke colour")]);
+    let faded = Object::new("Dot").arg("stroke_opacity", 0.5);
+    assert_eq!(unseen(&alone(faded)), [bare("a stroke opacity")]);
+    let both = Object::new("Integer")
+        .arg("stroke_opacity", 0.5)
+        .arg("stroke_color", orange());
+    assert_eq!(
+        unseen(&alone(both)),
+        [bare("a stroke colour and a stroke opacity")]
+    );
+    // A formula as well. Manim colours its letters with a stroke colour given at the
+    // start, but there is still no outline, which is what the setting is for.
+    let formula = Object::new("MathTex")
+        .arg("tex_strings", "x")
+        .arg("stroke_color", orange());
+    assert_eq!(unseen(&alone(formula)), [bare("a stroke colour")]);
+
+    // A shape has an outline, and a text that is given a width has one too: at once,
+    // straight after, or later in the deck, and on its own or as part of a group.
+    let circle = circle().arg("stroke_color", orange());
+    assert_eq!(codes(&alone(circle)), [] as [&str; 0]);
+    let width = || Call::new("set_stroke").arg("width", 2.0);
+    let mut deck = deck();
+    let mut slide = deck.add_slide("s");
+    let at_once = text()
+        .arg("stroke_color", orange())
+        .arg("stroke_width", 2.0);
+    let at_once = slide.object("at once", at_once);
+    let after = text().arg("stroke_color", orange()).then(width());
+    let after = slide.object("after", after);
+    let later = slide.object("later", text().arg("stroke_color", orange()));
+    let grouped = slide.object("grouped", text().arg("stroke_opacity", 0.5));
+    let never = slide.object("never", text().arg("stroke_color", orange()));
+    let row = slide.object("row", Object::vgroup(&[&grouped]));
+    slide.play(vec![
+        fade_in(&at_once),
+        fade_in(&after),
+        fade_in(&later),
+        fade_in(&row),
+        fade_in(&never),
+    ]);
+    slide.play(vec![Anim::animate(&later, vec![width()])]);
+    slide.apply(&row, width());
+    // Recolouring the whole of it does not draw an outline.
+    slide.apply(&never, Call::new("set_color").arg("color", orange()));
+    let said = unseen(&deck);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].0.starts_with("“never”"), "{said:?}");
+}
+
+#[test]
+fn set_stroke_without_a_width_on_what_has_no_outline_is_warned_of() {
+    let red = || Expr::konst("RED");
+    let recolour = || Call::new("set_stroke").arg("color", red());
+    let by_call = |name: &str, what: &str| {
+        let said = format!(
+            "“{name}” is given {what} by “set stroke”, but has no outline: Manim draws it \
+             with a stroke width of 0."
+        );
+        (said, Some("Give “set stroke” a width as well.".to_owned()))
+    };
+
+    // Straight after it is made, in a step of its own, and in an animation: each is said
+    // where it is done.
+    let mut deck = deck();
+    let mut slide = deck.add_slide("s");
+    let faded = Call::new("set_stroke").arg("opacity", 0.5);
+    let made = Object::new("Text").arg("text", "a").then(faded);
+    let label = slide.object("label", made);
+    let dot = slide.object("dot", Object::new("Dot"));
+    slide.play(vec![fade_in(&label), fade_in(&dot)]);
+    slide.apply(&label, recolour());
+    slide.play(vec![Anim::animate(&dot, vec![recolour()])]);
+    let checked = run(&deck);
+    let said: Vec<_> = checked
+        .diagnostics
+        .iter()
+        .map(|d| ((d.message.clone(), d.help.clone()), d.node))
+        .collect();
+    let suit_core::SlideContent::Blueprint(blueprint) = &deck.slides[0].content else {
+        unreachable!()
+    };
+    let steps: Vec<_> = blueprint.body.iter().map(|node| Some(node.id)).collect();
+    // An animation's problems are said at the animation, inside its step.
+    let suit_core::Command::Play { anims } = &blueprint.body[4].item else {
+        unreachable!()
+    };
+    assert_eq!(
+        said,
+        [
+            (by_call("label", "a stroke opacity"), steps[0]),
+            (by_call("label", "a stroke colour"), steps[3]),
+            (by_call("dot", "a stroke colour"), Some(anims[0].id)),
+        ]
+    );
+
+    // Given a width anywhere in the deck, or together with the colour, it shows.
+    let mut deck = self::deck();
+    let mut slide = deck.add_slide("s");
+    let label = slide.object("label", Object::new("Text").arg("text", "a"));
+    let dot = slide.object("dot", Object::new("Dot").arg("stroke_width", 2.0));
+    slide.play(vec![fade_in(&label), fade_in(&dot)]);
+    slide.apply(&label, recolour().arg("width", 2.0));
+    slide.apply(&dot, recolour());
+    // A shape has an outline of its own; a copy is not said to have none.
+    let c = slide.object("circle", circle());
+    let copied = slide.object("copy", Object::copy(&dot));
+    slide.apply(&c, recolour());
+    slide.apply(&copied, recolour());
+    assert_eq!(unseen(&deck), []);
+
+    let mut deck = self::deck();
+    let mut slide = deck.add_slide("s");
+    let label = slide.object("label", Object::new("Text").arg("text", "a"));
+    slide.play(vec![fade_in(&label)]);
+    slide.apply(&label, recolour());
+    slide.apply(&label, Call::new("set_stroke").arg("width", 1.0));
+    assert_eq!(unseen(&deck), []);
+}
+
+#[test]
+fn a_fill_shown_through_a_group_is_seen() {
+    let mut deck = deck();
+    let mut slide = deck.add_slide("s");
+    let c = slide.object("circle", circle().arg("fill_color", Expr::konst("ORANGE")));
+    let row = slide.object("row", Object::vgroup(&[&c]));
+    slide.play(vec![fade_in(&row)]);
+    slide.apply(&row, Call::new("set_opacity").arg("opacity", 1.0));
+    assert_eq!(codes(&deck), [] as [&str; 0]);
+}
+
+#[test]
 fn a_warning_that_waited_keeps_its_place_among_the_others() {
     let mut deck = deck();
     let mut slide = deck.add_slide("s");

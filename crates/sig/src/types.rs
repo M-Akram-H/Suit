@@ -70,6 +70,18 @@ pub enum Inside {
     Filled,
 }
 
+/// Whether an object starts with an outline, which is where its stroke colour and stroke
+/// opacity would show.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Outline {
+    /// It does: a stroke width above zero, on some part at least.
+    Drawn,
+    /// It does not: a stroke width of zero on every part. Its stroke colour and opacity
+    /// show once it is given a stroke width as well.
+    Bare,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Kind {
     pub parent: Option<Sym>,
@@ -79,6 +91,8 @@ pub struct Kind {
     pub params: Vec<Param>,
     /// Where it differs from the parent kind's.
     pub inside: Option<Inside>,
+    /// Where it differs from the parent kind's.
+    pub outline: Option<Outline>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -215,6 +229,7 @@ pub struct Signature {
 
 pub const ROOT_KIND: &str = "Mobject";
 pub const GROUP_KIND: &str = "Group";
+pub const VMOBJECT_KIND: &str = "VMobject";
 pub const VGROUP_KIND: &str = "VGroup";
 
 impl Signature {
@@ -253,11 +268,23 @@ impl Signature {
         self.ancestors(kind).find_map(|k| self.kinds[k].inside)
     }
 
+    /// Whether an object of `kind` starts with an outline. `None` for what has no stroke.
+    pub fn outline(&self, kind: &str) -> Option<Outline> {
+        self.ancestors(kind).find_map(|k| self.kinds[k].outline)
+    }
+
+    /// What is made of parts, as a group is: Manim makes the parts from the constructor's
+    /// own settings, and hands those it inherits along `≤` to the group.
+    pub fn made_of_parts(&self, kind: &str) -> bool {
+        self.is_subkind(kind, VGROUP_KIND)
+    }
+
     /// The settings of `ctor` that show nothing on a new object, whatever they are given
-    /// (spec §2). What is made of parts, as a group is, has its parts made from its own
-    /// settings; those it inherits along `≤` go to the group, which draws nothing itself.
+    /// (spec §2): those it inherits along `≤`, on what is made of parts, whose group draws
+    /// nothing itself, and on what is not a vector object, which Manim draws without them.
     pub fn unseen_params<'a>(&'a self, ctor: &'a Ctor) -> Vec<&'a Param> {
-        if !self.is_subkind(&ctor.kind, VGROUP_KIND) {
+        let vector = self.is_subkind(&ctor.kind, VMOBJECT_KIND);
+        if vector && !self.made_of_parts(&ctor.kind) {
             return Vec::new();
         }
         let inherited = |param: &&Param| !ctor.params.iter().any(|own| own.name == param.name);
@@ -267,10 +294,14 @@ impl Signature {
             .collect()
     }
 
-    /// The call that does to a finished object of `kind` what `setting` says of a new one:
-    /// its method, and the parameter that takes the setting's value. Unlike the setting,
-    /// it reaches every part.
+    /// The call that does to a finished vector object of `kind` what `setting` says of a
+    /// new one: its method, and the parameter that takes the setting's value. Unlike the
+    /// setting, it reaches every part. What is not a vector object has none: its `color`
+    /// shows nothing, and `set_color` paints all of an image over.
     pub fn call_for(&self, kind: &str, setting: &str) -> Option<(&'static str, &'static str)> {
+        if !self.is_subkind(kind, VMOBJECT_KIND) {
+            return None;
+        }
         let (method, param) = match setting {
             "color" => ("set_color", "color"),
             "stroke_color" => ("set_stroke", "color"),

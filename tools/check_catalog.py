@@ -19,6 +19,13 @@ from manim.utils import rate_functions
 manim.config.media_dir = tempfile.mkdtemp(prefix="suit-catalogue-")
 manim.logger.setLevel("ERROR")
 
+# A picture to make an image of: blue, with one yellow pixel that is half transparent.
+PICTURE = __import__("pathlib").Path(manim.config.media_dir) / "picture.png"
+_pixels = np.zeros((4, 4, 4), dtype=np.uint8)
+_pixels[...] = (30, 140, 220, 255)
+_pixels[0, 0] = (250, 250, 0, 128)
+__import__("PIL.Image").Image.fromarray(_pixels, "RGBA").save(PICTURE)
+
 problems = []
 checked = 0
 
@@ -110,7 +117,9 @@ def made(name, **settings):
     """A new `name`, given what it cannot do without and `settings`."""
     given = []
     for param in sig["ctors"][name]["params"]:
-        if param["pass"] == "variadic" and param["ty"] == {"base": "vec"}:
+        if param["name"] == "filename_or_array":
+            given.append(str(PICTURE))
+        elif param["pass"] == "variadic" and param["ty"] == {"base": "vec"}:
             given += [manim.UP, manim.LEFT, manim.RIGHT]
         elif param["pass"] == "variadic" or param["required"]:
             given.append(sample(param["ty"]))
@@ -119,9 +128,11 @@ def made(name, **settings):
 
 def look(mobject):
     """What can be seen of the look of an object: of each part, the fill if it is not
-    fully transparent, and the stroke if there is one."""
+    fully transparent, and the stroke if there is one; of an image, its pixels."""
     seen = []
     for part in mobject.get_family():
+        if isinstance(part, manim.ImageMobject):
+            seen.append(part.pixel_array.tobytes())
         if isinstance(part, manim.VMobject) and part.has_points():
             filled = part.get_fill_opacity() > 0
             stroked = part.get_stroke_width() > 0 and part.get_stroke_opacity() > 0
@@ -152,10 +163,17 @@ def below(name, other):
     return name is not None
 
 
+def outlined(mobject):
+    """Whether some part of an object has an outline: a stroke width above zero."""
+    parts = [part for part in mobject.get_family() if isinstance(part, manim.VMobject)]
+    return any(part.has_points() and part.get_stroke_width() > 0 for part in parts)
+
+
 def unseen(ctor):
-    """The settings of a constructor that reach none of its parts: of what is made of
-    parts, as a group is, those it inherits (`unseen_params` in crates/sig/src/types.rs)."""
-    if not below(ctor["kind"], "VGroup"):
+    """The settings of a constructor that show nothing: those it inherits, on what is made
+    of parts, as a group is, and on what is not a vector object (`unseen_params` in
+    crates/sig/src/types.rs)."""
+    if below(ctor["kind"], "VMobject") and not below(ctor["kind"], "VGroup"):
         return []
     own = {param["name"] for param in ctor["params"]}
     found, kind = [], ctor["kind"]
@@ -180,36 +198,95 @@ def other(param):
     return {"color": manim.ORANGE, "real": 0.5}[param["ty"]["base"]]
 
 
-# What a fill colour does to a new object is what the catalogue says of its inside: the
-# editor offers settings by it, and the checker warns by it.
+# The stroke width the editor gives what has no outline, with a stroke colour or opacity
+# (`OUTLINE_WIDTH` in crates/ui/src/properties.rs).
+OUTLINE_WIDTH = 2.0
+
+# Where Manim takes a stroke colour given to a new object as the colour of its letters as
+# well, unless a fill colour is given. It draws no outline there either.
+LETTERS_TAKE_THE_STROKE = {"MathTex", "Tex"}
+
 for name, ctor in sig["ctors"].items():
-    inside = inherited(ctor["kind"], "inside")
-    if inside is None:
-        continue
     plain = look(made(name))
-    checked += 1
-    if (look(made(name, fill_color=manim.ORANGE)) != plain) != (inside == "filled"):
-        shows = "nothing" if inside == "filled" else "something"
-        problem(f"{name}: its inside is {inside}, but a fill colour alone shows {shows}")
+    parts = unseen(ctor)
+    vector = below(ctor["kind"], "VMobject")
+
+    # What a fill colour does to a new object is what the catalogue says of its inside:
+    # the editor offers settings by it, and the checker warns by it.
+    inside = inherited(ctor["kind"], "inside")
+    if (inside is None) == vector:
+        problem(f"{name}: says {inside} of its inside, but is {'' if vector else 'not '}a vector object")
+    if inside is not None:
+        checked += 1
+        if (look(made(name, fill_color=manim.ORANGE)) != plain) != (inside == "filled"):
+            shows = "nothing" if inside == "filled" else "something"
+            problem(f"{name}: its inside is {inside}, but a fill colour alone shows {shows}")
     if inside == "clear":
         checked += 1
         if look(made(name, fill_color=manim.ORANGE, fill_opacity=1.0)) == plain:
             problem(f"{name}: its inside is clear, but a fill colour with an opacity shows nothing")
+
+    # Likewise a stroke colour and a stroke opacity, and its outline.
+    outline = inherited(ctor["kind"], "outline")
+    if (outline is None) == vector:
+        problem(f"{name}: says {outline} of its outline, but is {'' if vector else 'not '}a vector object")
+    if outline is not None:
+        checked += 1
+        if outlined(made(name)) != (outline == "drawn"):
+            problem(f"{name}: its outline is {outline}, but it starts with{'out' if outline == 'drawn' else ''} one")
+    if outline == "drawn" and not parts:
+        checked += 1
+        if look(made(name, stroke_color=manim.ORANGE)) == plain:
+            problem(f"{name}: has an outline, but a stroke colour shows nothing")
+    if outline == "bare":
+        drawn = look(made(name, stroke_width=OUTLINE_WIDTH))
+        checked += 1
+        if outlined(made(name, stroke_color=manim.ORANGE, stroke_opacity=0.5)):
+            problem(f"{name}: has no outline, but a stroke colour and opacity draw one")
+        checked += 1
+        if look(made(name, stroke_opacity=0.5)) != plain:
+            problem(f"{name}: has no outline, but a stroke opacity alone shows something")
+        checked += 1
+        if (look(made(name, stroke_color=manim.ORANGE)) != plain) != (name in LETTERS_TAKE_THE_STROKE):
+            shows = "nothing" if name in LETTERS_TAKE_THE_STROKE else "something"
+            problem(f"{name}: has no outline, but a stroke colour alone shows {shows}")
+        for setting, value in [("stroke_color", manim.ORANGE), ("stroke_opacity", 0.5)]:
+            # Shown by a width given with it, or later, which the checker goes by.
+            checked += 2
+            if look(made(name, **{setting: value, "stroke_width": OUTLINE_WIDTH})) == drawn:
+                problem(f"{name}: `{setting}` shows nothing with a stroke width")
+            later = made(name, **{setting: value})
+            later.set_stroke(width=OUTLINE_WIDTH)
+            if look(later) == drawn:
+                problem(f"{name}: `{setting}` shows nothing once set_stroke(width) is called")
+            # Called later on its own, it shows nothing either; with a width it does.
+            takes = setting.removeprefix("stroke_")
+            checked += 2
+            alone = made(name)
+            alone.set_stroke(**{takes: value})
+            if look(alone) != plain:
+                problem(f"{name}: has no outline, but set_stroke({takes}) alone shows something")
+            widened = made(name)
+            widened.set_stroke(**{takes: value, "width": OUTLINE_WIDTH})
+            if look(widened) == drawn:
+                problem(f"{name}: set_stroke({takes}, width) shows nothing")
+
     # `color` is the one that shows on everything, and what the checker says to use where
-    # there is no inside. Except on what is made of parts.
-    parts = unseen(ctor)
+    # there is no inside. Except on what is made of parts, and on what is not a vector
+    # object.
     if not parts:
         checked += 1
         if look(made(name, color=manim.ORANGE)) == plain:
             problem(f"{name}: `color` shows nothing")
     # There, nothing that is given for a look shows, alone or with the rest: the editor
-    # does not offer it, and the checker warns of it. The calls offered instead do show.
+    # does not offer it, and the checker warns of it. On what is made of parts, the calls
+    # offered instead do show; on the rest none is offered.
     for param in parts:
         setting, value = param["name"], other(param)
         checked += 1
         if look(made(name, **{setting: value})) != plain:
-            problem(f"{name}: is made of parts, but `{setting}` shows something")
-        if setting not in CALL_FOR:
+            problem(f"{name}: `{setting}` is unseen, but shows something")
+        if setting not in CALL_FOR or not vector:
             continue
         method, takes = CALL_FOR[setting]
         checked += 1
@@ -229,7 +306,7 @@ for name, ctor in sig["ctors"].items():
     if parts:
         checked += 1
         if look(made(name, **{param["name"]: other(param) for param in parts})) != plain:
-            problem(f"{name}: is made of parts, but its look settings together show something")
+            problem(f"{name}: its unseen settings together show something")
 
 for name, overloads in sig["methods"].items():
     for method in overloads:
