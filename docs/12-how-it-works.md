@@ -74,8 +74,8 @@ Say you drag a circle.
 7. **`ui`** draws that on the canvas.
 
 Steps 1 to 3 happen within one frame, so the step list, the properties and the problems
-are always current. Steps 4 to 7 take about half a second, during which the canvas shows
-what it had.
+are always current. Steps 4 to 7 take up to about a second for the slide you are on,
+during which the canvas shows what it had; the slides after it follow in the background.
 
 ## Asking Manim: the probe
 
@@ -93,16 +93,32 @@ clicked and dragged: Suit knows which outline is which object.
 ### Keeping it fast
 
 Starting Python and importing Manim takes a while, and running a whole deck takes longer
-the longer the deck is. Three things keep an edit at about half a second:
+the longer the deck is. These keep an edit short:
 
 - **One Python process stays alive.** It imports Manim once and then runs script after
   script.
 - **Slides are run one at a time, and their starting points are kept.** Before each
   slide the Python side saves the whole state of the scene, under a key computed from
   everything that led up to it. After an edit, Suit works out the first slide whose key
-  changed, and Manim starts from the saved state before that slide. Editing the last
-  slide of a long deck costs as much as editing a short one.
-- **Typeset text is cached** by Manim on disk, under Suit's cache folder.
+  changed, and Manim starts from the saved state before that slide. The slide on the
+  canvas is run first; the ones after it, which the change may have moved, follow, and
+  are given up as soon as the deck changes again. A state is saved only once the scene
+  moves on from it: while you type into a slide, every key starts again from the state
+  before that slide, and the one after it would be out of date at once.
+- **Animations whose end is plain are not run at all.** To skip an animation Manim still
+  copies its objects several times over, and a text is made of many shapes. One that only
+  brings an object in, takes it away, or points at it there and back, with an easing
+  that ends where it should, leaves a scene Suit can set up itself. Everything else is
+  run by Manim. A test runs decks both ways and compares every step; setting
+  `SUIT_PROBE_EXACT=1` makes the probe run every animation.
+- **Text is kept.** Formulas are typeset once and cached by Manim on disk, under Suit's
+  cache folder. A `Text`, which Pango draws and Manim reads back curve by curve, takes a
+  fifth of a second to make, and every edit makes the words of its slide again: the
+  probe keeps each one it made, by what it was made from, and copies it the next time,
+  which takes a hundredth.
+- **Python's garbage collector waits.** It looks through every object there is each time
+  enough new ones have been made, and restoring a slide's state makes hundreds of
+  thousands. It runs between probes instead, while nothing is asked of Python.
 
 A script that takes too long can be stopped: the Python side checks between steps
 whether it is still wanted, and if it does not answer, the process is replaced.

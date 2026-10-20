@@ -35,8 +35,10 @@ This has three consequences worth knowing:
 
 - **What the canvas shows is true.** A formula is typeset by LaTeX, a text by Pango, a
   morph by Manim's own `Transform`.
-- **An edit takes a moment to show.** After a change the bar says *Asking Manim…* for
-  about half a second. Slides before the one you changed are not run again.
+- **An edit takes a moment to show.** After a change the bar says *Asking Manim…*. The
+  slide you are on shows again within about a second; the slides after it, which the
+  change may have moved, are brought up to date after that. Slides before the one you
+  changed are not run again.
 - **Manim has to be installed.** With [Docker](02-installing.md) it comes in the box.
 
 Suit adds what Manim cannot do, which is to look at a deck *before* running it. A checker

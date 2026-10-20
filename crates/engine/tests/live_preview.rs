@@ -364,8 +364,9 @@ fn an_edit_late_in_a_long_deck_does_not_replay_the_deck() {
     let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
     let mut session = Session::blank().with_preview(sidecar, || {});
     session.record_ahead_of_time(false);
-    // Fifteen slides with a line of text and a formula each.
-    for slide in 0..15 {
+    // Thirty slides with a line of text and a formula each: long enough that what every
+    // edit costs anyway, the wait for typing to pause above all, is the smaller part.
+    for slide in 0..30 {
         if slide > 0 {
             session.add_slide();
         }
@@ -382,7 +383,7 @@ fn an_edit_late_in_a_long_deck_does_not_replay_the_deck() {
 
     session.add_object("Circle");
     let late = settle(&mut session);
-    session.select(7, Some(1));
+    session.select(15, Some(1));
     session.add_object("Square");
     let middle = settle(&mut session);
     let rest = Instant::now();

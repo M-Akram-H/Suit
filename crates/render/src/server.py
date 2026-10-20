@@ -18,6 +18,7 @@ text file every time it uses it (`PangoUtils.remove_last_M`), so two Manims maki
 text at the same moment read each other's half-written files, and one that is stopped in the
 middle leaves a broken file behind for everyone after it.
 """
+import gc
 import os
 import queue
 import sys
@@ -42,6 +43,15 @@ manim.config.text_dir = os.path.join(scratch, "texts")
 replies = sys.stdout
 sys.stdout = sys.stderr
 turn = open("manim.lock", "w")  # noqa: SIM115 - held for as long as the process lives
+
+# Python's collector looks through every object there is each time enough new ones have
+# been made, and a probe makes hundreds of thousands, restoring a slide's state alone: left
+# to itself it took half of every probe. So it collects while nothing is asked of it, and
+# leaves out of its looking what Manim made on being imported, which stays for good.
+gc.disable()
+gc.freeze()
+# Seconds without a request after which it collects.
+IDLE = 0.25
 
 requests = queue.Queue()
 # What the probes keep from one script to the next: the scene, and its state before every
@@ -90,7 +100,16 @@ tex_mobject.tex_to_svg_file = typeset_whole
 
 threading.Thread(target=listen, daemon=True).start()
 
-while (line := requests.get()) is not None:
+def next_request():
+    while True:
+        try:
+            return requests.get(timeout=IDLE)
+        except queue.Empty:
+            if gc.get_count()[0] > 1000:
+                gc.collect()
+
+
+while (line := next_request()) is not None:
     script, _, result = line.partition("\t")
     running = script
     sys.argv = [script, result]

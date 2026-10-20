@@ -241,9 +241,13 @@ configuration and of the text of the slides run to get there. A probe starts fro
 furthest saved pair whose name fits the deck it is given and runs the slides from there:
 after a change to slide `k`, slides `1 … k−1` are not run again. A slide that was *played*
 for a recording is never saved from, because it has been through other frames than one that
-was skipped through (Q3), and the two need not end in the same state. The tests hold this to
-the definition: after a long run of edits and undos, what the editor shows must be what a
-Manim that has never seen the deck makes of it.
+was skipped through (Q3), and the two need not end in the same state. Nor is every
+animation of a probe given to Manim to skip: one whose end state is plain (an entrance, a
+FadeOut, an indication there and back, each with an easing that ends where its kind needs)
+is not run at all, and the scene is put in that state directly. The tests hold all of this
+to the definition: after a long run of edits and undos, what the editor shows must be what a
+Manim that has never seen the deck makes of it, and a probe that skips those animations must
+report every step as one that gives each to Manim (`SUIT_PROBE_EXACT`).
 
 Σ should be generated, not typed in: a script imports the installed Manim, dumps constructor
 and method signatures by introspection, and merges a small hand-written overlay holding what

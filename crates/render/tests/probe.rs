@@ -7,9 +7,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use suit_check::check;
+use suit_check::{Diagnostic, Severity, check};
 use suit_core::{Anim, Call, Command, Deck, DeckConfig, Expr, Object, Raw, RawIface, Time};
-use suit_render::{Failure, Prober, Sidecar, Watch};
+use suit_render::{Drawn, Failure, Prober, Sidecar, Snapshot, Watch};
 use suit_sig::Signature;
 
 fn deck(text: &str) -> Deck {
@@ -736,4 +736,216 @@ fn an_updater_given_the_frame_time_moves_with_it() {
     };
     let travelled = x(clip.frames.len() - 1) - x(0);
     assert!((0.9..1.3).contains(&travelled), "travelled {travelled}");
+}
+
+/// Where two looks at a deck differ by more than the rounding in Manim's own arithmetic.
+fn differences(seen: &[Snapshot], exact: &[Snapshot]) -> Vec<String> {
+    let close = |a: f32, b: f32| (a - b).abs() <= 1e-4;
+    let mut found = Vec::new();
+    if seen.len() != exact.len() {
+        return vec![format!("{} steps against {}", seen.len(), exact.len())];
+    }
+    for (index, (a, b)) in seen.iter().zip(exact).enumerate() {
+        let at = format!("step {index} (slide {}, node {:?})", b.slide, b.node);
+        if (a.slide, a.node) != (b.slide, b.node) || a.drawn.len() != b.drawn.len() {
+            found.push(format!(
+                "{at}: {} drawn against {}",
+                a.drawn.len(),
+                b.drawn.len()
+            ));
+            continue;
+        }
+        for (p, q) in a.drawn.iter().zip(&b.drawn) {
+            let points = |drawn: &Drawn| -> Vec<[f32; 2]> {
+                drawn
+                    .paths
+                    .iter()
+                    .flat_map(|path| path.points.clone())
+                    .collect()
+            };
+            let (pp, qp) = (points(p), points(q));
+            let same = p.owners == q.owners
+                && p.paths.len() == q.paths.len()
+                && p.paths
+                    .iter()
+                    .zip(&q.paths)
+                    .all(|(x, y)| x.closed == y.closed)
+                && pp.len() == qp.len()
+                && pp
+                    .iter()
+                    .zip(&qp)
+                    .all(|(x, y)| close(x[0], y[0]) && close(x[1], y[1]))
+                && p.fill.iter().zip(&q.fill).all(|(x, y)| close(*x, *y))
+                && p.stroke.iter().zip(&q.stroke).all(|(x, y)| close(*x, *y))
+                && close(p.stroke_width, q.stroke_width);
+            if !same {
+                found.push(format!("{at}: {:?} is drawn otherwise", q.owners));
+            }
+        }
+        if a.boxes.keys().ne(b.boxes.keys()) {
+            found.push(format!("{at}: other objects have places"));
+            continue;
+        }
+        for (var, p) in &a.boxes {
+            let q = &b.boxes[var];
+            if p.on != q.on || !p.rect.iter().zip(&q.rect).all(|(x, y)| close(*x, *y)) {
+                found.push(format!("{at}: {var:?} at {:?} against {:?}", p, q));
+            }
+        }
+    }
+    found
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore = "needs Manim"]
+fn what_the_probe_skips_ends_as_playing_it_does() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let sig = Signature::builtin();
+    let mut deck = Deck::new(DeckConfig::default());
+    let point = |x, y| Expr::vec3(x, y, 0.0);
+    let mut slide = deck.add_slide("In");
+    let circle = slide.object("circle", Object::new("Circle"));
+    let square = slide.object("square", Object::new("Square").arg("side_length", 1.0));
+    let title = slide.object("title", Object::new("Text").arg("text", "Same words"));
+    // Made just like the one before: the second is a copy of the first.
+    let again = slide.object("again", Object::new("Text").arg("text", "Same words"));
+    let marked = slide.object(
+        "marked",
+        Object::new("MarkupText").arg("text", "<b>bold</b>"),
+    );
+    let dot = slide.object("dot", Object::new("Dot"));
+    let tri = slide.object("tri", Object::new("Triangle"));
+    let star = slide.object("star", Object::new("Star"));
+    let arrow = slide.object(
+        "arrow",
+        Object::new("Arrow")
+            .arg("start", point(-2.0, -2.0))
+            .arg("end", point(2.0, -2.0)),
+    );
+    let letters = slide.object("letters", Object::new("Text").arg("text", "abc"));
+    let unseen = slide.object("unseen", Object::new("Square"));
+    slide.play(vec![
+        Anim::prim("Create").arg("mobject", &circle),
+        Anim::prim("DrawBorderThenFill").arg("vmobject", &square),
+    ]);
+    slide.play(vec![
+        Anim::prim("Write").arg("vmobject", &title),
+        Anim::prim("FadeIn")
+            .arg("mobject", &again)
+            .arg("shift", Expr::konst("UP")),
+        Anim::prim("FadeIn")
+            .arg("mobject", &marked)
+            .arg("scale", 2.0),
+    ]);
+    slide.play(vec![
+        Anim::par(vec![
+            Anim::prim("GrowFromCenter").arg("mobject", &dot),
+            Anim::prim("SpinInFromNothing").arg("mobject", &tri),
+        ])
+        .lag(0.3),
+    ]);
+    slide.play(vec![
+        Anim::prim("GrowArrow").arg("arrow", &arrow),
+        Anim::prim("AddTextLetterByLetter").arg("text", &letters),
+    ]);
+    // Eased so that they do not end where they would: played.
+    slide.play(vec![
+        Anim::prim("FadeIn")
+            .arg("mobject", &unseen)
+            .rate("there_and_back"),
+        Anim::prim("GrowFromEdge")
+            .arg("mobject", &star)
+            .arg("edge", Expr::konst("DOWN"))
+            .rate("exponential_decay"),
+    ]);
+
+    let mut slide = deck.add_slide("Point");
+    let extra = slide.object("extra", Object::new("Circle").arg("radius", 0.5));
+    let shape = slide.object("shape", Object::new("RegularPolygon").arg("n", 6i64));
+    let streak = slide.object(
+        "streak",
+        Object::new("Line")
+            .arg("start", point(-3.0, 3.0))
+            .arg("end", point(3.0, 3.0)),
+    );
+    slide.play(vec![
+        Anim::prim("Indicate").arg("mobject", &circle),
+        Anim::prim("Wiggle").arg("mobject", &dot),
+        Anim::prim("ApplyWave").arg("mobject", &title),
+    ]);
+    slide.play(vec![
+        // Ends large.
+        Anim::prim("Indicate")
+            .arg("mobject", &square)
+            .rate("smooth"),
+        Anim::prim("Circumscribe").arg("mobject", &again),
+        Anim::prim("Flash").arg("point", &dot),
+        Anim::prim("FocusOn").arg("focus_point", &circle),
+    ]);
+    slide.play(vec![Anim::prim("ShowPassingFlash").arg("mobject", &streak)]);
+    // One played, one jumped, in one step.
+    slide.play(vec![
+        Anim::prim("Transform")
+            .arg("mobject", &tri)
+            .arg("target_mobject", &shape),
+        Anim::prim("FadeIn").arg("mobject", &extra),
+    ]);
+
+    let mut slide = deck.add_slide("Out");
+    let later = slide.object("later", Object::new("Square").arg("side_length", 0.5));
+    slide.play(vec![
+        Anim::prim("FadeOut")
+            .arg("mobject", &circle)
+            .arg("shift", Expr::konst("DOWN")),
+        Anim::prim("Uncreate").arg("mobject", &square),
+        Anim::prim("Unwrite").arg("vmobject", &title),
+    ]);
+    // While something follows another, all is played.
+    slide.always(
+        &again,
+        Call::new("next_to")
+            .arg("mobject_or_point", &dot)
+            .arg("direction", Expr::konst("UP")),
+    );
+    slide.play(vec![
+        Anim::prim("FadeIn").arg("mobject", &later),
+        Anim::animate(
+            &dot,
+            vec![Call::new("shift").arg("vectors", Expr::konst("LEFT"))],
+        ),
+    ]);
+    slide.detach(&again);
+    slide.play(vec![Anim::prim("FadeOut").arg("mobject", &again)]);
+    let checked = check(&deck, &sig);
+    let errors: Vec<_> = checked
+        .diagnostics
+        .iter()
+        .filter(|found| found.severity == Severity::Error)
+        .collect();
+    assert_eq!(errors, Vec::<&Diagnostic>::new());
+
+    let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let folder = std::env::temp_dir().join(format!("suit-exact-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let exact_python = folder.join("python");
+    let script = format!(
+        "#!/bin/sh\nSUIT_PROBE_EXACT=1 exec '{}' \"$@\"\n",
+        sidecar.python().display()
+    );
+    std::fs::write(&exact_python, script).unwrap();
+    std::fs::set_permissions(&exact_python, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let seen = Prober::new(sidecar.clone())
+        .probe(&deck, &sig, &checked, Watch::patient())
+        .expect("Manim runs");
+    let exact = Prober::new(sidecar.with_python(exact_python))
+        .probe(&deck, &sig, &checked, Watch::patient())
+        .expect("Manim runs");
+    std::fs::remove_dir_all(&folder).ok();
+    assert_eq!(seen.error, None);
+    assert_eq!(exact.error, None);
+    let found = differences(&seen.steps, &exact.steps);
+    assert!(found.is_empty(), "{}", found.join("\n"));
 }

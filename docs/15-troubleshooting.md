@@ -137,9 +137,11 @@ Slides share one scene. Begin a slide with FadeOut steps for what should go
 
 ## Speed
 
-**Every edit takes about half a second to show.**
-That is Manim working out the scene. Slides before the one you are editing are not run
-again, so a long deck is no slower than a short one.
+**Every edit takes a moment to show.**
+That is Manim working out the scene. The slide you are on comes first, within about a
+second; then the slides after it, which the change may have moved. *Asking Manim…*
+stays until the last of them is done. You can go on editing meanwhile: the work starts
+over with the newest deck. Slides before the one you are editing are not run again.
 
 **Play does not start at once.**
 The slide has not been played through by Manim yet, or has just changed. Suit does this

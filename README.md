@@ -193,7 +193,8 @@ Suit is at version 0.1. It works, and these are its edges:
   Docker on macOS, Windows and ARM is untried as well. Reports are welcome.
 - It knows a catalogue of 32 kinds of object and 31 animations, not all of Manim. A
   *Python code* step covers the rest.
-- Every edit takes about half a second to show, because Manim is asked each time.
+- Every edit takes a moment to show, because Manim is asked each time: up to about a
+  second for the slide you are on, and longer until the slides after it are up to date.
 - The deck's size, frame rate and background are set in the deck file, not in the window
   yet.
 - The file format may still change.
