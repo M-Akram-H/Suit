@@ -211,3 +211,18 @@ used. Without `suit-cli` the deck is written but not checked; without Manim ther
 preview. Both come with Suit (its installers, its Docker image, or a source checkout, where
 `cargo build -p suit-cli` makes the first). Set `SUIT_CLI` or `SUIT_PYTHON` to point at
 others. Say plainly in the hand-over which checks could not run.
+
+### In a chat, away from the user's computer
+
+In a Claude chat (claude.ai, or the Chat tab of the app) the code runs in a sandbox where
+Suit and Manim are not installed. The skill still works: `suitdeck.py` checks every name,
+setting and type against the catalogue it carries (`assets/signature.json`), so most
+mistakes are still caught while the deck is built. What cannot happen there is Suit's
+full check (whether objects are on screen when animated, timings) and the preview. So:
+
+- Be more careful with the rules in "What Suit's checker insists on": nothing else will
+  catch a slip there.
+- Save the deck where the chat offers files for download (for example
+  `/mnt/user-data/outputs/`), and give the user the link.
+- Tell the user it is unchecked, and to open it in Suit (**File → Open…**) and look at
+  the Problems list along the bottom, which shows anything the checker would have said.

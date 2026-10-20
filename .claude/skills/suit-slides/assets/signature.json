@@ -4,103 +4,120 @@
       "parent": "VMobject",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "Arrow": {
       "parent": "Line",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "Axes": {
       "parent": "VGroup",
       "elem": null,
       "params": [],
-      "inside": "open"
+      "inside": "open",
+      "outline": null
     },
     "Brace": {
       "parent": "VMobject",
       "elem": null,
       "params": [],
-      "inside": "filled"
+      "inside": "filled",
+      "outline": "bare"
     },
     "Circle": {
       "parent": "Arc",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "DashedLine": {
       "parent": "Line",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "DecimalNumber": {
       "parent": "VMobject",
       "elem": null,
       "params": [],
-      "inside": "filled"
+      "inside": "filled",
+      "outline": "bare"
     },
     "Dot": {
       "parent": "Circle",
       "elem": null,
       "params": [],
-      "inside": "filled"
+      "inside": "filled",
+      "outline": "bare"
     },
     "DoubleArrow": {
       "parent": "Arrow",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "Ellipse": {
       "parent": "Circle",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "FunctionGraph": {
       "parent": "ParametricFunction",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "Group": {
       "parent": "Mobject",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "ImageMobject": {
       "parent": "Mobject",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "Integer": {
       "parent": "DecimalNumber",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "Line": {
       "parent": "VMobject",
       "elem": null,
       "params": [],
-      "inside": "open"
+      "inside": "open",
+      "outline": null
     },
     "MarkupText": {
       "parent": "VMobject",
       "elem": null,
       "params": [],
-      "inside": "filled"
+      "inside": "filled",
+      "outline": "bare"
     },
     "MathTex": {
       "parent": "VMobject",
       "elem": null,
       "params": [],
-      "inside": "filled"
+      "inside": "filled",
+      "outline": "bare"
     },
     "Mobject": {
       "parent": null,
@@ -115,109 +132,127 @@
           "pass": "keyword"
         }
       ],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "NumberLine": {
       "parent": "Line",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "NumberPlane": {
       "parent": "Axes",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "ParametricFunction": {
       "parent": "VMobject",
       "elem": null,
       "params": [],
-      "inside": "open"
+      "inside": "open",
+      "outline": null
     },
     "Plot": {
       "parent": "VMobject",
       "elem": null,
       "params": [],
-      "inside": "open"
+      "inside": "open",
+      "outline": null
     },
     "Polygon": {
       "parent": "Polygram",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "Polygram": {
       "parent": "VMobject",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "Rectangle": {
       "parent": "Polygon",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "RegularPolygon": {
       "parent": "Polygram",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "RoundedRectangle": {
       "parent": "Rectangle",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "Square": {
       "parent": "Rectangle",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "Star": {
       "parent": "Polygon",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "SurroundingRectangle": {
       "parent": "RoundedRectangle",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "Tangent": {
       "parent": "Line",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "Tex": {
       "parent": "MathTex",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "Text": {
       "parent": "VMobject",
       "elem": null,
       "params": [],
-      "inside": "filled"
+      "inside": "filled",
+      "outline": "bare"
     },
     "Triangle": {
       "parent": "RegularPolygon",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "VGroup": {
       "parent": "VMobject",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     },
     "VMobject": {
       "parent": "Mobject",
@@ -264,13 +299,15 @@
           "pass": "keyword"
         }
       ],
-      "inside": "clear"
+      "inside": "clear",
+      "outline": "drawn"
     },
     "ValueTracker": {
       "parent": "Mobject",
       "elem": null,
       "params": [],
-      "inside": null
+      "inside": null,
+      "outline": null
     }
   },
   "ctors": {
