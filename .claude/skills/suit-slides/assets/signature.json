@@ -1,0 +1,3946 @@
+{
+  "kinds": {
+    "Arc": {
+      "parent": "VMobject",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "Arrow": {
+      "parent": "Line",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "Axes": {
+      "parent": "VGroup",
+      "elem": null,
+      "params": [],
+      "inside": "open"
+    },
+    "Brace": {
+      "parent": "VMobject",
+      "elem": null,
+      "params": [],
+      "inside": "filled"
+    },
+    "Circle": {
+      "parent": "Arc",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "DashedLine": {
+      "parent": "Line",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "DecimalNumber": {
+      "parent": "VMobject",
+      "elem": null,
+      "params": [],
+      "inside": "filled"
+    },
+    "Dot": {
+      "parent": "Circle",
+      "elem": null,
+      "params": [],
+      "inside": "filled"
+    },
+    "DoubleArrow": {
+      "parent": "Arrow",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "Ellipse": {
+      "parent": "Circle",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "FunctionGraph": {
+      "parent": "ParametricFunction",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "Group": {
+      "parent": "Mobject",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "ImageMobject": {
+      "parent": "Mobject",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "Integer": {
+      "parent": "DecimalNumber",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "Line": {
+      "parent": "VMobject",
+      "elem": null,
+      "params": [],
+      "inside": "open"
+    },
+    "MarkupText": {
+      "parent": "VMobject",
+      "elem": null,
+      "params": [],
+      "inside": "filled"
+    },
+    "MathTex": {
+      "parent": "VMobject",
+      "elem": null,
+      "params": [],
+      "inside": "filled"
+    },
+    "Mobject": {
+      "parent": null,
+      "elem": "Mobject",
+      "params": [
+        {
+          "name": "color",
+          "ty": {
+            "base": "color"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "inside": null
+    },
+    "NumberLine": {
+      "parent": "Line",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "NumberPlane": {
+      "parent": "Axes",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "ParametricFunction": {
+      "parent": "VMobject",
+      "elem": null,
+      "params": [],
+      "inside": "open"
+    },
+    "Plot": {
+      "parent": "VMobject",
+      "elem": null,
+      "params": [],
+      "inside": "open"
+    },
+    "Polygon": {
+      "parent": "Polygram",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "Polygram": {
+      "parent": "VMobject",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "Rectangle": {
+      "parent": "Polygon",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "RegularPolygon": {
+      "parent": "Polygram",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "RoundedRectangle": {
+      "parent": "Rectangle",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "Square": {
+      "parent": "Rectangle",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "Star": {
+      "parent": "Polygon",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "SurroundingRectangle": {
+      "parent": "RoundedRectangle",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "Tangent": {
+      "parent": "Line",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "Tex": {
+      "parent": "MathTex",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "Text": {
+      "parent": "VMobject",
+      "elem": null,
+      "params": [],
+      "inside": "filled"
+    },
+    "Triangle": {
+      "parent": "RegularPolygon",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "VGroup": {
+      "parent": "VMobject",
+      "elem": null,
+      "params": [],
+      "inside": null
+    },
+    "VMobject": {
+      "parent": "Mobject",
+      "elem": "VMobject",
+      "params": [
+        {
+          "name": "fill_color",
+          "ty": {
+            "base": "color"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "fill_opacity",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "stroke_color",
+          "ty": {
+            "base": "color"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "stroke_opacity",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "stroke_width",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "inside": "clear"
+    },
+    "ValueTracker": {
+      "parent": "Mobject",
+      "elem": null,
+      "params": [],
+      "inside": null
+    }
+  },
+  "ctors": {
+    "Arc": {
+      "kind": "Arc",
+      "params": [
+        {
+          "name": "radius",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "start_angle",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "angle",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "arc_center",
+          "ty": {
+            "base": "vec"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Arrow": {
+      "kind": "Arrow",
+      "params": [
+        {
+          "name": "start",
+          "ty": {
+            "union": [
+              {
+                "base": "vec"
+              },
+              {
+                "mob": "Mobject"
+              }
+            ]
+          },
+          "required": false,
+          "pass": "positional"
+        },
+        {
+          "name": "end",
+          "ty": {
+            "union": [
+              {
+                "base": "vec"
+              },
+              {
+                "mob": "Mobject"
+              }
+            ]
+          },
+          "required": false,
+          "pass": "positional"
+        },
+        {
+          "name": "buff",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Axes": {
+      "kind": "Axes",
+      "params": [
+        {
+          "name": "x_range",
+          "ty": {
+            "base": "vec"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "y_range",
+          "ty": {
+            "base": "vec"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "x_length",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "y_length",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "tips",
+          "ty": {
+            "base": "bool"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Brace": {
+      "kind": "Brace",
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "mob": "Mobject"
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "direction",
+          "ty": {
+            "base": "vec"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "buff",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Circle": {
+      "kind": "Circle",
+      "params": [
+        {
+          "name": "radius",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "DashedLine": {
+      "kind": "DashedLine",
+      "params": [
+        {
+          "name": "start",
+          "ty": {
+            "union": [
+              {
+                "base": "vec"
+              },
+              {
+                "mob": "Mobject"
+              }
+            ]
+          },
+          "required": false,
+          "pass": "positional"
+        },
+        {
+          "name": "end",
+          "ty": {
+            "union": [
+              {
+                "base": "vec"
+              },
+              {
+                "mob": "Mobject"
+              }
+            ]
+          },
+          "required": false,
+          "pass": "positional"
+        },
+        {
+          "name": "buff",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "dash_length",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "dashed_ratio",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "DecimalNumber": {
+      "kind": "DecimalNumber",
+      "params": [
+        {
+          "name": "number",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "num_decimal_places",
+          "ty": {
+            "base": "int"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "include_sign",
+          "ty": {
+            "base": "bool"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "font_size",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Dot": {
+      "kind": "Dot",
+      "params": [
+        {
+          "name": "point",
+          "ty": {
+            "base": "vec"
+          },
+          "required": false,
+          "pass": "positional"
+        },
+        {
+          "name": "radius",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "DoubleArrow": {
+      "kind": "DoubleArrow",
+      "params": [
+        {
+          "name": "start",
+          "ty": {
+            "union": [
+              {
+                "base": "vec"
+              },
+              {
+                "mob": "Mobject"
+              }
+            ]
+          },
+          "required": false,
+          "pass": "positional"
+        },
+        {
+          "name": "end",
+          "ty": {
+            "union": [
+              {
+                "base": "vec"
+              },
+              {
+                "mob": "Mobject"
+              }
+            ]
+          },
+          "required": false,
+          "pass": "positional"
+        },
+        {
+          "name": "buff",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Ellipse": {
+      "kind": "Ellipse",
+      "params": [
+        {
+          "name": "width",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "height",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "FunctionGraph": {
+      "kind": "FunctionGraph",
+      "params": [
+        {
+          "name": "function",
+          "ty": {
+            "fun": [
+              "real",
+              "real"
+            ]
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "x_range",
+          "ty": {
+            "base": "vec"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "ImageMobject": {
+      "kind": "ImageMobject",
+      "params": [
+        {
+          "name": "filename_or_array",
+          "ty": {
+            "base": "str"
+          },
+          "required": true,
+          "pass": "positional"
+        }
+      ]
+    },
+    "Integer": {
+      "kind": "Integer",
+      "params": [
+        {
+          "name": "number",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "font_size",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Line": {
+      "kind": "Line",
+      "params": [
+        {
+          "name": "start",
+          "ty": {
+            "union": [
+              {
+                "base": "vec"
+              },
+              {
+                "mob": "Mobject"
+              }
+            ]
+          },
+          "required": false,
+          "pass": "positional"
+        },
+        {
+          "name": "end",
+          "ty": {
+            "union": [
+              {
+                "base": "vec"
+              },
+              {
+                "mob": "Mobject"
+              }
+            ]
+          },
+          "required": false,
+          "pass": "positional"
+        },
+        {
+          "name": "buff",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "path_arc",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "MarkupText": {
+      "kind": "MarkupText",
+      "params": [
+        {
+          "name": "text",
+          "ty": {
+            "base": "str"
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "font_size",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "font",
+          "ty": {
+            "base": "str"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "MathTex": {
+      "kind": "MathTex",
+      "params": [
+        {
+          "name": "tex_strings",
+          "ty": {
+            "base": "str"
+          },
+          "required": false,
+          "pass": "variadic"
+        },
+        {
+          "name": "font_size",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "NumberLine": {
+      "kind": "NumberLine",
+      "params": [
+        {
+          "name": "x_range",
+          "ty": {
+            "base": "vec"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "length",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "include_numbers",
+          "ty": {
+            "base": "bool"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "include_ticks",
+          "ty": {
+            "base": "bool"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "include_tip",
+          "ty": {
+            "base": "bool"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "NumberPlane": {
+      "kind": "NumberPlane",
+      "params": [
+        {
+          "name": "x_range",
+          "ty": {
+            "base": "vec"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "y_range",
+          "ty": {
+            "base": "vec"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "x_length",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "y_length",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "ParametricFunction": {
+      "kind": "ParametricFunction",
+      "params": [
+        {
+          "name": "function",
+          "ty": {
+            "fun": [
+              "real",
+              "vec"
+            ]
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "t_range",
+          "ty": {
+            "base": "vec"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Plot": {
+      "kind": "Plot",
+      "params": [
+        {
+          "name": "function",
+          "ty": {
+            "fun": [
+              "real",
+              "real"
+            ]
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "on",
+          "ty": {
+            "base": "vec"
+          },
+          "required": false,
+          "pass": "list"
+        },
+        {
+          "name": "step",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "asymptotes",
+          "ty": {
+            "base": "bool"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Polygon": {
+      "kind": "Polygon",
+      "params": [
+        {
+          "name": "vertices",
+          "ty": {
+            "base": "vec"
+          },
+          "required": false,
+          "pass": "variadic"
+        }
+      ]
+    },
+    "Rectangle": {
+      "kind": "Rectangle",
+      "params": [
+        {
+          "name": "width",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "height",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "RegularPolygon": {
+      "kind": "RegularPolygon",
+      "params": [
+        {
+          "name": "n",
+          "ty": {
+            "base": "int"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "RoundedRectangle": {
+      "kind": "RoundedRectangle",
+      "params": [
+        {
+          "name": "corner_radius",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "width",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "height",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Square": {
+      "kind": "Square",
+      "params": [
+        {
+          "name": "side_length",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Star": {
+      "kind": "Star",
+      "params": [
+        {
+          "name": "n",
+          "ty": {
+            "base": "int"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "outer_radius",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "inner_radius",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "SurroundingRectangle": {
+      "kind": "SurroundingRectangle",
+      "params": [
+        {
+          "name": "mobjects",
+          "ty": {
+            "mob": "Mobject"
+          },
+          "required": false,
+          "pass": "variadic"
+        },
+        {
+          "name": "buff",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "corner_radius",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Tangent": {
+      "kind": "Tangent",
+      "params": [
+        {
+          "name": "graph",
+          "ty": {
+            "mob": "Plot"
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "at",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "length",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "dot",
+          "ty": {
+            "base": "bool"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Tex": {
+      "kind": "Tex",
+      "params": [
+        {
+          "name": "tex_strings",
+          "ty": {
+            "base": "str"
+          },
+          "required": false,
+          "pass": "variadic"
+        },
+        {
+          "name": "font_size",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Text": {
+      "kind": "Text",
+      "params": [
+        {
+          "name": "text",
+          "ty": {
+            "base": "str"
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "font_size",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "font",
+          "ty": {
+            "base": "str"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "weight",
+          "ty": {
+            "base": "str"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "slant",
+          "ty": {
+            "base": "str"
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "line_spacing",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    },
+    "Triangle": {
+      "kind": "Triangle",
+      "params": []
+    },
+    "ValueTracker": {
+      "kind": "ValueTracker",
+      "params": [
+        {
+          "name": "value",
+          "ty": {
+            "base": "real"
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ]
+    }
+  },
+  "methods": {
+    "align_to": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "mobject_or_point",
+            "ty": {
+              "union": [
+                {
+                  "base": "vec"
+                },
+                {
+                  "mob": "Mobject"
+                }
+              ]
+            },
+            "required": true,
+            "pass": "positional"
+          },
+          {
+            "name": "direction",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "positional"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "arrange": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "direction",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "positional"
+          },
+          {
+            "name": "buff",
+            "ty": {
+              "base": "real"
+            },
+            "required": false,
+            "pass": "keyword"
+          },
+          {
+            "name": "center",
+            "ty": {
+              "base": "bool"
+            },
+            "required": false,
+            "pass": "keyword"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "become": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "mobject",
+            "ty": {
+              "mob": "Mobject"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "reshapes": true
+      }
+    ],
+    "flip": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "axis",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "positional"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "move_to": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "point_or_mobject",
+            "ty": {
+              "union": [
+                {
+                  "base": "vec"
+                },
+                {
+                  "mob": "Mobject"
+                }
+              ]
+            },
+            "required": true,
+            "pass": "positional"
+          },
+          {
+            "name": "aligned_edge",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "keyword"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "next_to": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "mobject_or_point",
+            "ty": {
+              "union": [
+                {
+                  "base": "vec"
+                },
+                {
+                  "mob": "Mobject"
+                }
+              ]
+            },
+            "required": true,
+            "pass": "positional"
+          },
+          {
+            "name": "direction",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "positional"
+          },
+          {
+            "name": "buff",
+            "ty": {
+              "base": "real"
+            },
+            "required": false,
+            "pass": "keyword"
+          },
+          {
+            "name": "aligned_edge",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "keyword"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "rotate": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "angle",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          },
+          {
+            "name": "axis",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "keyword"
+          },
+          {
+            "name": "about_point",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "keyword"
+          },
+          {
+            "name": "about_edge",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "keyword"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "scale": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "scale_factor",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          },
+          {
+            "name": "about_point",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "keyword"
+          },
+          {
+            "name": "about_edge",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "keyword"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "scale_to_fit_height": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "height",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "scale_to_fit_width": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "width",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "set_color": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "color",
+            "ty": {
+              "base": "color"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "set_fill": [
+      {
+        "receiver": "VMobject",
+        "params": [
+          {
+            "name": "color",
+            "ty": {
+              "base": "color"
+            },
+            "required": false,
+            "pass": "keyword"
+          },
+          {
+            "name": "opacity",
+            "ty": {
+              "base": "real"
+            },
+            "required": false,
+            "pass": "keyword"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "set_opacity": [
+      {
+        "receiver": "VMobject",
+        "params": [
+          {
+            "name": "opacity",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "set_stroke": [
+      {
+        "receiver": "VMobject",
+        "params": [
+          {
+            "name": "color",
+            "ty": {
+              "base": "color"
+            },
+            "required": false,
+            "pass": "keyword"
+          },
+          {
+            "name": "width",
+            "ty": {
+              "base": "real"
+            },
+            "required": false,
+            "pass": "keyword"
+          },
+          {
+            "name": "opacity",
+            "ty": {
+              "base": "real"
+            },
+            "required": false,
+            "pass": "keyword"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "set_value": [
+      {
+        "receiver": "ValueTracker",
+        "params": [
+          {
+            "name": "value",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "reshapes": false
+      },
+      {
+        "receiver": "DecimalNumber",
+        "params": [
+          {
+            "name": "number",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "set_x": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "x",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "set_y": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "y",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "shift": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "vectors",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "variadic"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "stretch": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "factor",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          },
+          {
+            "name": "dim",
+            "ty": {
+              "base": "int"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "to_corner": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "corner",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "positional"
+          },
+          {
+            "name": "buff",
+            "ty": {
+              "base": "real"
+            },
+            "required": false,
+            "pass": "keyword"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "to_edge": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "edge",
+            "ty": {
+              "base": "vec"
+            },
+            "required": false,
+            "pass": "positional"
+          },
+          {
+            "name": "buff",
+            "ty": {
+              "base": "real"
+            },
+            "required": false,
+            "pass": "keyword"
+          }
+        ],
+        "reshapes": false
+      }
+    ],
+    "touch": [
+      {
+        "receiver": "Tangent",
+        "params": [
+          {
+            "name": "x",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "reshapes": false
+      }
+    ]
+  },
+  "queries": {
+    "c2p": [
+      {
+        "receiver": "Axes",
+        "params": [
+          {
+            "name": "x",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          },
+          {
+            "name": "y",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "result": "vec",
+        "property": false
+      }
+    ],
+    "get_bottom": [
+      {
+        "receiver": "Mobject",
+        "params": [],
+        "result": "vec",
+        "property": false
+      }
+    ],
+    "get_center": [
+      {
+        "receiver": "Mobject",
+        "params": [],
+        "result": "vec",
+        "property": false
+      }
+    ],
+    "get_corner": [
+      {
+        "receiver": "Mobject",
+        "params": [
+          {
+            "name": "direction",
+            "ty": {
+              "base": "vec"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "result": "vec",
+        "property": false
+      }
+    ],
+    "get_end": [
+      {
+        "receiver": "Mobject",
+        "params": [],
+        "result": "vec",
+        "property": false
+      }
+    ],
+    "get_left": [
+      {
+        "receiver": "Mobject",
+        "params": [],
+        "result": "vec",
+        "property": false
+      }
+    ],
+    "get_right": [
+      {
+        "receiver": "Mobject",
+        "params": [],
+        "result": "vec",
+        "property": false
+      }
+    ],
+    "get_start": [
+      {
+        "receiver": "Mobject",
+        "params": [],
+        "result": "vec",
+        "property": false
+      }
+    ],
+    "get_top": [
+      {
+        "receiver": "Mobject",
+        "params": [],
+        "result": "vec",
+        "property": false
+      }
+    ],
+    "get_value": [
+      {
+        "receiver": "ValueTracker",
+        "params": [],
+        "result": "real",
+        "property": false
+      },
+      {
+        "receiver": "DecimalNumber",
+        "params": [],
+        "result": "real",
+        "property": false
+      }
+    ],
+    "get_x": [
+      {
+        "receiver": "Mobject",
+        "params": [],
+        "result": "real",
+        "property": false
+      }
+    ],
+    "get_y": [
+      {
+        "receiver": "Mobject",
+        "params": [],
+        "result": "real",
+        "property": false
+      }
+    ],
+    "height": [
+      {
+        "receiver": "Mobject",
+        "params": [],
+        "result": "real",
+        "property": true
+      }
+    ],
+    "n2p": [
+      {
+        "receiver": "NumberLine",
+        "params": [
+          {
+            "name": "number",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "result": "vec",
+        "property": false
+      }
+    ],
+    "point_from_proportion": [
+      {
+        "receiver": "VMobject",
+        "params": [
+          {
+            "name": "alpha",
+            "ty": {
+              "base": "real"
+            },
+            "required": true,
+            "pass": "positional"
+          }
+        ],
+        "result": "vec",
+        "property": false
+      }
+    ],
+    "slope": [
+      {
+        "receiver": "Tangent",
+        "params": [],
+        "result": "real",
+        "property": true
+      }
+    ],
+    "width": [
+      {
+        "receiver": "Mobject",
+        "params": [],
+        "result": "real",
+        "property": true
+      }
+    ]
+  },
+  "anims": {
+    "AddTextLetterByLetter": {
+      "params": [
+        {
+          "name": "text",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "Text"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "linear",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "ApplyWave": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "mut",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "direction",
+          "ty": {
+            "value": {
+              "base": "vec"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "amplitude",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 2.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "Circumscribe": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "use",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "fade_in",
+          "ty": {
+            "value": {
+              "base": "bool"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "fade_out",
+          "ty": {
+            "value": {
+              "base": "bool"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "time_width",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "buff",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "color",
+          "ty": {
+            "value": {
+              "base": "color"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "stroke_width",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "linear",
+      "lag": 1.0,
+      "weakens": false
+    },
+    "Create": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "VMobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 1.0,
+      "weakens": false
+    },
+    "DrawBorderThenFill": {
+      "params": [
+        {
+          "name": "vmobject",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "VMobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        }
+      ],
+      "run_time": 2.0,
+      "rate": "double_smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "FadeIn": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "shift",
+          "ty": {
+            "value": {
+              "base": "vec"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "target_position",
+          "ty": {
+            "value": {
+              "union": [
+                {
+                  "base": "vec"
+                },
+                {
+                  "mob": "Mobject"
+                }
+              ]
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "scale",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "FadeOut": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "outro",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "shift",
+          "ty": {
+            "value": {
+              "base": "vec"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "target_position",
+          "ty": {
+            "value": {
+              "union": [
+                {
+                  "base": "vec"
+                },
+                {
+                  "mob": "Mobject"
+                }
+              ]
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "scale",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "FadeToColor": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "mut",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "color",
+          "ty": {
+            "value": {
+              "base": "color"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "FadeTransform": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "outro",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "target_mobject",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "stretch",
+          "ty": {
+            "value": {
+              "base": "bool"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "dim_to_match",
+          "ty": {
+            "value": {
+              "base": "int"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "Flash": {
+      "params": [
+        {
+          "name": "point",
+          "ty": {
+            "value": {
+              "union": [
+                {
+                  "base": "vec"
+                },
+                {
+                  "mob": "Mobject"
+                }
+              ]
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "line_length",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "num_lines",
+          "ty": {
+            "value": {
+              "base": "int"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "flash_radius",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "color",
+          "ty": {
+            "value": {
+              "base": "color"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "linear",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "FocusOn": {
+      "params": [
+        {
+          "name": "focus_point",
+          "ty": {
+            "value": {
+              "union": [
+                {
+                  "base": "vec"
+                },
+                {
+                  "mob": "Mobject"
+                }
+              ]
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "opacity",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "color",
+          "ty": {
+            "value": {
+              "base": "color"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 2.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "Glide": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "mut",
+              "kind": "Tangent"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "to",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "GrowArrow": {
+      "params": [
+        {
+          "name": "arrow",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "Arrow"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "point_color",
+          "ty": {
+            "value": {
+              "base": "color"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "GrowFromCenter": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "point_color",
+          "ty": {
+            "value": {
+              "base": "color"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "GrowFromEdge": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "edge",
+          "ty": {
+            "value": {
+              "base": "vec"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "point_color",
+          "ty": {
+            "value": {
+              "base": "color"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "GrowFromPoint": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "point",
+          "ty": {
+            "value": {
+              "base": "vec"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "point_color",
+          "ty": {
+            "value": {
+              "base": "color"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "Indicate": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "mut",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "scale_factor",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "color",
+          "ty": {
+            "value": {
+              "base": "color"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "there_and_back",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "MoveAlongPath": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "mut",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "path",
+          "ty": {
+            "object": {
+              "role": "use",
+              "kind": "VMobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "ReplacementTransform": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "consume",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "target_mobject",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "path_arc",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "Rotate": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "mut",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "angle",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "axis",
+          "ty": {
+            "value": {
+              "base": "vec"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "about_point",
+          "ty": {
+            "value": {
+              "base": "vec"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "about_edge",
+          "ty": {
+            "value": {
+              "base": "vec"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "ScaleInPlace": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "mut",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "scale_factor",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "ShowPassingFlash": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "flash",
+              "kind": "VMobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "time_width",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "SpinInFromNothing": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "angle",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "point_color",
+          "ty": {
+            "value": {
+              "base": "color"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "Transform": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "mut",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "target_mobject",
+          "ty": {
+            "object": {
+              "role": "use",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "path_arc",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": true
+    },
+    "TransformFromCopy": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "use",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "target_mobject",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "path_arc",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "TransformMatchingShapes": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "outro",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "target_mobject",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "transform_mismatches",
+          "ty": {
+            "value": {
+              "base": "bool"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "fade_transform_mismatches",
+          "ty": {
+            "value": {
+              "base": "bool"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "linear",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "TransformMatchingTex": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "outro",
+              "kind": "MathTex"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "target_mobject",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "MathTex"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "transform_mismatches",
+          "ty": {
+            "value": {
+              "base": "bool"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "fade_transform_mismatches",
+          "ty": {
+            "value": {
+              "base": "bool"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "linear",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "Uncreate": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "consume",
+              "kind": "VMobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "smooth",
+      "lag": 1.0,
+      "weakens": false
+    },
+    "Unwrite": {
+      "params": [
+        {
+          "name": "vmobject",
+          "ty": {
+            "object": {
+              "role": "consume",
+              "kind": "VMobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "linear",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "Wiggle": {
+      "params": [
+        {
+          "name": "mobject",
+          "ty": {
+            "object": {
+              "role": "mut",
+              "kind": "Mobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        },
+        {
+          "name": "scale_value",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "rotation_angle",
+          "ty": {
+            "value": {
+              "base": "real"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        },
+        {
+          "name": "n_wiggles",
+          "ty": {
+            "value": {
+              "base": "int"
+            }
+          },
+          "required": false,
+          "pass": "keyword"
+        }
+      ],
+      "run_time": 2.0,
+      "rate": "smooth",
+      "lag": 0.0,
+      "weakens": false
+    },
+    "Write": {
+      "params": [
+        {
+          "name": "vmobject",
+          "ty": {
+            "object": {
+              "role": "intro",
+              "kind": "VMobject"
+            }
+          },
+          "required": true,
+          "pass": "positional"
+        }
+      ],
+      "run_time": 1.0,
+      "rate": "linear",
+      "lag": 0.0,
+      "weakens": false
+    }
+  },
+  "rates": {
+    "double_smooth": "double_smooth",
+    "ease_in_back": "rate_functions.ease_in_back",
+    "ease_in_bounce": "rate_functions.ease_in_bounce",
+    "ease_in_circ": "rate_functions.ease_in_circ",
+    "ease_in_cubic": "rate_functions.ease_in_cubic",
+    "ease_in_elastic": "rate_functions.ease_in_elastic",
+    "ease_in_expo": "rate_functions.ease_in_expo",
+    "ease_in_out_back": "rate_functions.ease_in_out_back",
+    "ease_in_out_bounce": "rate_functions.ease_in_out_bounce",
+    "ease_in_out_circ": "rate_functions.ease_in_out_circ",
+    "ease_in_out_cubic": "rate_functions.ease_in_out_cubic",
+    "ease_in_out_elastic": "rate_functions.ease_in_out_elastic",
+    "ease_in_out_expo": "rate_functions.ease_in_out_expo",
+    "ease_in_out_quad": "rate_functions.ease_in_out_quad",
+    "ease_in_out_quart": "rate_functions.ease_in_out_quart",
+    "ease_in_out_quint": "rate_functions.ease_in_out_quint",
+    "ease_in_out_sine": "rate_functions.ease_in_out_sine",
+    "ease_in_quad": "rate_functions.ease_in_quad",
+    "ease_in_quart": "rate_functions.ease_in_quart",
+    "ease_in_quint": "rate_functions.ease_in_quint",
+    "ease_in_sine": "rate_functions.ease_in_sine",
+    "ease_out_back": "rate_functions.ease_out_back",
+    "ease_out_bounce": "rate_functions.ease_out_bounce",
+    "ease_out_circ": "rate_functions.ease_out_circ",
+    "ease_out_cubic": "rate_functions.ease_out_cubic",
+    "ease_out_elastic": "rate_functions.ease_out_elastic",
+    "ease_out_expo": "rate_functions.ease_out_expo",
+    "ease_out_quad": "rate_functions.ease_out_quad",
+    "ease_out_quart": "rate_functions.ease_out_quart",
+    "ease_out_quint": "rate_functions.ease_out_quint",
+    "ease_out_sine": "rate_functions.ease_out_sine",
+    "exponential_decay": "exponential_decay",
+    "linear": "linear",
+    "lingering": "lingering",
+    "running_start": "running_start",
+    "rush_from": "rush_from",
+    "rush_into": "rush_into",
+    "slow_into": "slow_into",
+    "smooth": "smooth",
+    "smoothererstep": "smoothererstep",
+    "smootherstep": "smootherstep",
+    "smoothstep": "smoothstep",
+    "there_and_back": "there_and_back",
+    "there_and_back_with_pause": "there_and_back_with_pause",
+    "wiggle": "wiggle"
+  },
+  "fns": {
+    "!=": [
+      {
+        "params": [
+          "real",
+          "real"
+        ],
+        "result": "bool",
+        "py": {
+          "infix": "!="
+        }
+      }
+    ],
+    "*": [
+      {
+        "params": [
+          "int",
+          "int"
+        ],
+        "result": "int",
+        "py": {
+          "infix": "*"
+        }
+      },
+      {
+        "params": [
+          "real",
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "infix": "*"
+        }
+      },
+      {
+        "params": [
+          "real",
+          "vec"
+        ],
+        "result": "vec",
+        "py": {
+          "infix": "*"
+        }
+      },
+      {
+        "params": [
+          "vec",
+          "real"
+        ],
+        "result": "vec",
+        "py": {
+          "infix": "*"
+        }
+      }
+    ],
+    "+": [
+      {
+        "params": [
+          "int",
+          "int"
+        ],
+        "result": "int",
+        "py": {
+          "infix": "+"
+        }
+      },
+      {
+        "params": [
+          "real",
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "infix": "+"
+        }
+      },
+      {
+        "params": [
+          "vec",
+          "vec"
+        ],
+        "result": "vec",
+        "py": {
+          "infix": "+"
+        }
+      }
+    ],
+    "-": [
+      {
+        "params": [
+          "int",
+          "int"
+        ],
+        "result": "int",
+        "py": {
+          "infix": "-"
+        }
+      },
+      {
+        "params": [
+          "real",
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "infix": "-"
+        }
+      },
+      {
+        "params": [
+          "vec",
+          "vec"
+        ],
+        "result": "vec",
+        "py": {
+          "infix": "-"
+        }
+      }
+    ],
+    "/": [
+      {
+        "params": [
+          "real",
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "infix": "/"
+        }
+      },
+      {
+        "params": [
+          "vec",
+          "real"
+        ],
+        "result": "vec",
+        "py": {
+          "infix": "/"
+        }
+      }
+    ],
+    "<": [
+      {
+        "params": [
+          "real",
+          "real"
+        ],
+        "result": "bool",
+        "py": {
+          "infix": "<"
+        }
+      }
+    ],
+    "<=": [
+      {
+        "params": [
+          "real",
+          "real"
+        ],
+        "result": "bool",
+        "py": {
+          "infix": "<="
+        }
+      }
+    ],
+    "==": [
+      {
+        "params": [
+          "real",
+          "real"
+        ],
+        "result": "bool",
+        "py": {
+          "infix": "=="
+        }
+      }
+    ],
+    ">": [
+      {
+        "params": [
+          "real",
+          "real"
+        ],
+        "result": "bool",
+        "py": {
+          "infix": ">"
+        }
+      }
+    ],
+    ">=": [
+      {
+        "params": [
+          "real",
+          "real"
+        ],
+        "result": "bool",
+        "py": {
+          "infix": ">="
+        }
+      }
+    ],
+    "abs": [
+      {
+        "params": [
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "call": "abs"
+        }
+      }
+    ],
+    "and": [
+      {
+        "params": [
+          "bool",
+          "bool"
+        ],
+        "result": "bool",
+        "py": {
+          "infix": "and"
+        }
+      }
+    ],
+    "cos": [
+      {
+        "params": [
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "call": "np.cos"
+        }
+      }
+    ],
+    "exp": [
+      {
+        "params": [
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "call": "np.exp"
+        }
+      }
+    ],
+    "log": [
+      {
+        "params": [
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "call": "np.log"
+        }
+      }
+    ],
+    "max": [
+      {
+        "params": [
+          "real",
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "call": "max"
+        }
+      }
+    ],
+    "min": [
+      {
+        "params": [
+          "real",
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "call": "min"
+        }
+      }
+    ],
+    "neg": [
+      {
+        "params": [
+          "int"
+        ],
+        "result": "int",
+        "py": {
+          "prefix": "-"
+        }
+      },
+      {
+        "params": [
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "prefix": "-"
+        }
+      },
+      {
+        "params": [
+          "vec"
+        ],
+        "result": "vec",
+        "py": {
+          "prefix": "-"
+        }
+      }
+    ],
+    "norm": [
+      {
+        "params": [
+          "vec"
+        ],
+        "result": "real",
+        "py": {
+          "call": "np.linalg.norm"
+        }
+      }
+    ],
+    "not": [
+      {
+        "params": [
+          "bool"
+        ],
+        "result": "bool",
+        "py": {
+          "prefix": "not "
+        }
+      }
+    ],
+    "or": [
+      {
+        "params": [
+          "bool",
+          "bool"
+        ],
+        "result": "bool",
+        "py": {
+          "infix": "or"
+        }
+      }
+    ],
+    "pow": [
+      {
+        "params": [
+          "real",
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "infix": "**"
+        }
+      }
+    ],
+    "sin": [
+      {
+        "params": [
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "call": "np.sin"
+        }
+      }
+    ],
+    "sqrt": [
+      {
+        "params": [
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "call": "np.sqrt"
+        }
+      }
+    ],
+    "tan": [
+      {
+        "params": [
+          "real"
+        ],
+        "result": "real",
+        "py": {
+          "call": "np.tan"
+        }
+      }
+    ],
+    "x": [
+      {
+        "params": [
+          "vec"
+        ],
+        "result": "real",
+        "py": {
+          "index": 0
+        }
+      }
+    ],
+    "y": [
+      {
+        "params": [
+          "vec"
+        ],
+        "result": "real",
+        "py": {
+          "index": 1
+        }
+      }
+    ],
+    "z": [
+      {
+        "params": [
+          "vec"
+        ],
+        "result": "real",
+        "py": {
+          "index": 2
+        }
+      }
+    ]
+  },
+  "consts": {
+    "BLACK": {
+      "color": "#000000"
+    },
+    "BLUE": {
+      "color": "#58c4dd"
+    },
+    "BLUE_A": {
+      "color": "#c7e9f1"
+    },
+    "BLUE_B": {
+      "color": "#9cdceb"
+    },
+    "BLUE_C": {
+      "color": "#58c4dd"
+    },
+    "BLUE_D": {
+      "color": "#29abca"
+    },
+    "BLUE_E": {
+      "color": "#236b8e"
+    },
+    "DARKER_GRAY": {
+      "color": "#222222"
+    },
+    "DARKER_GREY": {
+      "color": "#222222"
+    },
+    "DARK_BLUE": {
+      "color": "#236b8e"
+    },
+    "DARK_BROWN": {
+      "color": "#8b4513"
+    },
+    "DARK_GRAY": {
+      "color": "#444444"
+    },
+    "DARK_GREY": {
+      "color": "#444444"
+    },
+    "DEGREES": {
+      "real": 0.017453292519943295
+    },
+    "DL": {
+      "vec": [
+        -1.0,
+        -1.0,
+        0.0
+      ]
+    },
+    "DOWN": {
+      "vec": [
+        0.0,
+        -1.0,
+        0.0
+      ]
+    },
+    "DR": {
+      "vec": [
+        1.0,
+        -1.0,
+        0.0
+      ]
+    },
+    "GOLD": {
+      "color": "#f0ac5f"
+    },
+    "GOLD_A": {
+      "color": "#f7c797"
+    },
+    "GOLD_B": {
+      "color": "#f9b775"
+    },
+    "GOLD_C": {
+      "color": "#f0ac5f"
+    },
+    "GOLD_D": {
+      "color": "#e1a158"
+    },
+    "GOLD_E": {
+      "color": "#c78d46"
+    },
+    "GRAY": {
+      "color": "#888888"
+    },
+    "GRAY_A": {
+      "color": "#dddddd"
+    },
+    "GRAY_B": {
+      "color": "#bbbbbb"
+    },
+    "GRAY_BROWN": {
+      "color": "#736357"
+    },
+    "GRAY_C": {
+      "color": "#888888"
+    },
+    "GRAY_D": {
+      "color": "#444444"
+    },
+    "GRAY_E": {
+      "color": "#222222"
+    },
+    "GREEN": {
+      "color": "#83c167"
+    },
+    "GREEN_A": {
+      "color": "#c9e2ae"
+    },
+    "GREEN_B": {
+      "color": "#a6cf8c"
+    },
+    "GREEN_C": {
+      "color": "#83c167"
+    },
+    "GREEN_D": {
+      "color": "#77b05d"
+    },
+    "GREEN_E": {
+      "color": "#699c52"
+    },
+    "GREY": {
+      "color": "#888888"
+    },
+    "GREY_A": {
+      "color": "#dddddd"
+    },
+    "GREY_B": {
+      "color": "#bbbbbb"
+    },
+    "GREY_BROWN": {
+      "color": "#736357"
+    },
+    "GREY_C": {
+      "color": "#888888"
+    },
+    "GREY_D": {
+      "color": "#444444"
+    },
+    "GREY_E": {
+      "color": "#222222"
+    },
+    "IN": {
+      "vec": [
+        0.0,
+        0.0,
+        -1.0
+      ]
+    },
+    "LEFT": {
+      "vec": [
+        -1.0,
+        0.0,
+        0.0
+      ]
+    },
+    "LIGHTER_GRAY": {
+      "color": "#dddddd"
+    },
+    "LIGHTER_GREY": {
+      "color": "#dddddd"
+    },
+    "LIGHT_BROWN": {
+      "color": "#cd853f"
+    },
+    "LIGHT_GRAY": {
+      "color": "#bbbbbb"
+    },
+    "LIGHT_GREY": {
+      "color": "#bbbbbb"
+    },
+    "LIGHT_PINK": {
+      "color": "#dc75cd"
+    },
+    "LOGO_BLACK": {
+      "color": "#343434"
+    },
+    "LOGO_BLUE": {
+      "color": "#525893"
+    },
+    "LOGO_GREEN": {
+      "color": "#87c2a5"
+    },
+    "LOGO_RED": {
+      "color": "#e07a5f"
+    },
+    "LOGO_WHITE": {
+      "color": "#ece7e2"
+    },
+    "MAROON": {
+      "color": "#c55f73"
+    },
+    "MAROON_A": {
+      "color": "#ecabc1"
+    },
+    "MAROON_B": {
+      "color": "#ec92ab"
+    },
+    "MAROON_C": {
+      "color": "#c55f73"
+    },
+    "MAROON_D": {
+      "color": "#a24d61"
+    },
+    "MAROON_E": {
+      "color": "#94424f"
+    },
+    "ORANGE": {
+      "color": "#ff862f"
+    },
+    "ORIGIN": {
+      "vec": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "OUT": {
+      "vec": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    "PI": {
+      "real": 3.141592653589793
+    },
+    "PINK": {
+      "color": "#d147bd"
+    },
+    "PURE_BLUE": {
+      "color": "#0000ff"
+    },
+    "PURE_CYAN": {
+      "color": "#00ffff"
+    },
+    "PURE_GREEN": {
+      "color": "#00ff00"
+    },
+    "PURE_MAGENTA": {
+      "color": "#ff00ff"
+    },
+    "PURE_RED": {
+      "color": "#ff0000"
+    },
+    "PURE_YELLOW": {
+      "color": "#ffff00"
+    },
+    "PURPLE": {
+      "color": "#9a72ac"
+    },
+    "PURPLE_A": {
+      "color": "#caa3e8"
+    },
+    "PURPLE_B": {
+      "color": "#b189c6"
+    },
+    "PURPLE_C": {
+      "color": "#9a72ac"
+    },
+    "PURPLE_D": {
+      "color": "#715582"
+    },
+    "PURPLE_E": {
+      "color": "#644172"
+    },
+    "RED": {
+      "color": "#fc6255"
+    },
+    "RED_A": {
+      "color": "#f7a1a3"
+    },
+    "RED_B": {
+      "color": "#ff8080"
+    },
+    "RED_C": {
+      "color": "#fc6255"
+    },
+    "RED_D": {
+      "color": "#e65a4c"
+    },
+    "RED_E": {
+      "color": "#cf5044"
+    },
+    "RIGHT": {
+      "vec": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    "TAU": {
+      "real": 6.283185307179586
+    },
+    "TEAL": {
+      "color": "#5cd0b3"
+    },
+    "TEAL_A": {
+      "color": "#acead7"
+    },
+    "TEAL_B": {
+      "color": "#76ddc0"
+    },
+    "TEAL_C": {
+      "color": "#5cd0b3"
+    },
+    "TEAL_D": {
+      "color": "#55c1a7"
+    },
+    "TEAL_E": {
+      "color": "#49a88f"
+    },
+    "UL": {
+      "vec": [
+        -1.0,
+        1.0,
+        0.0
+      ]
+    },
+    "UP": {
+      "vec": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    "UR": {
+      "vec": [
+        1.0,
+        1.0,
+        0.0
+      ]
+    },
+    "WHITE": {
+      "color": "#ffffff"
+    },
+    "YELLOW": {
+      "color": "#f7d96f"
+    },
+    "YELLOW_A": {
+      "color": "#fff1b6"
+    },
+    "YELLOW_B": {
+      "color": "#ffea94"
+    },
+    "YELLOW_C": {
+      "color": "#f7d96f"
+    },
+    "YELLOW_D": {
+      "color": "#f4d345"
+    },
+    "YELLOW_E": {
+      "color": "#e8c11c"
+    }
+  }
+}

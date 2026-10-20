@@ -164,6 +164,14 @@ python3 -m venv .venv
 
 All of it starts at [docs/README.md](docs/README.md).
 
+## Decks written by Claude
+
+This repository comes with a [Claude Code](https://claude.com/claude-code) skill,
+[`.claude/skills/suit-slides`](.claude/skills/suit-slides/SKILL.md). Working in this
+folder, ask Claude for slides ("make slides about eigenvalues for my first-year students")
+and it writes a `.suit.json` deck, checks it with Suit's own checker, renders a preview
+with Manim to look at the result, and hands you a file to open in Suit and polish.
+
 ## How it works, in one paragraph
 
 A deck is a program in a small language, *Manim Core*, which has a written
