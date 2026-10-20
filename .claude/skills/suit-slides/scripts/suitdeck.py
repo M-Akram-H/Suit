@@ -49,11 +49,16 @@ class SuitError(Exception):
 
 def _source_checkouts():
     """Folders that may be a checkout of Suit's source: named in SUIT_REPO, above this
-    script (the skill may live in one), and above the working directory."""
+    script (the skill may live in one), the one a copy of the skill was made from (named
+    in assets/checkout.txt), and above the working directory."""
     seen = []
     named = os.environ.get("SUIT_REPO")
     starts = [Path(named)] if named else []
-    starts += [HERE, Path.cwd()]
+    starts.append(HERE)
+    recorded = HERE.parent / "assets" / "checkout.txt"
+    if recorded.is_file():
+        starts.append(Path(recorded.read_text().strip()))
+    starts.append(Path.cwd())
     for start in starts:
         for folder in [start, *start.parents]:
             if (folder / "Cargo.toml").is_file() and (folder / "crates").is_dir():
@@ -89,10 +94,21 @@ def find_python():
     else:
         shared = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
         candidates.append(Path(shared) / "suit" / "venv" / inside)
+    # A Python environment only works on the system it was made on: one made in a
+    # container is there on the host too, and finds none of its packages. So each is asked.
     for python in candidates:
-        if python.is_file():
+        if python.is_file() and _has_manim(python):
             return str(python)
     return None
+
+
+def _has_manim(python):
+    try:
+        asked = subprocess.run([str(python), "-c", "import manim, manim_slides"],
+                               capture_output=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return asked.returncode == 0
 
 
 # ── The catalogue ────────────────────────────────────────────────────────────
