@@ -7,7 +7,7 @@ pub mod formula;
 pub mod pretty;
 mod python;
 
-use std::fmt::Write;
+use std::{cell::Cell, fmt::Write};
 
 use suit_check::{Checked, Note};
 use suit_core::{
@@ -55,6 +55,7 @@ pub fn export(deck: &Deck, sig: &Signature, checked: &Checked, options: &Options
         sig,
         checked,
         mode: Mode::Slides,
+        frame_time: Cell::new(None),
     };
     let mut out = String::new();
     exporter.header(&mut out, options);
@@ -125,6 +126,7 @@ fn probe_script(deck: &Deck, sig: &Signature, checked: &Checked, last: usize, ru
         sig,
         checked,
         mode: Mode::Probe,
+        frame_time: Cell::new(None),
     };
     let config = &deck.config;
     let frame_width = FRAME_HEIGHT * f64::from(config.width) / f64::from(config.height);
@@ -168,6 +170,9 @@ struct Exporter<'a> {
     sig: &'a Signature,
     checked: &'a Checked,
     mode: Mode,
+    /// While an updater that is given the frame time is written: the variable that stands
+    /// for it. Manim passes the time only to a parameter called `dt`, so that is its name.
+    frame_time: Cell<Option<VarId>>,
 }
 
 /// Statements inside `construct`.
@@ -407,10 +412,14 @@ impl Exporter<'_> {
             }
             Command::Attach { target, updater } => {
                 let (params, call) = match updater {
-                    Updater::Always(call) => ("m".to_owned(), call),
-                    Updater::Every { dt, call } => (format!("m, {}", self.var(*dt)), call),
+                    Updater::Always(call) => ("m", call),
+                    Updater::Every { dt, call } => {
+                        self.frame_time.set(Some(*dt));
+                        ("m, dt", call)
+                    }
                 };
                 let body = self.call("m", call);
+                self.frame_time.set(None);
                 let _ = writeln!(
                     out,
                     "{INDENT}{}.add_updater(lambda {params}: {body})",
@@ -715,6 +724,9 @@ impl Exporter<'_> {
     /// The Python name of a variable: its display name made an identifier, plus its id, so
     /// that it is unique and cannot shadow anything Manim exports.
     fn var(&self, var: VarId) -> String {
+        if self.frame_time.get() == Some(var) {
+            return "dt".to_owned();
+        }
         let name = self.deck.names.get(&var).map_or("", String::as_str);
         format!("{}_{}", identifier(name), var.0)
     }

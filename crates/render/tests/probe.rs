@@ -8,7 +8,7 @@ use std::{
 };
 
 use suit_check::check;
-use suit_core::{Anim, Command, Deck, DeckConfig, Object, Raw, RawIface, Time};
+use suit_core::{Anim, Call, Command, Deck, DeckConfig, Expr, Object, Raw, RawIface, Time};
 use suit_render::{Failure, Prober, Sidecar, Watch};
 use suit_sig::Signature;
 
@@ -703,4 +703,37 @@ fn a_tangent_touches_its_graph_all_the_way_along() {
         "{middle:?}"
     );
     assert!((slope - 2.0).abs() < 2e-3, "{slope}");
+}
+
+#[test]
+#[ignore = "needs Manim"]
+fn an_updater_given_the_frame_time_moves_with_it() {
+    let sig = Signature::builtin();
+    let mut deck = Deck::new(DeckConfig::default());
+    let mut slide = deck.add_slide("Drift");
+    let dot = slide.object("dot", Object::new("Dot"));
+    slide.add(&[&dot]);
+    // A unit to the right every second, worked out from the time each frame takes.
+    slide.every(&dot, |dt| {
+        let step = Expr::call("*", vec![Expr::Var(dt), Expr::konst("RIGHT")]);
+        Call::new("shift").arg("vectors", step)
+    });
+    slide.wait(1.0);
+    let checked = check(&deck, &sig);
+    assert_eq!(checked.diagnostics, []);
+
+    let clip = prober()
+        .probe_frames(&deck, &sig, &checked, 0, Watch::patient())
+        .expect("Manim runs");
+    assert_eq!(clip.error, None);
+    let x = |index: usize| {
+        let xs: Vec<f32> = clip
+            .frame(index)
+            .flat_map(|drawn| drawn.paths.iter().flat_map(|path| path.points.iter()))
+            .map(|point| point[0])
+            .collect();
+        xs.iter().sum::<f32>() / xs.len() as f32
+    };
+    let travelled = x(clip.frames.len() - 1) - x(0);
+    assert!((0.9..1.3).contains(&travelled), "travelled {travelled}");
 }

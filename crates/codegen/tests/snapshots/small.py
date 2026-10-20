@@ -45,7 +45,7 @@ class Deck(Slide):
         self.add(pair_18)
         twin_21 = _relayer(pair_18.copy(), 4)
         self.play(Succession(pair_18.animate(run_time=1.0).shift(UP), Rotate(pair_18, run_time=1.0), run_time=2.0))
-        line_14.add_updater(lambda m, dt_28: m.shift((dt_28 * RIGHT)))
+        line_14.add_updater(lambda m, dt: m.shift((dt * RIGHT)))
         self.play(AnimationGroup(Indicate(circle_2, run_time=1.0), Circumscribe(the_label_5, color=RED, run_time=1.0), lag_ratio=0.5))
         self.wait(0.1, frozen_frame=False)
 
