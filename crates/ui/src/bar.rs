@@ -168,7 +168,12 @@ impl SuitApp {
             match &self.session.preview {
                 Preview::Running => {
                     ui.spinner();
-                    ui.weak("Asking Manim…");
+                    // The slide on the canvas is done first; the ones after it may have
+                    // moved with it, and are done next.
+                    ui.weak(match self.session.catching_up_after() {
+                        true => "Updating the slides after this one…",
+                        false => "Asking Manim…",
+                    });
                     // What takes this long may never finish; nobody should have to wait
                     // it out or close the window.
                     if now - since > PATIENCE {

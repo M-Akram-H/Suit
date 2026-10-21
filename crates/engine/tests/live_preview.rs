@@ -385,9 +385,19 @@ fn an_edit_late_in_a_long_deck_does_not_replay_the_deck() {
     let late = settle(&mut session);
     session.select(15, Some(1));
     session.add_object("Square");
+    assert!(
+        !session.catching_up_after(),
+        "the slide on the canvas is not there yet"
+    );
     let middle = settle(&mut session);
+    // The bar says so while the slides after it are done.
+    assert_eq!(
+        session.catching_up_after(),
+        session.preview == Preview::Running
+    );
     let rest = Instant::now();
     settle_all(&mut session);
+    assert!(!session.catching_up_after());
     println!(
         "the whole deck {whole:?}; an edit on the last slide {late:?}; on a middle one \
          {middle:?} until the canvas has it, {:?} more for the slides after",

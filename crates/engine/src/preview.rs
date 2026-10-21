@@ -478,6 +478,13 @@ impl Session {
         self.held() > self.slide
     }
 
+    /// Whether the selected slide is shown as it is now, and Manim is only bringing the
+    /// slides after it up to date.
+    pub fn catching_up_after(&self) -> bool {
+        let held = self.held();
+        held > self.slide && held < self.deck.slides.len()
+    }
+
     fn take_steps(&mut self, reply: Reply) {
         let Reply::Steps {
             revision,

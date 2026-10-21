@@ -139,8 +139,9 @@ Slides share one scene. Begin a slide with FadeOut steps for what should go
 
 **Every edit takes a moment to show.**
 That is Manim working out the scene. The slide you are on comes first, within about a
-second; then the slides after it, which the change may have moved. *Asking Manim…*
-stays until the last of them is done. You can go on editing meanwhile: the work starts
+second, while the bar says *Asking Manim…*; then the slides after it, which the change
+may have moved, while it says *Updating the slides after this one…*. You can go on
+editing meanwhile: the work starts
 over with the newest deck. Slides before the one you are editing are not run again.
 
 **Play does not start at once.**

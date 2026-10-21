@@ -37,7 +37,8 @@ This has three consequences worth knowing:
   morph by Manim's own `Transform`.
 - **An edit takes a moment to show.** After a change the bar says *Asking Manim…*. The
   slide you are on shows again within about a second; the slides after it, which the
-  change may have moved, are brought up to date after that. Slides before the one you
+  change may have moved, are brought up to date after that (*Updating the slides after
+  this one…*). Slides before the one you
   changed are not run again.
 - **Manim has to be installed.** With [Docker](02-installing.md) it comes in the box.
 
