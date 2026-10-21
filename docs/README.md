@@ -19,7 +19,7 @@ first time, and looked things up in afterwards.
 | [7. Graphs and tangents](07-graphs-and-tangents.md) | Functions, where they have a value, asymptotes, and lines that follow a curve |
 | [8. Formulas](08-formulas.md) | Settings that are computed instead of typed |
 | [9. Slides and presenting](09-slides-and-presenting.md) | Loops, notes, playing a slide, and presenting the deck |
-| [10. Saving and exporting](10-saving-and-exporting.md) | Deck files, pictures, Python for manim-slides, the command line |
+| [10. Saving and exporting](10-saving-and-exporting.md) | Deck files, pictures, a PDF, a website to put online, Python for manim-slides, the command line |
 | [11. Problems](11-problems.md) | What the list at the bottom tells you, and what to do about it |
 | [15. Troubleshooting](15-troubleshooting.md) | When something does not work |
 

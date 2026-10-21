@@ -11,6 +11,7 @@ suit-sig.workspace = true
 suit-check.workspace = true
 suit-codegen.workspace = true
 suit-render.workspace = true
+suit-export.workspace = true
 serde_json.workspace = true
 
 [lints]

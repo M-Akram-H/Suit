@@ -232,4 +232,4 @@ s.play(Rotate(spinner, angle=PI / 2), run_time=1, rate="linear")
 A looping slide should end the way it starts, or it jumps on every round: so what it
 shows is brought in on the slide before, and a quarter turn of a square looks the same as
 none. The checker warns otherwise, and also about a loop on the first or last slide,
-which the web export cannot show.
+which the HTML page of `manim-slides convert` cannot show (Suit's own website can).

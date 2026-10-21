@@ -152,6 +152,27 @@ in the background when the deck is left alone for a moment.
 Suit draws every frame as it shows it. For a talk, export the deck and present the
 rendered result ([chapter 10](10-saving-and-exporting.md#rendering-and-presenting-the-export)).
 
+## Exports
+
+**Export PDF… says *Waiting for Manim to finish the slides…***
+The PDF is drawn from what Manim showed, and the last edit has not reached every slide
+yet. It goes on by itself within seconds. If the top bar says *Preview stopped*, press
+**Try again** there first.
+
+**Export website… says the folder *has other files in it*.**
+Suit writes a website only into a new folder, an empty one, or one it wrote before, so
+that it never replaces files of yours. Move the other files away, or rename the old
+folder.
+
+**The website stopped with *Manim stopped: …*.**
+The reason is Manim's own. A deck that previews fine renders fine as a rule; the
+exceptions are a slide that takes very long to render or a disk that is full. Exporting
+Python and rendering it with `manim-slides render` (above) shows Manim's whole message.
+
+**The website is too big for my host.**
+Export it again with smaller videos. 854×480 makes the sample deck's videos about half
+the size they are at full HD.
+
 ## Starting afresh
 
 Suit keeps nothing but a cache of typeset texts. Deleting it is always safe:

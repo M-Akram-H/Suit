@@ -463,7 +463,7 @@ impl Session {
     }
 
     /// How many slides, from the first, the snapshots show as they are now.
-    fn held(&self) -> usize {
+    pub(crate) fn held(&self) -> usize {
         let current = |(have, now): &(&Option<u64>, &u64)| **have == Some(**now);
         self.snapshot_keys
             .iter()

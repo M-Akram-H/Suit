@@ -281,14 +281,14 @@ impl Checker<'_> {
             self.warn(
                 "loop-auto-next",
                 "This slide both loops and moves on by itself.".into(),
-                Some("Presented, it loops and never moves on; exported to the web, it moves on after one pass. Choose one."),
+                Some("Presented, in Suit, in manim-slides or on Suit's website, it loops and never moves on; in the HTML page of manim-slides convert, it moves on after one pass. Choose one."),
             );
         }
         if config.looping && (index == 0 || index + 1 == self.deck.slides.len()) {
             self.warn(
                 "loop-edge",
-                "A looping first or last slide does not work in the web (RevealJS) export.".into(),
-                None,
+                "A looping first or last slide does not work in the HTML page of manim-slides convert.".into(),
+                Some("Suit's own website and presenting show it as it is. For manim-slides' HTML page, put a plain slide before or after it."),
             );
         }
 

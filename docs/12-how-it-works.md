@@ -27,6 +27,7 @@ flowchart TD
     check["check · the type checker"]
     codegen["codegen · deck → Python"]
     render["render · runs Python, reads the answers"]
+    export["export · PDF and website"]
     sig["sig · the catalogue"]
     core["core · the deck's data types"]
     manim(["Python · Manim"])
@@ -35,6 +36,9 @@ flowchart TD
     engine --> check
     engine --> codegen
     engine --> render
+    engine --> export
+    export --> render
+    export --> codegen
     check --> sig
     codegen --> sig
     check --> core
@@ -44,7 +48,7 @@ flowchart TD
     manim -- "outlines as JSON" --> render
 ```
 
-They are seven crates in `crates/`, and two programs in `apps/` (`suit`, the window, and
+They are eight crates in `crates/`, and two programs in `apps/` (`suit`, the window, and
 `suit-cli`, the command line).
 
 | Crate | What it is | Spec |
@@ -54,6 +58,7 @@ They are seven crates in `crates/`, and two programs in `apps/` (`suit`, the win
 | `check` | The **checker**. Walks the deck once and works out, for every step, what exists and whether it is on the slide; reports errors and warnings; computes the exact length of every step and slide. | §5 |
 | `codegen` | The **translation** to Python: the export, and the *probe* scripts the editor runs. Also the formula language people type. | §7, §3.1 |
 | `render` | Manim as a **sidecar** process: starts Python, sends scripts, reads results, stops it when asked. | §2 |
+| `export` | The deck as a **PDF**, drawn from what Manim showed, and as a **website**: a manim-slides render driven from Suit, and the player for the browser. | §7.1 |
 | `engine` | The **session**: the open deck, every edit as an undoable change, the selection, and the preview kept in step with the deck. No user interface. | |
 | `ui` | The **window**, drawn with egui. It changes nothing itself: every edit is a call into the session. | |
 
@@ -140,6 +145,29 @@ them as *remarks*: an object with points that are not numbers, a graph asked to 
 where its rule has no value, a tangent with nothing to touch. The engine puts them into
 words and lists them with the checker's findings.
 
+### Exports: a PDF and a website
+
+A **PDF** needs no new run of Manim: its pages are the states the probe already reported,
+the ones the canvas draws. `crates/export/src/pdf.rs` writes their outlines as PDF paths,
+filled and then stroked as Manim's Cairo camera does, with Cairo's caps and joins, so the
+page and the canvas show the same picture.
+
+A **website** is a real render. Suit exports the deck's Python into a folder of its own
+in the cache and runs `render.py` there with the same Python as the preview. That script
+loads the deck's `Deck` class and has manim-slides render it as `manim-slides render`
+would, with two additions: it reports how far the scene has got after every animation,
+and it stops between two animations when Suit asks, so Manim never leaves half a video in
+its cache. When the render is done it copies each slide's video and rewind video with
+their index moved to the front (`faststart`), so a browser can start playing before the
+whole file has arrived, and names each after what is in it, so that a host may let
+browsers keep it for good. Suit then writes the page, the player and `deck.js` around
+them, and only when all of it is ready does it replace the old website in the folder.
+
+The player, `crates/export/assets/site/player.js`, follows the table of presenting in
+§6.6 of the specification, like Suit's own presenter: the same states (playing, held,
+resting at the end), the same answers to Next, Previous, Rewind and Replay, loops beating
+moving on by itself.
+
 ## Suit's own objects
 
 Two things in the catalogue are not Manim's: `Plot`, the graph that looks before it
@@ -174,6 +202,7 @@ predicts, what the canvas shows, and what manim-slides renders.
 | The deck | The `.suit.json` file you save |
 | Undo history, selection, recordings | In memory, for the session |
 | Manim's typeset texts and formulas, the scripts in flight | `~/.cache/suit` (or `$XDG_CACHE_HOME/suit`). Safe to delete. |
+| What Manim rendered for a website, so that exporting it again is quicker | `render-…` folders in the same place, one per website folder, removed after a day unused |
 | Settings | None are kept: Suit has no settings file. |
 
 Next: [13. The deck file](13-deck-file-format.md)

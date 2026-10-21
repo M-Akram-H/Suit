@@ -14,6 +14,8 @@ suit-core.workspace = true
 suit-sig.workspace = true
 suit-check.workspace = true
 suit-codegen.workspace = true
+suit-render.workspace = true
+suit-engine.workspace = true
 serde_json.workspace = true
 clap.workspace = true
 

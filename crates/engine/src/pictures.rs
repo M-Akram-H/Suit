@@ -91,7 +91,8 @@ impl Session {
     }
 
     /// The deck as Manim is to see it: with every picture named by its whole path.
-    pub(crate) fn deck_for_manim(&self) -> Deck {
+    /// The deck as Manim is to see it: every picture named in full.
+    pub fn deck_for_manim(&self) -> Deck {
         let mut deck = self.deck.clone();
         rebase(&mut deck, self.folder().as_deref(), None);
         deck

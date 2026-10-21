@@ -32,8 +32,12 @@ approximation.
   fill colour that nothing shows.
 - **Present from the editor**, full screen, with the keys of manim-slides and your notes
   in a second window.
-- **Export** ordinary Python for manim-slides, to render videos or an HTML page of the
-  talk.
+- **Export a website** of the talk: every slide rendered by Manim, played in any browser
+  and on phones with the same keys as presenting, ready to put on Vercel, Netlify or
+  GitHub Pages as it is.
+- **Export a PDF**, a page per slide or per step, drawn as shapes so it is sharp at any
+  zoom.
+- **Export** ordinary Python for manim-slides, to render the talk yourself.
 - **Undo for everything.**
 
 ## Get it running

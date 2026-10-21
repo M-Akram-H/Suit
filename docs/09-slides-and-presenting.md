@@ -120,9 +120,10 @@ screen (usually F11) to fill the display. The notes window opens inside the same
 top of the slides, so it is of little use there; rehearse with it, and present with the
 notes on paper, or run Suit directly ([chapter 2](02-installing.md#without-docker-on-linux)).
 
-For a talk in front of an audience, consider exporting the deck and presenting the result
-with manim-slides or as an HTML page ([chapter 10](10-saving-and-exporting.md)): a
-rendered video plays smoothly on any machine, whereas Suit draws each frame as it shows
-it.
+For a talk in front of an audience, consider exporting the deck as a website and
+presenting that ([chapter 10](10-saving-and-exporting.md#exporting-a-website)): its
+videos play smoothly on any machine, whereas Suit draws each frame as it shows it. It
+has the same keys, runs in any browser and on a phone, and can be put online so that
+your audience can watch it again afterwards.
 
 Next: [10. Saving and exporting](10-saving-and-exporting.md)

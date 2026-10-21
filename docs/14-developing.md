@@ -43,12 +43,13 @@ cargo run -p suit-cli -- check examples/sample.suit.json
 
 ```
 apps/suit            the window: command line, then hands over to crates/ui
-apps/suit-cli        check, timeline, export, probe, signature, sample
+apps/suit-cli        check, timeline, export, pdf, website, probe, signature, sample
 crates/core          the deck's data types
 crates/sig           the catalogue (builtin.rs), its types, Manim's colours
 crates/check         the checker
 crates/codegen       export and probes; formula.rs; probe.py, plot.py, tangent.py
 crates/render        the Python sidecar; server.py
+crates/export        the PDF (pdf.rs), the website (site.rs, render.py, assets/site/)
 crates/engine        the session: edit.rs, preview.rs, present.rs, pictures.rs
 crates/ui            the window: one file per panel
 docs/                these chapters, and spec/manim-core.md
@@ -63,17 +64,18 @@ docker/              what the Docker image needs besides the programs
 cargo test --workspace
 ```
 
-runs the tests that need no Manim: about 110, in a second or two. They cover the checker
-rule by rule, the export text, the formula language, every kind of edit with undo, and
-the window driven by simulated clicks and keys.
+runs the tests that need no Manim: about 130, in a second or two. They cover the checker
+rule by rule, the export text, the formula language, every kind of edit with undo, the
+pages of a PDF, and the window driven by simulated clicks and keys.
 
 ```bash
 SUIT_PYTHON="$PWD/.venv/bin/python" cargo test --workspace -- --ignored
 ```
 
-runs the 22 that use the real Manim, in two to three minutes: the probe, the
+runs the 27 that use the real Manim, in two to three minutes: the probe, the
 incremental preview against a run from scratch, recordings against predicted frame
-counts, stopping a Manim that hangs, and the window from start to presenting.
+counts, stopping a Manim that hangs, a website made, made again and stopped, and the
+window from start to presenting.
 
 Before a commit:
 

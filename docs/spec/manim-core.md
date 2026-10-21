@@ -1,6 +1,6 @@
 # Manim Core — abstract syntax, AST, type system and semantics
 
-Draft 0.11 · 2026-10-14 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
+Draft 0.12 · 2026-10-21 · pinned to **manim 0.21.0** and **manim-slides 5.7.0**
 
 Manim has no syntax of its own: a scene is a Python method that calls a library. What this
 document formalises is the small language *embedded* in those calls — make objects, change
@@ -15,7 +15,7 @@ Python.
 | 4 | AST (Rust) | the document that is saved, edited and undone |
 | 5 | Type system | errors and warnings while editing; slide interfaces |
 | 6 | Dynamic semantics | timeline, preview, cache keys; the meaning export must preserve |
-| 7 | Translation to Python | export to manim-slides |
+| 7 | Translation to Python | export to manim-slides; §7.1 the PDF and the website built on it |
 
 Four decisions shape everything below.
 
@@ -792,8 +792,8 @@ Warnings are legal programs that are probably not meant:
 | Warned | Why |
 |---|---|
 | `loop` slide whose exit presence differs from its entry | the loop will visibly jump |
-| `loop` together with `auto_next` | the presenter loops for ever, the web export moves on after one pass (§6.6) **[src]** |
-| `loop` on the first or last slide | not supported by the RevealJS export **[src]** |
+| `loop` together with `auto_next` | the presenter loops for ever, manim-slides' RevealJS export moves on after one pass (§6.6) **[src]** |
+| `loop` on the first or last slide | not supported by manim-slides' RevealJS export, though by Suit's website (§7.1) **[src]** |
 | `p.animate(rotate(…))` | morphs along straight lines instead of rotating; `Rotate` is meant **[run]** |
 | an updater that reads an object which an animation then consumes | it keeps following the leftover geometry |
 | an object with a point that is not a number | Manim draws none of that object, and says nothing **[run]**; found by running the deck, not by the checker |
@@ -1140,6 +1140,49 @@ which are unique and cannot shadow anything Manim exports.
 
 `skip` maps to `next_slide(skip_animations=True)`. `cfg` maps to Manim's configuration
 (`pixel_width`, `pixel_height`, `frame_rate`, `background_color`).
+
+### 7.1 Paper and the web
+
+Two further outputs are defined from §6 and from the translation above, and add no meaning
+of their own.
+
+**A PDF** is a list of frames. Write `Wᶜ` for the world after command `c` and `Wᵢ⁰` for
+the world slide `Sᵢ` starts in. Over the slides that have a clip (not skipped, not
+`media`), in order:
+
+```
+per slide   pages(Sᵢ) = [ frame(W_last) ]          W_last: the world after Sᵢ's last command
+per step    pages(Sᵢ) = [ frame(Wᶜ) | c ∈ Sᵢ,  frame(Wᶜ) ≠ frame(W_prev(c)),  frame(Wᶜ) ≠ ε ]
+                        or [ frame(W_last) ] if that is empty
+            where W_prev(c) is the world after the command before c, or Wᵢ⁰ for the first
+```
+
+The per-slide page is the picture the clip rests on (`■` in the table of §6.6), up to the
+gap, which changes the world only through updaters. The per-step pages leave out a command
+that changes nothing that shows, and an empty screen, such as a slide clearing what the
+one before left. The worlds are the ones the probes report, so a page is what the canvas
+shows. Each element of a frame is drawn as Manim's Cairo camera draws it **[src]**: the
+outline filled by the non-zero rule, then stroked, the stroke `sty.stroke_width / 100`
+scene units wide, with Cairo's caps and joins (butt, mitre, limit 10), which the camera
+keeps unless an object asks for others; a picture as its pixels on the parallelogram of
+three of its corners. The canvas draws the same way. A page is 540 pt high, so a scene
+unit is 67.5 pt.
+
+**A website** is the presentation `Π` of `⟦D⟧` as manim-slides renders it, each clip as a
+video `Fᵢ` and its reverse `reverse(Fᵢ)` (P6 makes it the editor's `Π`), and a player in
+the browser that runs the transition system of §6.6 with the three differences of Suit's
+own presenter. The command-line choices `--start-paused`, `--next-terminates-loop` and
+`--skip-all` are read from the page's address; `--exit-after-last-slide` has no meaning
+in a page that cannot close itself. The player adds one transition, for a viewer who is
+not presenting:
+
+```
+GO TO k                          ⟨i, d, m⟩ ⟶ ⟨k, →, ▶⟩        1 ≤ k ≤ n
+```
+
+It is what the address `#k`, the list of slides and the keys Home (`k = 1`) and End
+(`k = n`) do. A click or a tap on the right of the slide is `NEXT`, a tap on its left
+third `PREVIOUS`, a swipe either of the two.
 
 ---
 

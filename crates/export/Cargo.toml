@@ -1,0 +1,21 @@
+[package]
+name = "suit-export"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+suit-core.workspace = true
+suit-sig.workspace = true
+suit-check.workspace = true
+suit-codegen.workspace = true
+suit-render.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tiny-skia.workspace = true
+pdf-writer = "0.15"
+miniz_oxide = "0.9"
+
+[lints]
+workspace = true

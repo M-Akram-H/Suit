@@ -16,6 +16,7 @@ suit-codegen = { path = "crates/codegen" }
 suit-render = { path = "crates/render" }
 suit-engine = { path = "crates/engine" }
 suit-ui = { path = "crates/ui" }
+suit-export = { path = "crates/export" }
 
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }

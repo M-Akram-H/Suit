@@ -410,3 +410,35 @@ fn an_edit_late_in_a_long_deck_does_not_replay_the_deck() {
         from_scratch(&session)
     );
 }
+
+#[test]
+#[ignore = "needs Manim"]
+fn a_picture_goes_into_the_pdf_with_its_see_through_parts() {
+    let _alone = alone();
+    let folder = std::env::temp_dir().join(format!("suit-pdf-picture-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::create_dir_all(&folder).unwrap();
+    let logo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/images/logo.png");
+    std::fs::copy(&logo, folder.join("logo.png")).unwrap();
+
+    let sidecar = Sidecar::locate(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let mut session = Session::blank().with_preview(sidecar, || {});
+    session.record_ahead_of_time(false);
+    session.save_as(&folder.join("pictures.suit.json")).unwrap();
+    session.add_object("Text");
+    session.add_picture(&folder.join("logo.png")).unwrap();
+    settle_all(&mut session);
+    assert!(session.shows_every_slide());
+
+    let written = session.export_pdf(suit_engine::Pages::Slides).unwrap();
+    assert_eq!(written, folder.join("pictures.pdf"));
+    let pdf = std::fs::read(&written).unwrap();
+    let text = String::from_utf8_lossy(&pdf);
+    assert!(text.contains("/Subtype /Image"), "the picture is in it");
+    assert!(text.contains("/SMask"), "with what of it is see-through");
+    assert!(
+        text.contains("/Width 811") && text.contains("/Height 811"),
+        "at its own size"
+    );
+    println!("PDF at {}", written.display());
+}

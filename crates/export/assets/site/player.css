@@ -1,0 +1,379 @@
+/* Suit's web player. The slide fills the window; the controls come up when the pointer
+   moves or the screen is touched, and go again when it rests. */
+
+:root {
+  color-scheme: dark;
+  --panel: rgba(18, 18, 22, 0.86);
+  --ink: #f3f3f5;
+  --dim: #a9a9b2;
+  --line: rgba(255, 255, 255, 0.12);
+  --accent: #58c4dd;
+  --gutter: max(12px, env(safe-area-inset-bottom));
+}
+
+/* What is hidden stays hidden, whatever its layout says. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--background, #000);
+  color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+body.idle,
+body.no-pointer,
+body.no-pointer * {
+  cursor: none;
+}
+
+/* ── The slide ─────────────────────────────────────────────────────────── */
+
+#stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  touch-action: pinch-zoom;
+}
+
+#screen {
+  position: relative;
+  width: min(100vw, calc(100vh * var(--ratio)));
+  width: min(100vw, calc(100dvh * var(--ratio)));
+  aspect-ratio: var(--ratio);
+}
+
+#screen > video,
+#screen > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#screen > .shown {
+  opacity: 1;
+  z-index: 1;
+}
+
+#blank {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: #000;
+}
+
+#loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 5;
+  pointer-events: none;
+}
+
+#loading span {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--ink);
+  animation: turn 0.9s linear infinite;
+}
+
+@keyframes turn {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+#start {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 26px 14px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+#start svg {
+  width: 26px;
+  height: 26px;
+  fill: currentColor;
+}
+
+#problem {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  max-width: min(520px, calc(100vw - 32px));
+  margin: 0;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: var(--panel);
+  text-align: center;
+}
+
+/* ── Controls ──────────────────────────────────────────────────────────── */
+
+#controls {
+  position: fixed;
+  left: 50%;
+  bottom: var(--gutter);
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100vw - 16px);
+  padding: 5px;
+  border-radius: 999px;
+  background: var(--panel);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+body.idle #controls {
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  pointer-events: none;
+}
+
+#controls button,
+#controls a {
+  display: grid;
+  place-items: center;
+  min-width: 42px;
+  height: 42px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  box-sizing: border-box;
+  text-decoration: none;
+}
+
+#controls button:hover,
+#controls a:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+#controls button:focus-visible,
+#controls a:focus-visible,
+#start:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+#controls button:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: none;
+}
+
+#controls svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+#controls .play,
+body.held #controls .pause {
+  display: none;
+}
+
+body.held #controls .play {
+  display: block;
+}
+
+#place span {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--dim);
+}
+
+#controls [data-do="help"] span {
+  font-weight: 600;
+  color: var(--dim);
+}
+
+body:not(.has-notes) .notes-only {
+  display: none !important;
+}
+
+@media (max-width: 520px) {
+  #controls [data-do="replay"],
+  #controls [data-do="help"] {
+    display: none;
+  }
+  #controls button,
+  #controls a {
+    min-width: 38px;
+    padding: 0 5px;
+  }
+}
+
+/* ── Panels: notes, the list of slides, the keys ───────────────────────── */
+
+.panel {
+  position: fixed;
+  z-index: 11;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--gutter) + 62px);
+  width: min(640px, calc(100vw - 24px));
+  max-height: min(60vh, 520px);
+  max-height: min(60dvh, 520px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: var(--panel);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+#notes {
+  max-height: min(34vh, 320px);
+  max-height: min(34dvh, 320px);
+}
+
+#notes .text {
+  white-space: pre-wrap;
+  font-size: 17px;
+}
+
+#notes .text.empty {
+  color: var(--dim);
+}
+
+#list ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#list button {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+#list button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+#list button[aria-current="true"] {
+  background: rgba(88, 196, 221, 0.18);
+}
+
+#list .number {
+  min-width: 2ch;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+#help table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+#help th,
+#help td {
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+  text-align: left;
+}
+
+#help th {
+  padding-right: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#help td {
+  color: var(--dim);
+}
+
+#help p {
+  margin: 10px 0 0;
+  color: var(--dim);
+}
+
+#help a {
+  color: var(--accent);
+}
+
+@media (max-width: 520px) {
+  #help th {
+    white-space: normal;
+  }
+}
+
+.quiet {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.noscript {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+}

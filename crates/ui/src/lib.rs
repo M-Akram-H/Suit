@@ -7,6 +7,7 @@
 mod bar;
 mod canvas;
 mod editors;
+mod exports;
 mod files;
 mod present;
 mod problems;
@@ -64,6 +65,10 @@ pub struct SuitApp {
     screenshot: Option<PathBuf>,
     /// Frames drawn since the preview arrived; a screenshot waits for a few.
     settled: u32,
+    /// The website being made, if one is.
+    website: Option<suit_engine::Job>,
+    /// The folder of the website made last, to be looked at.
+    made_website: Option<PathBuf>,
 }
 
 impl SuitApp {
@@ -89,6 +94,8 @@ impl SuitApp {
             leaving: false,
             screenshot: None,
             settled: 0,
+            website: None,
+            made_website: None,
         }
     }
 

@@ -17,7 +17,13 @@ use std::{
 
 use suit_check::{Checked, Diagnostic, ObjectState, check};
 use suit_core::{Command, Deck, DeckConfig, Node, NodeId, SlideContent, SlideId, VarId};
+use suit_export::site;
 use suit_render::{Clip, Sidecar, Snapshot, Snapshots};
+
+pub use suit_export::{
+    pdf::Pages,
+    site::{Job, Progress, Report},
+};
 use suit_sig::Signature;
 
 pub use crate::present::{PresentOptions, Presenter};
@@ -335,17 +341,33 @@ impl Session {
         self.save_as(&path)
     }
 
+    /// The deck's file name without its endings: `talk` for `talk.suit.json`.
+    pub fn stem(&self) -> Option<String> {
+        let name = self
+            .path
+            .as_ref()?
+            .file_name()?
+            .to_string_lossy()
+            .into_owned();
+        let stem = name.split('.').next().filter(|stem| !stem.is_empty());
+        Some(stem.unwrap_or("deck").to_owned())
+    }
+
+    /// Where an export called `name` goes: next to the deck, which must have been saved.
+    pub fn export_path(&self, name: impl FnOnce(&str) -> String) -> Result<PathBuf, String> {
+        let (Some(path), Some(stem)) = (&self.path, self.stem()) else {
+            return Err("Save the deck first: what is exported goes next to it.".to_owned());
+        };
+        Ok(path.with_file_name(name(&stem)))
+    }
+
     /// Writes the deck as a manim-slides file next to it; returns where.
     pub fn export(&self) -> Result<PathBuf, String> {
         if self.checked.has_errors() {
             return Err("The deck has problems; fix the red ones before exporting.".to_owned());
         }
-        let target = match &self.path {
-            Some(path) => {
-                let name = path.file_name().unwrap_or_default().to_string_lossy();
-                let stem = name.split('.').next().unwrap_or("deck").to_owned();
-                path.with_file_name(format!("{stem}.py"))
-            }
+        let target = match self.path {
+            Some(_) => self.export_path(|stem| format!("{stem}.py"))?,
             None => PathBuf::from("deck.py"),
         };
         let python =
@@ -354,4 +376,76 @@ impl Session {
             .map_err(|e| format!("cannot write {}: {e}", target.display()))?;
         Ok(target)
     }
+
+    /// Whether what Manim showed is the whole deck as it is now, so that it can be put on
+    /// paper.
+    pub fn shows_every_slide(&self) -> bool {
+        self.held() >= self.deck.slides.len() && self.snapshots.error.is_none()
+    }
+
+    /// Writes the deck as a PDF next to it, from what Manim showed; returns where.
+    pub fn export_pdf(&self, which: Pages) -> Result<PathBuf, String> {
+        let target = self.export_path(|stem| format!("{stem}.pdf"))?;
+        self.write_pdf(&target, which)?;
+        Ok(target)
+    }
+
+    /// Writes the deck as a PDF to `target`.
+    pub fn write_pdf(&self, target: &Path, which: Pages) -> Result<(), String> {
+        if self.checked.has_errors() {
+            return Err("The deck has problems; fix the red ones before exporting.".to_owned());
+        }
+        if !self.shows_every_slide() {
+            return Err("Manim has not finished the slides yet.".to_owned());
+        }
+        let deck = self.deck_for_manim();
+        let pages = suit_export::pdf::pages(&deck, &self.snapshots, which)?;
+        let title = self.stem().unwrap_or_else(|| self.title());
+        let bytes = suit_export::pdf::write(&deck, &pages, &title);
+        fs::write(target, bytes).map_err(|e| format!("cannot write {}: {e}", target.display()))
+    }
+
+    /// The folder a website of the deck goes to: next to it, named after it.
+    pub fn website_folder(&self) -> Result<PathBuf, String> {
+        self.export_path(|stem| format!("{stem}-website"))
+    }
+
+    /// What it takes to make a website of the deck as it is, into `folder`. Manim is run
+    /// with `sidecar`.
+    pub fn website(
+        &self,
+        folder: PathBuf,
+        choices: WebsiteChoices,
+        sidecar: Sidecar,
+    ) -> Result<site::Request, String> {
+        if self.checked.has_errors() {
+            return Err("The deck has problems; fix the red ones before exporting.".to_owned());
+        }
+        let snapshots = self.shows_every_slide().then(|| self.snapshots.clone());
+        Ok(site::Request {
+            deck: self.deck_for_manim(),
+            checked: self.checked.clone(),
+            sig: self.sig.clone(),
+            title: self.stem().unwrap_or_else(|| self.title()),
+            folder,
+            height: choices
+                .height
+                .filter(|&height| height != self.deck.config.height),
+            notes: choices.notes,
+            pdf: choices.pdf,
+            snapshots,
+            sidecar,
+        })
+    }
+}
+
+/// How a website of the deck is to be made.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct WebsiteChoices {
+    /// The height of the videos, if not the deck's.
+    pub height: Option<u32>,
+    /// Whether the notes go with the slides.
+    pub notes: bool,
+    /// A PDF to download from the page, and its pages.
+    pub pdf: Option<Pages>,
 }

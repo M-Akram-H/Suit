@@ -11,13 +11,14 @@ The borders between them can be dragged.
 | Item | What it does |
 |---|---|
 | **Suit** *file name* | The open deck. A dot after the name means there are unsaved changes. |
-| **File** | New deck, Open…, Open the sample deck, Save, Save as…, Gather pictures, Export Python ([chapter 10](10-saving-and-exporting.md)). |
+| **File** | New deck, Open…, Open the sample deck, Save, Save as…, Gather pictures, Export PDF…, Export website…, Export Python ([chapter 10](10-saving-and-exporting.md)). |
 | **Undo**, **Redo** | Every change to the deck can be undone. Hover to see what would be undone. |
 | **Present** | Shows the deck full screen from the selected slide ([chapter 9](09-slides-and-presenting.md)). |
 | **▾** next to Present | How a presentation runs, whether your notes get a window, and whether slides are made ready to play while you edit. |
 | *Asking Manim…* | Manim is working out what the deck looks like. After four seconds a **Stop** button appears, in case it never finishes. |
 | *Updating the slides after this one…* | The slide you are on is up to date; Manim is redoing the slides after it, which the change may have moved. **Stop** appears here too. |
 | *Preview stopped: …* | Manim could not run the deck. The reason is given; **Try again** asks once more. |
+| *Website: …* | A website of the deck is being made, and how far it has got. **Stop** stops it. When it is done, the bar says where it went and **Watch it** opens it in your browser. |
 | on the right | Number of slides, the length of the deck, and its size and frame rate. |
 
 ## Slides

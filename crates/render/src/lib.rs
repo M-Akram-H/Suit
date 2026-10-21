@@ -390,6 +390,11 @@ impl Sidecar {
         &self.python
     }
 
+    /// The folder Manim is run in, where what it makes once is kept for the next time.
+    pub fn work(&self) -> &Path {
+        &self.work
+    }
+
     /// The same, with another Python: one that is known to have Manim, or, in a test, one
     /// that is known not to.
     pub fn with_python(mut self, python: PathBuf) -> Sidecar {
@@ -398,7 +403,7 @@ impl Sidecar {
     }
 
     /// Says what a failure means where that is known, in place of what Python said.
-    fn explain(&self, failure: Failure) -> Failure {
+    pub fn explain(&self, failure: Failure) -> Failure {
         match failure {
             // The commonest way for this to go wrong: Suit was started somewhere other
             // than where Manim was installed, and found a Python that knows nothing of it.
@@ -435,7 +440,7 @@ impl Sidecar {
         for entry in entries.flatten() {
             let name = entry.file_name();
             let name = name.to_string_lossy();
-            let ours = ["probe-", "server-", "texts-", "own-"]
+            let ours = ["probe-", "server-", "texts-", "own-", "render-"]
                 .iter()
                 .any(|prefix| name.starts_with(prefix));
             let age = entry.metadata().and_then(|meta| meta.modified());

@@ -7,6 +7,7 @@ use suit_engine::{Preview, Session};
 
 use crate::{
     SuitApp,
+    exports::{self, PdfForm, WebsiteForm},
     files::{Answer, Browser, Purpose},
     style,
 };
@@ -27,6 +28,10 @@ pub enum Dialog {
     Picture(Browser),
     /// Asking whether unsaved changes may be thrown away, before doing `then`.
     Discard { then: AfterDiscard },
+    /// Asking how to make a PDF of the deck.
+    Pdf(PdfForm),
+    /// Asking how to make a website of the deck.
+    Website(WebsiteForm),
 }
 
 /// What was about to happen when unsaved changes got in the way.
@@ -81,7 +86,30 @@ impl SuitApp {
                         Err(problem) => problem,
                     });
                 }
-                if ui.button("Export Python").clicked() {
+                ui.separator();
+                if ui
+                    .button("Export PDF…")
+                    .on_hover_text("The slides as a PDF, to print or to hand out")
+                    .clicked()
+                {
+                    self.dialog = Some(Dialog::Pdf(PdfForm::default()));
+                }
+                if ui
+                    .add_enabled(self.website.is_none(), egui::Button::new("Export website…"))
+                    .on_hover_text(
+                        "The slides as a website, to watch in any browser, on any device, \
+                         and to put online",
+                    )
+                    .on_disabled_hover_text("A website is being made; see the top bar.")
+                    .clicked()
+                {
+                    self.dialog = Some(Dialog::Website(WebsiteForm::default()));
+                }
+                if ui
+                    .button("Export Python")
+                    .on_hover_text("The deck as Manim code for manim-slides, next to the deck")
+                    .clicked()
+                {
                     self.notice = Some(match self.session.export() {
                         Ok(path) => format!("Exported to {}", path.display()),
                         Err(problem) => problem,
@@ -159,6 +187,7 @@ impl SuitApp {
             });
             ui.separator();
 
+            self.website_progress(ui);
             let now = ui.input(|input| input.time);
             let running = self.session.preview == Preview::Running;
             let since = *self.asking_since.get_or_insert(now);
@@ -211,7 +240,14 @@ impl SuitApp {
                 Preview::Ready => {}
             }
             if let Some(notice) = &self.notice {
-                ui.weak(notice);
+                // A long one is cut short rather than run into what is on the right; all of
+                // it shows when the pointer rests on it.
+                let room = (ui.available_width() - 330.0).max(120.0);
+                ui.scope(|ui| {
+                    ui.set_max_width(room);
+                    let label = egui::Label::new(RichText::new(notice).weak()).truncate();
+                    ui.add(label).on_hover_text(notice);
+                });
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let config = &self.session.deck.config;
@@ -370,6 +406,16 @@ impl SuitApp {
                     }
                 },
             },
+            Dialog::Pdf(mut form) => {
+                if let exports::Answer::Pending = self.pdf_form(ctx, &mut form) {
+                    self.dialog = Some(Dialog::Pdf(form));
+                }
+            }
+            Dialog::Website(mut form) => {
+                if let exports::Answer::Pending = self.website_form(ctx, &mut form) {
+                    self.dialog = Some(Dialog::Website(form));
+                }
+            }
             Dialog::Picture(mut browser) => match browser.show(ctx) {
                 Answer::Pending => self.dialog = Some(Dialog::Picture(browser)),
                 Answer::Cancelled => {}

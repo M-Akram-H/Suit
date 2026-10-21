@@ -42,8 +42,8 @@ Problems come in two strengths:
 | What it says | Why it matters | What to do |
 |---|---|---|
 | *This looping slide does not end the way it starts, so the loop will jump.* | Something is on the slide at the end that was not at the start, or the other way round. | Remove what the slide adds, and bring back what it removes, before it ends. |
-| *This slide both loops and moves on by itself.* | A loop never ends, so the slide never moves on. The HTML export decides the other way and moves on after one round. | Choose one of the two. |
-| *A looping first or last slide does not work in the web (RevealJS) export.* | | Put a plain slide before or after it. |
+| *This slide both loops and moves on by itself.* | A loop never ends, so the slide never moves on, in Suit, in manim-slides and on Suit's website. The HTML page of `manim-slides convert` decides the other way and moves on after one round. | Choose one of the two. |
+| *A looping first or last slide does not work in the HTML page of manim-slides convert.* | Only that page: Suit's own website and presenting show it as it is. | If you use `manim-slides convert`, put a plain slide before or after it. |
 | *“square” will not turn: it slides in a straight line to its rotated position.* | An animated *rotate* is a morph between two pictures, not a turn. | Use the **Rotate** animation. |
 | *“label” keeps following “circle”, which ReplacementTransform uses up.* | The follower would go on following what is left of an object that is gone. | Add **Stop keeping on** before, and **Keep doing…** for the new object after. |
 | *“line” is given a fill colour, but has no inside to fill.* | Manim takes the colour and shows nothing. | **Use color instead**, offered in Properties. |
