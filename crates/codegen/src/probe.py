@@ -151,38 +151,41 @@ def _jump(scene, animations):
     # Not AddTextLetterByLetter: being made, it makes the letters see-through, and only
     # its frames make them seen again.
     brought_in = (FadeIn, Create, Write, DrawBorderThenFill, GrowFromPoint)
-    shown = []
+    # What Manim's `play` does to the scene's list, in this order: every object animated
+    # that is not on scene is put on it; then what is brought in is added; and at the end,
+    # what is taken away is removed.
+    put, bring, take = 0, 1, 2
 
     def ends(animation, *where):
         end = animation.rate_func(1.0)
         return any(abs(end - value) < 1e-9 for value in where)
 
-    def put_on(animation, plan):
-        # What is not brought in, Manim puts on scene for the animation, if it is not.
-        if not shown:
-            shown.append({id(mobject) for mobject in scene.get_mobject_family_members()})
-        if id(animation.mobject) not in shown[0]:
-            plan.append((scene.add, animation.mobject))
-        return True
-
     def walk(animation, plan):
         if isinstance(animation, (FadeOut, ShowPassingFlash)):
-            # Both put the object back as it was on taking it away, however eased.
-            plan.append((scene.remove, animation.mobject))
+            # Both put the object back as it was on taking it away, however eased. Put on
+            # scene first, a group takes its members off it, where they were by themselves:
+            # so taking the group away takes them all.
+            plan += [(put, animation.mobject), (take, animation.mobject)]
             return True
         if isinstance(animation, (Circumscribe, Flash, FocusOn)):
             # Frames, lines and dots of their own, gone at the end; the object untouched.
             return True
         if isinstance(animation, Indicate):
-            return ends(animation, 0) and put_on(animation, plan)
+            if not ends(animation, 0):
+                return False
+            plan.append((put, animation.mobject))
+            return True
         if isinstance(animation, (Wiggle, ApplyWave)):
-            return ends(animation, 0, 1) and put_on(animation, plan)
+            if not ends(animation, 0, 1):
+                return False
+            plan.append((put, animation.mobject))
+            return True
         # Before the groups: some of these are made of groups.
         if isinstance(animation, brought_in):
             # Uncreate is a Create, Unwrite a Write: those take away.
             if animation.is_remover() or not ends(animation, 1):
                 return False
-            plan.append((scene.add, animation.mobject))
+            plan.append((bring, animation.mobject))
             return True
         if isinstance(animation, AnimationGroup):
             # A group is jumped as a whole or played as a whole.
@@ -204,8 +207,20 @@ def _jump(scene, animations):
     # Animations of one step act on different objects (the checker sees to it), so those
     # jumped and those played do not meet: only the order of the scene's list could tell
     # them apart, and every object is drawn by its own layer.
-    for do, mobject in jumped:
-        do(mobject)
+    #
+    # Manim puts a group of animations on scene as one group of its objects, where this
+    # puts each object by itself: either way, what is on scene and what is drawn are the
+    # same, only how the scene's list is nested differs.
+    on = {id(mobject) for mobject in scene.get_mobject_family_members()}
+    for phase, mobject in sorted(jumped, key=lambda step: step[0]):
+        if phase == put:
+            if id(mobject) not in on:
+                scene.add(mobject)
+                on.update(id(member) for member in mobject.get_family())
+        elif phase == bring:
+            scene.add(mobject)
+        else:
+            scene.remove(mobject)
     return played
 
 

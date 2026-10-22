@@ -918,6 +918,36 @@ fn what_the_probe_skips_ends_as_playing_it_does() {
     ]);
     slide.detach(&again);
     slide.play(vec![Anim::prim("FadeOut").arg("mobject", &again)]);
+
+    // A group of objects brought in one by one, as the sample deck's row of dots: taking
+    // the group away takes them all, because Manim puts the group on scene first.
+    let mut slide = deck.add_slide("Groups");
+    let mut dots = Vec::new();
+    for (index, x) in [-2.0, -1.0, 0.0, 1.0, 2.0].into_iter().enumerate() {
+        let dot = slide.object(
+            &format!("dot {index}"),
+            Object::new("Dot").then(Call::new("move_to").arg("point_or_mobject", point(x, 1.0))),
+        );
+        dots.push(dot);
+    }
+    let row = slide.object("row", Object::vgroup(&dots.iter().collect::<Vec<_>>()));
+    slide.play(vec![
+        Anim::par(
+            dots.iter()
+                .map(|dot| Anim::prim("FadeIn").arg("mobject", dot))
+                .collect(),
+        )
+        .lag(0.3),
+    ]);
+    slide.play(vec![
+        Anim::par(
+            dots.iter()
+                .map(|dot| Anim::prim("Indicate").arg("mobject", dot))
+                .collect(),
+        )
+        .lag(0.3),
+    ]);
+    slide.play(vec![Anim::prim("FadeOut").arg("mobject", &row)]);
     let checked = check(&deck, &sig);
     let errors: Vec<_> = checked
         .diagnostics
